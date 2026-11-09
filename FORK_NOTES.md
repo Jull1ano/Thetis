@@ -1,6 +1,8 @@
-# Jull1ano fork of Thetis — branch `smooth-pan-drag`
+# Jull1ano fork of Thetis
 
-Based on Thetis v2.10.3.15 (ramdor/Thetis). Goal: AltSDR-style spectrum handling.
+Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
+- `smooth-pan-drag`: AltSDR-style spectrum handling (pan, zoom, retunes).
+- `native-scaling`: `smooth-pan-drag` + native high-DPI (crisp at 200 % on a 4K monitor).
 
 ## What changed
 
@@ -32,6 +34,21 @@ changes the span by 2^(1/3) (about 26 %). Display only, never retunes.
 - Now the shift changes at the input sample where the new DDC frequency is expected
   (`SetRXAShiftFreqAt`), with a short soft mute (default ±1.5 ms + 1.5 ms ramps) around it to cover the
   network timing uncertainty.
+
+## Native high-DPI (branch `native-scaling`)
+
+Upstream Thetis is DPI-unaware: at 200 % Windows draws it at 1920x1080 and stretches the bitmap, so
+text is soft and the spectrum line is a blurred staircase. The fork runs system DPI aware when Windows
+scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
+
+- WinForms scales the layout; the console's own resize code, the skins (positions in 96 DPI units),
+  status bar widths, mouse distances, the VFO digit boxes and Setup's window size were fixed for it.
+- Direct2D spectrum / waterfall: fonts scaled; hairlines (grid, cursor) and the spectrum trace are one
+  device pixel, like NereusSDR (Setup > Appearance > RX Display > Line Width is in device pixels; 1.0 is
+  crisp at 4K); wider lines keep their designed weight; the waterfall adds 2 pixel rows per update at
+  200 % so it covers the same time.
+- Window positions and sizes are saved in 96 DPI units, so one settings database works in both modes.
+- Off: command line `-nohidpi` or `THETIS_HIDPI=0`. At 100 % scaling nothing changes.
 
 ## Test settings (no rebuild needed)
 
@@ -66,3 +83,6 @@ Output: `Project Files\bin\x64\Release\Thetis.exe`.
   pan moves the RX2 view too, as the slider always did).
 - The retune latency is a fixed estimate until measured on the radio.
 - No Setup UI for these options yet.
+- High DPI: checked on the main window, Setup (Hardware, Display, Appearance) at 200 %; other dialogs,
+  meter containers, RX2 and collapsed layouts not checked yet. System DPI aware: on a second monitor with
+  a different scaling Windows stretches the window as before.

@@ -801,6 +801,10 @@ namespace Thetis
                 int up = (int)Math.Round(4 * (HighDpi.Scale - 1));
                 HighDpi.Nudge(txtVFOALSD, -up);
                 HighDpi.Nudge(txtVFOBLSD, -up);
+                HighDpi.GrowLeft(txtVFOALSD, HighDpi.Px(1));
+                HighDpi.GrowLeft(txtVFOBLSD, HighDpi.Px(1));
+                HighDpi.KeepAbove(panelVFOAHover, txtVFOAFreq, HighDpi.Px(1));
+                HighDpi.KeepAbove(panelVFOBHover, txtVFOBFreq, HighDpi.Px(1));
             }
 
             // for resizing

@@ -5,7 +5,8 @@ Windows draws it at 1/2 size and stretches the bitmap: soft text and jagged line
 Thetis is system DPI aware: WinForms scales the forms by the system DPI and the custom drawing
 (Direct2D spectrum, meters, ...) uses HighDpi.Scale.
 
-Switch: command line -hidpi, or environment variable THETIS_HIDPI=1 (0 forces it off).
+On by default when Windows display scaling is above 100 %. Off: command line -nohidpi or environment
+variable THETIS_HIDPI=0 (THETIS_HIDPI=1 or -hidpi force it on).
 
 This program is free software; you can redistribute it and/or modify it under the terms of the GNU
 General Public License as published by the Free Software Foundation; either version 2 of the License,
@@ -38,9 +39,12 @@ namespace Thetis
         // must run before the first window is created
         public static void Init(string[] args)
         {
-            bool want = false;
+            bool want = true;   // default on; at 100 % scaling it changes nothing (Scale stays 1)
             foreach (string a in args)
+            {
                 if (string.Equals(a, "-hidpi", StringComparison.OrdinalIgnoreCase)) want = true;
+                if (string.Equals(a, "-nohidpi", StringComparison.OrdinalIgnoreCase)) want = false;
+            }
             string env = Environment.GetEnvironmentVariable("THETIS_HIDPI");
             if (env == "1") want = true;
             else if (env == "0") want = false;
@@ -56,8 +60,9 @@ namespace Thetis
 
             uint dpi = 96;
             try { dpi = GetDpiForSystem(); } catch { }
+            if (dpi <= 96) return;  // 100 %: DPI awareness changes nothing, keep every code path as upstream
             Enabled = true;
-            Scale = Math.Max(1.0f, dpi / 96.0f);
+            Scale = dpi / 96.0f;
 
             // WinForms builds Control.DefaultFont from the system GUI font, which a DPI-aware process gets
             // already scaled (15.75 pt at 200 %); point sizes scale again when drawn, so every control that
@@ -93,6 +98,24 @@ namespace Thetis
         {
             if (!Enabled || c == null || dy == 0) return;
             c.Top += dy;
+        }
+
+        // Keep control c inside box (same parent), at least 'gap' pixels above its bottom. Used for the VFO
+        // digit-hover bars: auto-sized text boxes come out a bit shorter than the scaled design, and the bar
+        // then covered the box's bottom border.
+        public static void KeepAbove(System.Windows.Forms.Control c, System.Windows.Forms.Control box, int gap)
+        {
+            if (!Enabled || c == null || box == null || c.Parent != box.Parent) return;
+            int maxBottom = box.Bottom - gap;
+            if (c.Bottom > maxBottom) c.Top = maxBottom - c.Height;
+        }
+
+        // Grow control c to the left by dx pixels (its right edge stays)
+        public static void GrowLeft(System.Windows.Forms.Control c, int dx)
+        {
+            if (!Enabled || c == null || dx <= 0) return;
+            c.Left -= dx;
+            c.Width += dx;
         }
 
         // diagnostics while porting: THETIS_HIDPI_LOG=<file>
