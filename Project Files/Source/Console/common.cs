@@ -405,10 +405,10 @@ namespace Thetis
                 }
             }
 
-            control_data.Add($"Top/{form.Top}");
-            control_data.Add($"Left/{form.Left}");
-            control_data.Add($"Width/{form.Width}");
-            control_data.Add($"Height/{form.Height}");
+            control_data.Add($"Top/{HighDpi.Unpx(form.Top)}"); // Jull1ano fork: window geometry stored in 96 DPI units
+            control_data.Add($"Left/{HighDpi.Unpx(form.Left)}");
+            control_data.Add($"Width/{HighDpi.Unpx(form.Width)}");
+            control_data.Add($"Height/{HighDpi.Unpx(form.Height)}");
 
             DB.SaveVars(tablename, control_data);
         }
@@ -441,7 +441,7 @@ namespace Thetis
 
                 if (name == "Top" || name == "Left" || name == "Width" || name == "Height")
                 {
-                    int parsed_value = int.Parse(val);
+                    int parsed_value = HighDpi.Px(int.Parse(val)); // Jull1ano fork: stored in 96 DPI units
                     switch (name)
                     {
                         case "Top":

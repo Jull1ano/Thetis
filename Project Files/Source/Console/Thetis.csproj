@@ -20,7 +20,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>Thetis</RootNamespace>
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
-    <StartupObject>Thetis.Console</StartupObject>
+    <StartupObject>Thetis.Program</StartupObject>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>3.5</OldToolsVersion>
@@ -673,6 +673,8 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="SmoothPan.cs" />
+    <Compile Include="HighDpi.cs" />
+    <Compile Include="Program.cs" />
     <Compile Include="cwedit.cs">
       <SubType>Form</SubType>
     </Compile>

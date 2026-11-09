@@ -210,7 +210,7 @@ namespace Thetis
             if (!_pan_pending && !_rx1_pan_drag) return false;
             if (_pan_pending)
             {
-                if (Math.Abs(e.X - _pan_press_x) < PAN_DRAG_THRESHOLD_PX) return true;
+                if (Math.Abs(e.X - _pan_press_x) < HighDpi.Px(PAN_DRAG_THRESHOLD_PX)) return true;
                 _pan_pending = false;
                 _rx1_pan_drag = true;
                 _pan_last_x = _pan_press_x;

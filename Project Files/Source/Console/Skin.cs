@@ -1768,8 +1768,8 @@ namespace Thetis
         private static void SaveSize(Size s, XmlTextWriter writer)
         {
             writer.WriteStartElement("Size");
-            writer.WriteElementString("Width", s.Width.ToString());
-            writer.WriteElementString("Height", s.Height.ToString());
+            writer.WriteElementString("Width", HighDpi.Unpx(s.Width).ToString()); // Jull1ano fork: skins hold 1x pixels
+            writer.WriteElementString("Height", HighDpi.Unpx(s.Height).ToString());
             writer.WriteEndElement();
         }
 
@@ -1781,10 +1781,10 @@ namespace Thetis
                 switch (x.LocalName)
                 {
                     case "Width":
-                        s.Width = int.Parse(x.InnerText);
+                        s.Width = HighDpi.Px(int.Parse(x.InnerText)); // Jull1ano fork: skins hold 1x pixels
                         break;
                     case "Height":
-                        s.Height = int.Parse(x.InnerText);
+                        s.Height = HighDpi.Px(int.Parse(x.InnerText));
                         break;
                 }
             }
@@ -1840,8 +1840,8 @@ namespace Thetis
         private static void SaveLocation(Point p, XmlTextWriter writer)
         {
             writer.WriteStartElement("Location");
-            writer.WriteElementString("X", p.X.ToString());
-            writer.WriteElementString("Y", p.Y.ToString());
+            writer.WriteElementString("X", HighDpi.Unpx(p.X).ToString()); // Jull1ano fork: skins hold 1x pixels
+            writer.WriteElementString("Y", HighDpi.Unpx(p.Y).ToString());
             writer.WriteEndElement();
         }
 
@@ -1853,10 +1853,10 @@ namespace Thetis
                 switch (x.LocalName)
                 {
                     case "X":
-                        p.X = int.Parse(x.InnerText);
+                        p.X = HighDpi.Px(int.Parse(x.InnerText)); // Jull1ano fork: skins hold 1x pixels
                         break;
                     case "Y":
-                        p.Y = int.Parse(x.InnerText);
+                        p.Y = HighDpi.Px(int.Parse(x.InnerText));
                         break;
                 }
             }

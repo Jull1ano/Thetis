@@ -117,6 +117,27 @@ namespace Thetis
             MaximumSize = MinimumSize;
             Size = MinimumSize;
 
+            // Jull1ano fork: at high DPI the 96 DPI minimum size was scaled with 96 DPI window borders, so the
+            // client area came out short and the bottom row (OK / Cancel / Apply) was cut; fit it to the controls
+            if (HighDpi.Enabled)
+            {
+                int right = 0, bottom = 0;
+                foreach (Control ctl in new Control[] { tcSetup, btnOK, btnCancel, btnApply })
+                {
+                    right = Math.Max(right, ctl.Right);
+                    bottom = Math.Max(bottom, ctl.Bottom);
+                }
+                Size need = SizeFromClientSize(new Size(right + HighDpi.Px(8), bottom + HighDpi.Px(8)));
+                if (need.Width > Size.Width || need.Height > Size.Height)
+                {
+                    need = new Size(Math.Max(need.Width, Size.Width), Math.Max(need.Height, Size.Height));
+                    MaximumSize = Size.Empty;
+                    MinimumSize = need;
+                    MaximumSize = need;
+                    Size = need;
+                }
+            }
+
             console = c;
             this.Owner = c;
 

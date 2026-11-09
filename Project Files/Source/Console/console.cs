@@ -795,6 +795,14 @@ namespace Thetis
             ptbRX2RF.MouseWheel += new MouseEventHandler(MouseWheelAGCRX2);
             //
 
+            // Jull1ano fork: at high DPI the big VFO digits sit higher than the small-digit boxes cover
+            if (HighDpi.Enabled)
+            {
+                int up = (int)Math.Round(4 * (HighDpi.Scale - 1));
+                HighDpi.Nudge(txtVFOALSD, -up);
+                HighDpi.Nudge(txtVFOBLSD, -up);
+            }
+
             // for resizing
             GrabConsoleSizeBasis();
             MinimumSize = this.Size;
@@ -859,13 +867,13 @@ namespace Thetis
             // resize events are caused by this
             if (local_rx2Enabled)
             {
-                this.MinimumSize = new Size(this.MinimumSize.Width, this.MinimumSize.Height - (panelRX2Filter.Height + 8));
+                this.MinimumSize = new Size(this.MinimumSize.Width, this.MinimumSize.Height - (panelRX2Filter.Height + HighDpi.Px(8)));
             }
             else
             {
-                console_basis_size.Height -= (panelRX2Filter.Height + 8);
-                this.MinimumSize = new Size(this.MinimumSize.Width, this.MinimumSize.Height - (panelRX2Filter.Height + 8));
-                this.Height -= (panelRX2Filter.Height + 8);
+                console_basis_size.Height -= (panelRX2Filter.Height + HighDpi.Px(8));
+                this.MinimumSize = new Size(this.MinimumSize.Width, this.MinimumSize.Height - (panelRX2Filter.Height + HighDpi.Px(8)));
+                this.Height -= (panelRX2Filter.Height + HighDpi.Px(8));
             }
             // end move down
 
@@ -1465,8 +1473,9 @@ namespace Thetis
         // ======================================================
         // Main
         // ======================================================
-        [STAThread]
-        static void Main(string[] args)
+        // Jull1ano fork: the process entry point is Program.Main (Program.cs), which switches high DPI on
+        // before this class's static fields start GDI+, then calls this
+        internal static void RunMain(string[] args)
         {
             //if(a()){return;}
             Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
@@ -3234,10 +3243,10 @@ namespace Thetis
 
             if (this.WindowState != FormWindowState.Minimized)
             {
-                a.Add("console_top/" + r.Top.ToString());
-                a.Add("console_left/" + r.Left.ToString());
-                a.Add("console_width/" + r.Width.ToString());
-                a.Add("console_height/" + r.Height.ToString());
+                a.Add("console_top/" + HighDpi.Unpx(r.Top).ToString()); // Jull1ano fork: window geometry stored in 96 DPI units
+                a.Add("console_left/" + HighDpi.Unpx(r.Left).ToString());
+                a.Add("console_width/" + HighDpi.Unpx(r.Width).ToString());
+                a.Add("console_height/" + HighDpi.Unpx(r.Height).ToString());
             }
 
             a.Add("console_state/" + ((int)this.WindowState).ToString());
@@ -3246,8 +3255,8 @@ namespace Thetis
             {
                 if (SetupForm.WindowState != FormWindowState.Minimized)
                 {
-                    a.Add("setup_top/" + SetupForm.Top.ToString());
-                    a.Add("setup_left/" + SetupForm.Left.ToString());
+                    a.Add("setup_top/" + HighDpi.Unpx(SetupForm.Top).ToString());
+                    a.Add("setup_left/" + HighDpi.Unpx(SetupForm.Left).ToString());
                 }
             }
 
@@ -4092,28 +4101,28 @@ namespace Thetis
                         m_fMeterPadRatio = float.Parse(val);
                         break;
                     case "console_top":
-                        num = Int32.Parse(val);
+                        num = HighDpi.Px(Int32.Parse(val)); // Jull1ano fork: stored in 96 DPI units
                         bNeedUpdate = true;
                         pConsoleLocation.Y = num;
                         break;
                     case "console_left":
-                        num = Int32.Parse(val);
+                        num = HighDpi.Px(Int32.Parse(val));
                         bNeedUpdate = true;
                         pConsoleLocation.X = num;
                         break;
                     case "console_width":
-                        if (dpi <= 96)
+                        if (dpi <= 96 || HighDpi.Enabled)
                         {
-                            int tmp = int.Parse(val);
+                            int tmp = HighDpi.Px(int.Parse(val));
                             if (_isexpanded) this.expandedSize.Width = tmp;
                             bNeedUpdate = true;
                             szConsoleSize.Width = tmp;
                         }
                         break;
                     case "console_height":
-                        if (dpi <= 96)
+                        if (dpi <= 96 || HighDpi.Enabled)
                         {
-                            int tmp = int.Parse(val);
+                            int tmp = HighDpi.Px(int.Parse(val));
                             if (_isexpanded) this.expandedSize.Height = tmp;
                             bNeedUpdate = true;
                             szConsoleSize.Height = tmp;
@@ -4124,11 +4133,11 @@ namespace Thetis
                         bNeedUpdate = true;
                         break;
                     case "setup_top":
-                        num = Int32.Parse(val);
+                        num = HighDpi.Px(Int32.Parse(val));
                         SetupForm.Top = num;
                         break;
                     case "setup_left":
-                        num = Int32.Parse(val);
+                        num = HighDpi.Px(Int32.Parse(val));
                         SetupForm.Left = num;
                         break;
                     case "IncludeWindowBorders":
@@ -37064,8 +37073,13 @@ namespace Thetis
             }
         }
 
+        private bool _basis_grabbed = false; // Jull1ano fork
         public void GrabConsoleSizeBasis()
         {
+            _basis_grabbed = true;
+            HighDpi.Log("GrabConsoleSizeBasis: Size " + this.Size + " Client " + this.ClientSize + " AutoScaleDim " + this.AutoScaleDimensions +
+                " Current " + this.CurrentAutoScaleDimensions + " panelDisplay " + panelDisplay.Bounds + " panelVFO " + panelVFO.Bounds +
+                " grpVFOA " + grpVFOA.Bounds + " handle " + this.IsHandleCreated);
             console_basis_size = this.Size;
             pnldisplay_basis_size = pnlDisplay.Size;
             gr_filter_basis_location = this.panelFilter.Location;
@@ -37481,17 +37495,17 @@ namespace Thetis
             {
                 if (chkRX2.Checked)
                 {
-                    if (this.Height <= MinimumSize.Height + panelRX2Filter.Height + 8)
-                        this.Height += (panelRX2Filter.Height + 8);
+                    if (this.Height <= MinimumSize.Height + panelRX2Filter.Height + HighDpi.Px(8))
+                        this.Height += (panelRX2Filter.Height + HighDpi.Px(8));
 
-                    console_basis_size.Height += (panelRX2Filter.Height + 8);
+                    console_basis_size.Height += (panelRX2Filter.Height + HighDpi.Px(8));
                 }
                 else
                 {
-                    if (this.Height <= MinimumSize.Height + panelRX2Filter.Height + 8)
-                        this.Height -= (panelRX2Filter.Height + 8);
+                    if (this.Height <= MinimumSize.Height + panelRX2Filter.Height + HighDpi.Px(8))
+                        this.Height -= (panelRX2Filter.Height + HighDpi.Px(8));
 
-                    console_basis_size.Height -= (panelRX2Filter.Height + 8);
+                    console_basis_size.Height -= (panelRX2Filter.Height + HighDpi.Px(8));
                 }
 
                 Console_Resize(this, EventArgs.Empty);
@@ -39456,6 +39470,13 @@ namespace Thetis
 
             if (dpi == 0)
                 dpi = (int)pnlDisplay.CreateGraphics().DpiX;
+            if (HighDpi.Enabled)
+            {
+                // Jull1ano fork: WinForms scales the layout inside InitializeComponent; that fires a resize before
+                // GrabConsoleSizeBasis, which would lay the panels out from the 100x100 defaults and spoil the basis
+                if (!_basis_grabbed) return;
+                dpi_resize_done = true;
+            }
             if (dpi > 96 && !dpi_resize_done)
             {
                 if (base_size.Width == 0)
@@ -39487,6 +39508,7 @@ namespace Thetis
 
             h_delta = this.Width - console_basis_size.Width;                //MW0LGE_[2.9.0.7] might actually want to set the globals
             v_delta = Math.Max(this.Height - console_basis_size.Height, 0);
+            HighDpi.Log("Console_Resize: Size " + this.Size + " basis " + console_basis_size + " h_delta " + h_delta + " v_delta " + v_delta);
 
             if (!IsSetupFormNull)
             {
@@ -39502,7 +39524,7 @@ namespace Thetis
                     if (this.SetupForm.CollapsedHeight == 0)
                         this.SetupForm.CollapsedHeight =
                             (HardwareSpecific.Model == HPSDRModel.HPSDR || HardwareSpecific.Model == HPSDRModel.HERMES) ?
-                                console_basis_size.Height - (panelRX2Filter.Height + 8) :
+                                console_basis_size.Height - (panelRX2Filter.Height + HighDpi.Px(8)) :
                                 console_basis_size.Height;
                 }
             }
@@ -44756,6 +44778,20 @@ namespace Thetis
 
         private void Console_Shown(object sender, EventArgs e)
         {
+            // Jull1ano fork: test hook for high-DPI captures (THETIS_HIDPI_OPEN=setup opens Setup at start)
+            string hidpiOpen = Environment.GetEnvironmentVariable("THETIS_HIDPI_OPEN");
+            if (hidpiOpen != null && hidpiOpen.StartsWith("setup")) BeginInvoke(new MethodInvoker(() =>
+            {
+                setupToolStripMenuItem1_Click(this, EventArgs.Empty);
+                string[] tabs = hidpiOpen.Split(':'); // setup:tpDisplay:tpDisplayGeneral selects those tab pages
+                for (int t = 1; t < tabs.Length; t++)
+                {
+                    Control[] found = SetupForm.Controls.Find(tabs[t], true);
+                    if (found.Length > 0 && found[0] is TabPage tp && tp.Parent is TabControl tc) tc.SelectedTab = tp;
+                }
+                HighDpi.Log("Setup: Size " + SetupForm.Size + " Client " + SetupForm.ClientSize);
+            }));
+
             //attempt to fix ampview on top issue
             if (psform != null && !psform.IsDisposed)
             {
@@ -44771,30 +44807,30 @@ namespace Thetis
             // NOTE: Important if you are ading more items to the status bar
             // MW0LGE_21e could not get the designer to keep widths of these
             // so force them here
-            toolStripDropDownButton_ScreenSize.Width = 110;
-            toolStripDropDownButton_CPU.Width = 68;
-            toolStripStatusLabel_Volts.Width = 60;
-            toolStripStatusLabel_Amps.Width = 50;
-            toolStripStatusLabel_SeqWarning.Width = 18;
-            toolStripStatusLabel_TXInhibit.Width = 18;
-            toolStripStatusLabelRXAnt.Width = 90;
-            toolStripStatusLabelTXAnt.Width = 90;
-            toolStripStatusLabelAndromedaMulti.Width = 140;
+            toolStripDropDownButton_ScreenSize.Width = HighDpi.Px(110);
+            toolStripDropDownButton_CPU.Width = HighDpi.Px(68);
+            toolStripStatusLabel_Volts.Width = HighDpi.Px(60);
+            toolStripStatusLabel_Amps.Width = HighDpi.Px(50);
+            toolStripStatusLabel_SeqWarning.Width = HighDpi.Px(18);
+            toolStripStatusLabel_TXInhibit.Width = HighDpi.Px(18);
+            toolStripStatusLabelRXAnt.Width = HighDpi.Px(90);
+            toolStripStatusLabelTXAnt.Width = HighDpi.Px(90);
+            toolStripStatusLabelAndromedaMulti.Width = HighDpi.Px(140);
 
-            toolStripStatusLabel_N1MM.Width = 22;
-            toolStripStatusLabel_TCI.Width = 22;
-            toolStripStatusLabel_CatTCPip.Width = 22;
-            toolStripStatusLabel_CatSerial.Width = 22;
-            toolStripStatusLabel_CMstatus.Width = 22;
-            toolStripStatus_PAspacer.Width = 8;
-            toolStripStatusLabel_PAstatus.Width = 32;
-            toolStripStatusLabel_play_record.Width = 16;
-            toolStripStatus_RecordPlay_spacer.Width = 8;
+            toolStripStatusLabel_N1MM.Width = HighDpi.Px(22);
+            toolStripStatusLabel_TCI.Width = HighDpi.Px(22);
+            toolStripStatusLabel_CatTCPip.Width = HighDpi.Px(22);
+            toolStripStatusLabel_CatSerial.Width = HighDpi.Px(22);
+            toolStripStatusLabel_CMstatus.Width = HighDpi.Px(22);
+            toolStripStatus_PAspacer.Width = HighDpi.Px(8);
+            toolStripStatusLabel_PAstatus.Width = HighDpi.Px(32);
+            toolStripStatusLabel_play_record.Width = HighDpi.Px(16);
+            toolStripStatus_RecordPlay_spacer.Width = HighDpi.Px(8);
 
-            toolStripStatusLabel_timer.Width = 80;
-            toolStripStatusLabel_UTCTime.Width = 92;
-            toolStripStatusLabel_Date.Width = 104;
-            toolStripStatusLabel_LocalTime.Width = 92;
+            toolStripStatusLabel_timer.Width = HighDpi.Px(80);
+            toolStripStatusLabel_UTCTime.Width = HighDpi.Px(92);
+            toolStripStatusLabel_Date.Width = HighDpi.Px(104);
+            toolStripStatusLabel_LocalTime.Width = HighDpi.Px(92);
         }
 
         public bool TwoTone
@@ -49043,12 +49079,12 @@ namespace Thetis
                             if (nHpx - nLpx > 8)
                             {
                                 // ok, the edges are far enough appart in pixels to actually check to see if we are over low or high side
-                                if (Math.Abs(e.X - nLpx) < 4)
+                                if (Math.Abs(e.X - nLpx) < HighDpi.Px(4))
                                 {
                                     m_BDragginNotchBWRightSide = false;
                                     bNearEdge = true;
                                 }
-                                else if (Math.Abs(e.X - nHpx) < 4)
+                                else if (Math.Abs(e.X - nHpx) < HighDpi.Px(4))
                                 {
                                     m_BDragginNotchBWRightSide = true;
                                     bNearEdge = true;
@@ -49077,7 +49113,7 @@ namespace Thetis
                     //MIDDLE OF PANAFALL MOVEUPDOWN MW0LGE
                     if (!rx2_enabled && Display.CurrentDisplayMode == DisplayMode.PANAFALL)
                     {
-                        m_bDraggingPanafallSplit = (e.Y >= Display.PanafallSplitBarPos && e.Y < Display.PanafallSplitBarPos + 20);
+                        m_bDraggingPanafallSplit = (e.Y >= Display.PanafallSplitBarPos && e.Y < Display.PanafallSplitBarPos + HighDpi.Px(20));
                         if (m_bDraggingPanafallSplit) return;
                     }
                     //END SPLITTER DRAG
@@ -49215,7 +49251,7 @@ namespace Thetis
 
                     //BAND STACK OVERLAY
                     //only do this if not doing something else
-                    if (e.Y >= 15 && m_bShowBandStackOverlays && bOverRX1 && !(rx1_sub_drag || m_bDraggingNotch || m_bDraggingNotchBW || m_bDraggingPanafallSplit ||
+                    if (e.Y >= HighDpi.Px(15) && m_bShowBandStackOverlays && bOverRX1 && !(rx1_sub_drag || m_bDraggingNotch || m_bDraggingNotchBW || m_bDraggingPanafallSplit ||
                         gridminmaxadjust || agc_knee_drag || agc_hang_drag || rx1_spectrum_tune_drag || rx1_click_tune_drag || rx2_spectrum_tune_drag || rx2_click_tune_drag ||
                         tx_high_filter_drag || tx_low_filter_drag || rx1_low_filter_drag || rx1_high_filter_drag || rx2_low_filter_drag || rx1_high_filter_drag))
                     {
@@ -49348,9 +49384,9 @@ namespace Thetis
                                 getFilterEdgesInPixels(e, ref low_x, ref high_x, ref vfoa_sub_x, ref vfoa_sub_low_x, ref vfoa_sub_high_x);
 
                                 bool bOverTopOfDragSpectrum = false;
-                                if (bOverRX2 && e.Y < ((pnlDisplay.Height / 2) + 15))
+                                if (bOverRX2 && e.Y < ((pnlDisplay.Height / 2) + HighDpi.Px(15)))
                                     bOverTopOfDragSpectrum = true;
-                                else if (bOverRX1 && e.Y < 15)
+                                else if (bOverRX1 && e.Y < HighDpi.Px(15))
                                     bOverTopOfDragSpectrum = true;
 
                                 if (current_click_tune_mode == ClickTuneMode.Off || bOverTopOfDragSpectrum)
@@ -49360,7 +49396,7 @@ namespace Thetis
                                         spectrum_drag_last_x = e.X;
                                         if (_click_tune_rx2_display)
                                         {
-                                            if (e.Y < ((pnlDisplay.Height / 2) + 15))
+                                            if (e.Y < ((pnlDisplay.Height / 2) + HighDpi.Px(15)))
                                             {
                                                 rx2_spectrum_tune_drag = true;
                                                 next_cursor = Cursors.SizeWE;
@@ -49385,7 +49421,7 @@ namespace Thetis
                                         spectrum_drag_last_x = e.X;
                                         if (_click_tune_display)
                                         {
-                                            if (e.Y < 15)
+                                            if (e.Y < HighDpi.Px(15))
                                             {
                                                 if (!panDragArmTop(e)) // Jull1ano fork: the drag strip pans like the rest (SmoothPan.cs)
                                                 {
@@ -49501,7 +49537,7 @@ namespace Thetis
                                 int vfoa_sub_high_x = 0;
                                 getFilterEdgesInPixels(e, ref low_x, ref high_x, ref vfoa_sub_x, ref vfoa_sub_low_x, ref vfoa_sub_high_x);
 
-                                if (Math.Abs(e.X - low_x) < 3 && e.X < high_x)
+                                if (Math.Abs(e.X - low_x) < HighDpi.Px(3) && e.X < high_x)
                                 {
                                     if (rx2_enabled && e.Y > pnlDisplay.Height / 2)
                                     {
@@ -49554,7 +49590,7 @@ namespace Thetis
                                         else rx1_low_filter_drag = true;
                                     }
                                 }
-                                else if (Math.Abs(e.X - high_x) < 3)
+                                else if (Math.Abs(e.X - high_x) < HighDpi.Px(3))
                                 {
                                     if (rx2_enabled && e.Y > pnlDisplay.Height / 2)
                                     {
@@ -49601,7 +49637,7 @@ namespace Thetis
                                     dragWholeFilter(e);
                                 }
                                 else if (chkEnableMultiRX.Checked && !_mox &&
-                                    (e.X > vfoa_sub_low_x - 3 && e.X < vfoa_sub_high_x + 3))
+                                    (e.X > vfoa_sub_low_x - HighDpi.Px(3) && e.X < vfoa_sub_high_x + HighDpi.Px(3)))
                                 {
                                     sub_drag_last_x = e.X;
                                     if (rx2_enabled) sub_drag_start_freq = VFOASubFreq;
@@ -49628,7 +49664,7 @@ namespace Thetis
                     // right click in the middle splitter bar will recentre it
                     if (!rx2_enabled && Display.CurrentDisplayMode == DisplayMode.PANAFALL)
                     {
-                        if (e.Y >= Display.PanafallSplitBarPos && e.Y < Display.PanafallSplitBarPos + 20)
+                        if (e.Y >= Display.PanafallSplitBarPos && e.Y < Display.PanafallSplitBarPos + HighDpi.Px(20))
                         {
                             Display.PanafallSplitBarPerc = 0.5f;
                             return;
@@ -50062,7 +50098,7 @@ namespace Thetis
                     #region BandStackHighlight
                     //BandstackOverlay highlight MW0LGE_21h
                     //only do this if not doing something else
-                    if (e.Y >= 15 && m_bShowBandStackOverlays && bOverRX1 && !(rx1_sub_drag || bHighlightNumberScaleRX1 || bDraggingAFilter || m_bDraggingNotch || m_bDraggingNotchBW || m_bDraggingPanafallSplit))
+                    if (e.Y >= HighDpi.Px(15) && m_bShowBandStackOverlays && bOverRX1 && !(rx1_sub_drag || bHighlightNumberScaleRX1 || bDraggingAFilter || m_bDraggingNotch || m_bDraggingNotchBW || m_bDraggingPanafallSplit))
                     {
                         if (Display.BandStackOverlays != null && Display.BandStackOverlays.Length > 0)
                         {
@@ -50519,11 +50555,11 @@ namespace Thetis
                         {
                             if (!rx1_spectrum_tune_drag && !rx2_spectrum_tune_drag && current_click_tune_mode == ClickTuneMode.Off)
                             {
-                                bool bLowEdge = (bOkToChangeRX1 && (!rx1_whole_filter_drag && (Math.Abs(e.X - filt_low_x) < 3 || rx1_low_filter_drag))) ||
-                                                (bOkToChangeRX2 && (!rx2_whole_filter_drag && (Math.Abs(e.X - vfob_low_x) < 3 || rx2_low_filter_drag)));
+                                bool bLowEdge = (bOkToChangeRX1 && (!rx1_whole_filter_drag && (Math.Abs(e.X - filt_low_x) < HighDpi.Px(3) || rx1_low_filter_drag))) ||
+                                                (bOkToChangeRX2 && (!rx2_whole_filter_drag && (Math.Abs(e.X - vfob_low_x) < HighDpi.Px(3) || rx2_low_filter_drag)));
 
-                                bool bHighEdge = (bOkToChangeRX1 && (!rx1_whole_filter_drag && (Math.Abs(e.X - filt_high_x) < 3 || rx1_high_filter_drag))) ||
-                                                 (bOkToChangeRX2 && (!rx2_whole_filter_drag && (Math.Abs(e.X - vfob_high_x) < 3 || rx2_high_filter_drag)));
+                                bool bHighEdge = (bOkToChangeRX1 && (!rx1_whole_filter_drag && (Math.Abs(e.X - filt_high_x) < HighDpi.Px(3) || rx1_high_filter_drag))) ||
+                                                 (bOkToChangeRX2 && (!rx2_whole_filter_drag && (Math.Abs(e.X - vfob_high_x) < HighDpi.Px(3) || rx2_high_filter_drag)));
 
                                 int highlightRX1 = 0;
                                 int highlightRX2 = 0;
@@ -50557,8 +50593,8 @@ namespace Thetis
                                         next_cursor = Cursors.NoMoveHoriz;
                                 }
 
-                                if (e.Y < 15) highlightRX1 = 0; // ignore it if we up top
-                                if (e.Y < ((pnlDisplay.Height / 2) + 15)) highlightRX2 = 0;
+                                if (e.Y < HighDpi.Px(15)) highlightRX1 = 0; // ignore it if we up top
+                                if (e.Y < ((pnlDisplay.Height / 2) + HighDpi.Px(15))) highlightRX2 = 0;
 
                                 //MW0LGE_21k9 added the filter info onto the cursor info, also done below on the filter drags
                                 if (highlightRX1 == -1)
@@ -50848,7 +50884,7 @@ namespace Thetis
                                 break;
                             case DisplayMode.WATERFALL:
                                 bShowDBM = false;
-                                bShowWaterfallSeconds = e.Y > 16;
+                                bShowWaterfallSeconds = e.Y > HighDpi.Px(16);
                                 break;
                         }
 
@@ -51007,9 +51043,9 @@ namespace Thetis
                 #endregion
 
                 // top drag area - this will override hover over filter
-                if (bOverRX2 && e.Y < ((pnlDisplay.Height / 2) + 15))
+                if (bOverRX2 && e.Y < ((pnlDisplay.Height / 2) + HighDpi.Px(15)))
                     next_cursor = Cursors.SizeWE;
-                else if (bOverRX1 && e.Y < 15)
+                else if (bOverRX1 && e.Y < HighDpi.Px(15))
                     next_cursor = Cursors.SizeWE;
                 //
 
@@ -51023,7 +51059,7 @@ namespace Thetis
                     if (agc_knee_drag || agc_hang_drag) next_cursor = grabbing; // agc grab handles
                     else if (rx1_spectrum_drag || rx2_spectrum_drag || rx1_spectrum_tune_drag || rx2_spectrum_tune_drag) next_cursor = Cursors.SizeWE; // dragging the spectrum
                     else if (rx1_click_tune_drag || rx2_click_tune_drag) next_cursor = grabbing; // dragging the tune in CTUN on mode
-                    else if ((!rx2_enabled && Display.CurrentDisplayMode == DisplayMode.PANAFALL) && e.Y >= Display.PanafallSplitBarPos && e.Y < Display.PanafallSplitBarPos + 20) next_cursor = Cursors.SizeNS; // over the splitter
+                    else if ((!rx2_enabled && Display.CurrentDisplayMode == DisplayMode.PANAFALL) && e.Y >= Display.PanafallSplitBarPos && e.Y < Display.PanafallSplitBarPos + HighDpi.Px(20)) next_cursor = Cursors.SizeNS; // over the splitter
                 }
 
                 pnlDisplay.Cursor = next_cursor;

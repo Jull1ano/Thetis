@@ -136,10 +136,10 @@ namespace Thetis
             a.Add("spectrum_grid_max/" + wbdisplay.SpectrumGridMax);
             a.Add("spectrum_grid_min/" + wbdisplay.SpectrumGridMin);
 
-            a.Add("Top/" + this.Top);
-            a.Add("Left/" + this.Left);
-            a.Add("Width/" + this.Width);
-            a.Add("Height/" + this.Height);
+            a.Add("Top/" + HighDpi.Unpx(this.Top)); // Jull1ano fork: 96 DPI units
+            a.Add("Left/" + HighDpi.Unpx(this.Left));
+            a.Add("Width/" + HighDpi.Unpx(this.Width));
+            a.Add("Height/" + HighDpi.Unpx(this.Height));
 
             DB.SaveVars("WideBand", a);
         }
@@ -165,20 +165,20 @@ namespace Thetis
                 {
                     case "Top":
                         this.StartPosition = FormStartPosition.Manual;
-                        int top = int.Parse(val);
+                        int top = HighDpi.Px(int.Parse(val));
                         this.Top = top;
                         break;
                     case "Left":
                         this.StartPosition = FormStartPosition.Manual;
-                        int left = int.Parse(val);
+                        int left = HighDpi.Px(int.Parse(val));
                         this.Left = left;
                         break;
                     case "Width":
-                        int width = int.Parse(val);
+                        int width = HighDpi.Px(int.Parse(val));
                         this.Width = width;
                         break;
                     case "Height":
-                        int height = int.Parse(val);
+                        int height = HighDpi.Px(int.Parse(val));
                         this.Height = height;
                         break;
                     case "average_on":

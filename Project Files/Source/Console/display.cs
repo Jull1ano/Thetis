@@ -5152,7 +5152,7 @@ namespace Thetis
                 }
 
                 fillPeaksBrush = m_bDX2_dataPeaks_fill_fpen_brush; //todo
-                line_width = _tx_display_line_width;
+                line_width = _tx_display_line_width; // Jull1ano fork: the trace width is in device pixels (as NereusSDR): 1 px is crisp at 4K
             }
             else
             {
@@ -5167,7 +5167,7 @@ namespace Thetis
                     fillBrush = m_bUseLinearGradient ? m_brushLGDataFillRX2 : m_bDX2_data_fill_fpen_brush;
                 }
                 fillPeaksBrush = m_bDX2_dataPeaks_fill_fpen_brush;
-                line_width = _display_line_width;
+                line_width = _display_line_width; // Jull1ano fork: the trace width is in device pixels (as NereusSDR): 1 px is crisp at 4K
             }
 
             float dbmToPixel = H / (float)yRange;
@@ -6691,7 +6691,8 @@ namespace Thetis
                         clearWaterfallBitmapRegion(waterfallBitmap, 0, 0, W, (int)waterfallBitmap.Size.Height);
                     }
 
-                    int preservedBitmapHeight = (int)waterfallBitmap.Size.Height - (addRow ? 1 : 0);
+                    int wfRows = HighDpi.WaterfallRowsPerUpdate; // Jull1ano fork: one data row is this many pixel rows (same time span at any DPI)
+                    int preservedBitmapHeight = (int)waterfallBitmap.Size.Height - (addRow ? wfRows : 0);
                     topPixels = new SharpDX.Direct2D1.Bitmap(_d2dRenderTarget, new Size2((int)waterfallBitmap.Size.Width, preservedBitmapHeight), new BitmapProperties(new SDXPixelFormat(waterfallBitmap.PixelFormat.Format, ALPHA_MODE)));
 
                     topPixels.CopyFromBitmap(waterfallBitmap, new SharpDX.Point(0, 0), new SharpDX.Rectangle(0, 0, (int)topPixels.Size.Width, preservedBitmapHeight));
@@ -7614,11 +7615,12 @@ namespace Thetis
                     {
                         if (addRow)
                         {
-                            waterfallBitmap.CopyFromMemory(row, W * pixel_size, new SharpDX.Rectangle(0, 0, W, 1));
+                            for (int wr = 0; wr < wfRows; wr++)
+                                waterfallBitmap.CopyFromMemory(row, W * pixel_size, new SharpDX.Rectangle(0, wr, W, 1));
                         }
 
                         int copyWidth = W - Math.Abs(horizontalShiftPixels);
-                        int shiftedRowTop = addRow ? 1 : 0;
+                        int shiftedRowTop = addRow ? wfRows : 0;
                         if (copyWidth > 0)
                         {
                             int sourceX = horizontalShiftPixels < 0 ? -horizontalShiftPixels : 0;
@@ -7640,7 +7642,7 @@ namespace Thetis
                             clearWaterfallBitmapRegion(waterfallBitmap, 0, shiftedRowTop, W, preservedBitmapHeight);
                         }
 
-                        if (addRow) recordWaterfallAdvance(rx, H - 20);
+                        if (addRow) for (int wr = 0; wr < wfRows; wr++) recordWaterfallAdvance(rx, H - 20);
                     }
 
                     Utilities.Dispose(ref topPixels);
@@ -8420,17 +8422,17 @@ namespace Thetis
 
                 fontFactory = new SharpDX.DirectWrite.Factory();
 
-                fontDX2d_callout = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (m_fntCallOutFont.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font9 = new SharpDX.DirectWrite.TextFormat(fontFactory, font9.FontFamily.Name, (font9.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font9b = new SharpDX.DirectWrite.TextFormat(fontFactory, font9b.FontFamily.Name, SharpDX.DirectWrite.FontWeight.Bold, SharpDX.DirectWrite.FontStyle.Normal, (font9b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font9c = new SharpDX.DirectWrite.TextFormat(fontFactory, font95.FontFamily.Name, (font95.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_panafont = new SharpDX.DirectWrite.TextFormat(fontFactory, pana_font.FontFamily.Name, (pana_font.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font10 = new SharpDX.DirectWrite.TextFormat(fontFactory, font10.FontFamily.Name, (font10.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font12 = new SharpDX.DirectWrite.TextFormat(fontFactory, font12.FontFamily.Name, (font12.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font14 = new SharpDX.DirectWrite.TextFormat(fontFactory, font14b.FontFamily.Name, (font14b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font32 = new SharpDX.DirectWrite.TextFormat(fontFactory, font32b.FontFamily.Name, (font32b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_font1 = new SharpDX.DirectWrite.TextFormat(fontFactory, font1r.FontFamily.Name, (font1r.Size / 72) * _d2dRenderTarget.DotsPerInch.Width);
-                fontDX2d_fps_profile = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (64f / 72) * _d2dRenderTarget.DotsPerInch.Width);
+                fontDX2d_callout = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (m_fntCallOutFont.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font9 = new SharpDX.DirectWrite.TextFormat(fontFactory, font9.FontFamily.Name, (font9.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font9b = new SharpDX.DirectWrite.TextFormat(fontFactory, font9b.FontFamily.Name, SharpDX.DirectWrite.FontWeight.Bold, SharpDX.DirectWrite.FontStyle.Normal, (font9b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font9c = new SharpDX.DirectWrite.TextFormat(fontFactory, font95.FontFamily.Name, (font95.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_panafont = new SharpDX.DirectWrite.TextFormat(fontFactory, pana_font.FontFamily.Name, (pana_font.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font10 = new SharpDX.DirectWrite.TextFormat(fontFactory, font10.FontFamily.Name, (font10.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font12 = new SharpDX.DirectWrite.TextFormat(fontFactory, font12.FontFamily.Name, (font12.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font14 = new SharpDX.DirectWrite.TextFormat(fontFactory, font14b.FontFamily.Name, (font14b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font32 = new SharpDX.DirectWrite.TextFormat(fontFactory, font32b.FontFamily.Name, (font32b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_font1 = new SharpDX.DirectWrite.TextFormat(fontFactory, font1r.FontFamily.Name, (font1r.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_fps_profile = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (64f / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
             }
         }
         static void clearBackgroundDX2D(int rx, int W, int H, bool bottom)
@@ -8466,12 +8468,12 @@ namespace Thetis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void drawLineDX2D(SharpDX.Direct2D1.Brush b, float x1, float y1, float x2, float y2, float strokeWidth = 1f)
         {
-            _d2dRenderTarget.DrawLine(new SharpDX.Vector2(x1, y1), new SharpDX.Vector2(x2, y2), b, strokeWidth);
+            _d2dRenderTarget.DrawLine(new SharpDX.Vector2(x1, y1), new SharpDX.Vector2(x2, y2), b, HighDpi.Stroke(strokeWidth)); // Jull1ano fork: hairlines stay 1 px, wider lines DPI-scaled
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void drawLineDX2D(SharpDX.Direct2D1.Brush b, float x1, float y1, float x2, float y2, StrokeStyle strokeStyle, float strokeWidth = 1f)
         {
-            _d2dRenderTarget.DrawLine(new SharpDX.Vector2(x1, y1), new SharpDX.Vector2(x2, y2), b, strokeWidth, strokeStyle);
+            _d2dRenderTarget.DrawLine(new SharpDX.Vector2(x1, y1), new SharpDX.Vector2(x2, y2), b, HighDpi.Stroke(strokeWidth), strokeStyle); // Jull1ano fork: hairlines stay 1 px, wider lines DPI-scaled
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void drawFillRectangleDX2D(SharpDX.Direct2D1.Brush b, float x, float y, float w, float h)
@@ -8501,7 +8503,7 @@ namespace Thetis
         private static void drawRectangleDX2D(SharpDX.Direct2D1.Brush b, Rectangle r, float lineWidth = 1)
         {
             RectangleF rect = new RectangleF(r.X, r.Y, r.Width, r.Height);
-            _d2dRenderTarget.DrawRectangle(rect, b, lineWidth);
+            _d2dRenderTarget.DrawRectangle(rect, b, HighDpi.Stroke(lineWidth)); // Jull1ano fork: hairlines stay 1 px, wider lines DPI-scaled
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void drawFillRectangleDX2D(SharpDX.Direct2D1.Brush b, Rectangle r)

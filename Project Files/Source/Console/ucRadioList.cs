@@ -1648,7 +1648,7 @@ if (!DoesRadioExist(item.Key))
             int dpi;
             try
             {
-                dpi = DeviceDpi;
+                dpi = HighDpi.Enabled ? (int)Math.Round(96 * HighDpi.Scale) : DeviceDpi; // Jull1ano fork: DeviceDpi stays 96 in a system-aware process
             }
             catch
             {
