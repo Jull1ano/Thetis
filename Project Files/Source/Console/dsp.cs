@@ -414,6 +414,10 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetRXAShiftFreq", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXAShiftFreq(int channel, double freq);
 
+        // Jull1ano fork: shift change at the sample where a DDC retune sent now arrives (smooth pan)
+        [DllImport("wdsp.dll", EntryPoint = "SetRXAShiftFreqAt", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXAShiftFreqAt(int channel, double freq, double delay_ms, double guard_ms, double ramp_ms);
+
         [DllImport("wdsp.dll", EntryPoint = "SetRXASpectrum", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXASpectrum(int channel, int flag, int disp, int ss, int LO);
 

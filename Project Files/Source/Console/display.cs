@@ -240,6 +240,15 @@ namespace Thetis
         private static readonly double[] _waterfallBitmapSpanHz = new double[] { double.NaN, double.NaN };
         private static readonly double[] _waterfallBitmapShiftRemainderPixels = new double[2];
         private static readonly int[] _waterfallBitmapWidths = new int[2];
+        // Jull1ano fork: the analyzer keeps the trace in absolute frequency across pans, zooms and DDC retunes
+        // (WDSP analyzer smooth pan / retune), so the waterfall need not pause after a centre change
+        private static bool _smoothSpectrum = true;
+        public static bool SmoothSpectrum
+        {
+            get { return _smoothSpectrum; }
+            set { _smoothSpectrum = value; }
+        }
+
         private static bool _allowWaterfallSmear = false;
         public static bool AllowWaterfallSmear
         {
@@ -6361,7 +6370,7 @@ namespace Thetis
             // this add row block prevents rows from being added if the centre frequency changes
             // for a duration 20% greater than fft fill time to allow buckets to aproach expected levels
             // all to reduce smearing when centre frequency is changed
-            bool stopWaterfall = !_allowWaterfallSmear && (rx == 1 ? _stopRx1Waterfall : _stopRx2Waterfall);
+            bool stopWaterfall = !_allowWaterfallSmear && !_smoothSpectrum && (rx == 1 ? _stopRx1Waterfall : _stopRx2Waterfall);
             if (stopWaterfall)                
             {
                 DateTime stopTime = rx == 1 ? _rx1_centrefreq_change_time : _rx2_centrefreq_change_time;

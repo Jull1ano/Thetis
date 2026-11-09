@@ -124,6 +124,7 @@ warren@wpratt.com
 #define dMAX_N							100					// maximum number of frequencies at which to calibrate
 #define dMAX_CAL_SETS					2					// maximum number of calibration data sets
 #define dMAX_PIXOUTS					4					// maximum number of det/avg/outputs per display instance
+#define dMAX_RETUNE_EV					256					// maximum number of LO changes remembered for one fft window
 
 // wisdom definitions
 #define MAX_WISDOM_SIZE_DISPLAY			262144

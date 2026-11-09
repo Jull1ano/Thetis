@@ -845,6 +845,13 @@ namespace Thetis
         [DllImport("WDSP.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetPixelRef(int disp, double pixel_ref);
 
+        // Jull1ano fork: smooth pan / retune in the analyzer (on by default)
+        [DllImport("WDSP.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetAnalyzerSmooth(int disp, int enable);
+
+        [DllImport("WDSP.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetAnalyzerRetuneLatency(int disp, double latency_ms);
+
         [DllImport("WDSP.dll", EntryPoint = "GetPixels", CallingConvention = CallingConvention.Cdecl)]
         private static extern void GetPixelsNative(int disp, int pixout, float* pix, ref int flag, out double pixel_ref);
 

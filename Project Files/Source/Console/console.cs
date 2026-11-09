@@ -31144,6 +31144,8 @@ namespace Thetis
                 return;
             }
 
+            if (panWheelZoom(e)) return; // Jull1ano fork: Ctrl + wheel zooms around the cursor (SmoothPan.cs)
+
             if (vfo_char_width == 0)
                 GetVFOCharWidth();
 
@@ -31416,7 +31418,7 @@ namespace Thetis
                 double Hdisp = Convert.ToDouble(Display.RXDisplayHigh) - dispWidth * dispMargin;
                 double freqJumpThresh = 0.5e6;  // definition of jumping far, e.g. with memory recall - causes a re-centering
 
-                if (!m_bIgnoreLimitsForZTB) // MW0LGE_21k9
+                if (!m_bIgnoreLimitsForZTB && !_pan_applying) // MW0LGE_21k9 // Jull1ano fork: a pan moves the view away from the VFO on purpose
                 {
                     if (!ClickTuneDrag)
                     {
@@ -31475,7 +31477,7 @@ namespace Thetis
                 }
                 //
 
-                if (!m_bIgnoreLimitsForZTB)
+                if (!m_bIgnoreLimitsForZTB && !_pan_applying) // Jull1ano fork
                 {
                     if (!rx1_spectrum_tune_drag && bLimitToSpectral)  // MW0LGE_21k9 repos if limited to spectral
                     {
@@ -31499,12 +31501,12 @@ namespace Thetis
                     }
                 }
 
-                radio.GetDSPRX(0, 0).RXOsc = rx1_osc; // keep tuning
+                setRX1Osc(0, rx1_osc); // keep tuning // Jull1ano fork: aligned with the DDC while a pan re-centres it
                 Display.FreqDiff = (int)radio.GetDSPRX(0, 0).RXOsc;
             }
             else
             {
-                if (!bCanFitInView && _click_tune_display && !rx1_spectrum_tune_drag)
+                if (!bCanFitInView && _click_tune_display && !rx1_spectrum_tune_drag && !_pan_applying) // Jull1ano fork
                 {
                     // if filter is off the edge of view, most likey because of high zoom
                     CentreFrequency = freq;
@@ -31919,7 +31921,7 @@ namespace Thetis
                         int rx2_osc = (int)(radio.GetDSPRX(0, 0).RXOsc - diff);
                         if (rx2_osc > -sample_rate_rx1 / 2 && rx2_osc < sample_rate_rx1 / 2)
                         {
-                            radio.GetDSPRX(0, 1).RXOsc = rx2_osc;
+                            setRX1Osc(1, rx2_osc); // Jull1ano fork
                         }
                         else chkEnableMultiRX.Checked = false;
                     }
@@ -33560,9 +33562,10 @@ namespace Thetis
         //
         private void ptbDisplayPan_Scroll(object sender, System.EventArgs e)
         {
-            specRX.GetSpecRX(0).PanSlider = (double)ptbDisplayPan.Value / 1000.0;
-            specRX.GetSpecRX(1).PanSlider = (double)ptbDisplayPan.Value / 1000.0;
-            specRX.GetSpecRX(cmaster.inid(1, 0)).PanSlider = (double)ptbDisplayPan.Value / 1000.0;
+            double pan = exactPanSlider(); // Jull1ano fork: keeps a drag pan's exact value (the trackbar has 1000 steps)
+            specRX.GetSpecRX(0).PanSlider = pan;
+            specRX.GetSpecRX(1).PanSlider = pan;
+            specRX.GetSpecRX(cmaster.inid(1, 0)).PanSlider = pan;
             CalcDisplayFreq();
             CalcRX2DisplayFreq();
             CalcTXDisplayFreq();
@@ -33689,9 +33692,10 @@ namespace Thetis
         {
             double dOldZoomFactor = lastZoomFactor;//MW0LGE21d
 
-            specRX.GetSpecRX(0).ZoomSlider = ((double)ptbDisplayZoom.Value - 10.0) / 230.0;
-            specRX.GetSpecRX(1).ZoomSlider = ((double)ptbDisplayZoom.Value - 10.0) / 230.0;
-            specRX.GetSpecRX(cmaster.inid(1, 0)).ZoomSlider = ((double)ptbDisplayZoom.Value - 10.0) / 230.0;
+            double zoom = exactZoomSlider(); // Jull1ano fork: keeps a Ctrl+wheel zoom's exact value
+            specRX.GetSpecRX(0).ZoomSlider = zoom;
+            specRX.GetSpecRX(1).ZoomSlider = zoom;
+            specRX.GetSpecRX(cmaster.inid(1, 0)).ZoomSlider = zoom;
             double zoom_factor = 1.0 / ((ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - ptbDisplayZoom.Value) * 0.01);
 
             DisplayZoomButton dzb;
@@ -49383,15 +49387,21 @@ namespace Thetis
                                         {
                                             if (e.Y < 15)
                                             {
-                                                rx1_spectrum_tune_drag = true;
-                                                next_cursor = Cursors.SizeWE;
+                                                if (!panDragArmTop(e)) // Jull1ano fork: the drag strip pans like the rest (SmoothPan.cs)
+                                                {
+                                                    rx1_spectrum_tune_drag = true;
+                                                    next_cursor = Cursors.SizeWE;
+                                                }
                                             }
                                             else
                                             {
                                                 if (!(Common.ShiftKeyDown && (e.X > low_x && e.X < high_x))) // ignore if shift down, so that we move the filter, and not the frequency MW0LGE_21k9d
                                                 {
-                                                    rx1_click_tune_drag = true;
-                                                    next_cursor = grabbing;
+                                                    if (!panDragArm(e, low_x, high_x, freq)) // Jull1ano fork: outside the passband, a drag pans (SmoothPan.cs)
+                                                    {
+                                                        rx1_click_tune_drag = true;
+                                                        next_cursor = grabbing;
+                                                    }
                                                 }
                                                 else
                                                 {
@@ -49409,7 +49419,7 @@ namespace Thetis
                                 {
                                     if (!rx2_enabled)
                                     {
-                                        if (!rx1_spectrum_tune_drag)
+                                        if (!rx1_spectrum_tune_drag && !_pan_pending) // Jull1ano fork: a click-or-pan tunes on release, if it was a click
                                         {
                                             if (!(Common.ShiftKeyDown && (e.X > low_x && e.X < high_x))) //MW0LGE_21k9d do not set freq, so we can shift the filter instead
                                             {
@@ -49446,7 +49456,7 @@ namespace Thetis
                                                 {
                                                     if (e.Y <= pnlDisplay.Height / 2)
                                                     {
-                                                        if (!rx1_spectrum_tune_drag)
+                                                        if (!rx1_spectrum_tune_drag && !_pan_pending) // Jull1ano fork
                                                             VFOAFreq = Math.Round(freq, 6);
                                                     }
 
@@ -49782,6 +49792,8 @@ namespace Thetis
         unsafe private void pnlDisplay_MouseMove(object sender, MouseEventArgs e)
         {
             if (Display.PausedDisplay) return;
+
+            if (panDragMove(e)) return; // Jull1ano fork: click-or-pan / pan in progress (SmoothPan.cs)
 
             try
             {
@@ -51028,6 +51040,8 @@ namespace Thetis
 
             if (e.Button == MouseButtons.Left)
             {
+                panDragUp(); // Jull1ano fork: a click tunes, a pan ends or coasts on (SmoothPan.cs)
+
                 switch (Display.CurrentDisplayMode)
                 {
                     case DisplayMode.SPECTRUM:

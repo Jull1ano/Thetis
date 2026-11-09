@@ -162,6 +162,33 @@ typedef struct _dp
 	CRITICAL_SECTION cs_dmb;
 	// END CODE TO GET MAX FFT_BIN WITHIN A FREQUENCY RANGE
 
+	// BEGIN SMOOTH PAN / RETUNE (Jull1ano fork)
+	// The averaging state of every pixel output is kept on a grid anchored in absolute frequency, so a pan,
+	// a zoom or a DDC retune shifts or rescales it instead of smearing it, and the input sample history is
+	// kept (no refill) when only the visible part of the span changes. Retunes are marked in the input
+	// sample stream; older samples inside an FFT window are frequency-rotated onto the newest LO, so frames
+	// stay valid while the LO moves.
+	int smooth_enable;										// client switch, 1 by default
+	int smooth_on;											// active for the current configuration (complex data, one sub-span)
+	long long in_count[dMAX_STITCH][dMAX_NUM_FFT];			// number of input samples received so far
+	long long win_start[dMAX_STITCH][dMAX_NUM_FFT];			// absolute index of the first sample of the last dispatched window
+	double lat_ms;											// delay from SetPixelRef() to the first sample taken at the new LO
+	int ev_count;											// retune events, oldest first
+	long long ev_idx[dMAX_RETUNE_EV];						// absolute input sample index at which the new LO starts
+	double ev_lo[dMAX_RETUNE_EV];							// the new LO, MHz
+	double base_lo;											// LO of the samples before ev_idx[0], MHz
+	int req_valid;											// a pixel_ref (LO) has been set
+	int av_n[dMAX_PIXOUTS];									// number of pixels on the averaging grid
+	double av_low_hz[dMAX_PIXOUTS];							// absolute frequency of averaging pixel 0, Hz
+	double av_hzpp[dMAX_PIXOUTS];							// Hz per pixel of the averaging grid, 0 = no state
+	unsigned char *av_valid[dMAX_PIXOUTS];					// 1 = this averaging pixel holds data
+	double av_floor[dMAX_PIXOUTS];							// last noise floor estimate (dB), shown where there is no data
+	double *sm_tmp;
+	double *sm_tmp2;
+	unsigned char *sm_vtmp;
+	int publish_mask;										// pixel outputs that get a frame at once when the view moves
+	// END SMOOTH PAN / RETUNE
+
 }  dp, *DP;
 
 extern DP pdisp[];
@@ -228,5 +255,14 @@ void GetPixels(int disp,
 	dOUTREAL* pix,
 	int* flag,
 	double* pixel_ref);
+
+extern __declspec(dllexport)
+void SetAnalyzerSmooth(int disp, int enable);
+
+extern __declspec(dllexport)
+void SetAnalyzerRetuneLatency(int disp, double latency_ms);
+
+extern __declspec(dllexport)
+long long GetAnalyzerInputCount(int disp);
 
 #endif

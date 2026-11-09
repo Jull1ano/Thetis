@@ -217,10 +217,13 @@ void Celiminate(int disp, int ss, int LO)
 	DP a = pdisp[disp];
 	int i, k, begin0, end0, begin1, end1, ilim;
 	double mag;
+	// smooth mode: deliver the whole span, the visible part is cut out in sm_stitch() so a pan needs no restart
+	int fscL = a->smooth_on ? 0 : a->fscL;
+	int fscH = a->smooth_on ? 0 : a->fscH;
 
 	if (ss == a->begin_ss)
 	{
-		begin0 = a->out_size / 2 + 1 + a->clip + a->fscL;
+		begin0 = a->out_size / 2 + 1 + a->clip + fscL;
 		if (begin0 > a->out_size)
 			begin1 = begin0 - a->out_size;
 		else
@@ -233,7 +236,7 @@ void Celiminate(int disp, int ss, int LO)
 	}
 	if (ss == a->end_ss)
 	{
-		end1 = a->out_size / 2 - a->clip - a->fscH;
+		end1 = a->out_size / 2 - a->clip - fscH;
 		if (end1 < 0)
 			end0 = a->out_size + end1;
 		else
@@ -553,6 +556,526 @@ void avenger (  int av_mode,				// averaging mode
 			pixels[i] += (dOUTREAL)norm_oneHz;
 }
 
+/********************************************************************************************************
+*																										*
+*								SMOOTH PAN / RETUNE (Jull1ano fork)										*
+*																										*
+*	The averaging state of each pixel output lives on a grid anchored in absolute frequency:			*
+*	av pixel j is at av_low_hz + j * av_hzpp.  When the view (pan, zoom) or the LO moves, the state		*
+*	is shifted by whole pixels or resampled, never smeared or restarted.  Pixels without data are		*
+*	marked invalid, shown at the noise floor and seeded by the first fresh value.						*
+*	Every LO change is marked in the input sample stream (SetPixelRef).  Samples older than the last	*
+*	LO change inside an fft window are frequency-rotated onto the newest LO (phase continuous, like		*
+*	the radio's NCO), so frames stay valid while the LO moves; the band edge the old samples cannot		*
+*	cover is marked invalid for that frame.  All of this needs complex data and one sub-span.			*
+*																										*
+********************************************************************************************************/
+
+typedef struct _sm_frame
+{
+	int smooth;			// frame was prepared by sm_fill_window()
+	int skip;			// frame has too little valid span (big LO jump inside the window)
+	double lo;			// LO the frame is computed for, MHz
+	double vlo_hz;		// valid part of the frame, Hz relative to lo
+	double vhi_hz;
+} sm_frame;
+
+static int sm_geometry(DP a, double* low_rel_hz, double* hzpp)
+{
+	double bw;
+	int bins;
+	if (a->sample_rate <= 0 || a->size <= 0 || a->num_pixels < 2)
+		return 0;
+	bw = (double)a->sample_rate / (double)a->size;
+	bins = a->num_stitch * (a->out_size - 1 - 2 * a->clip);
+	*low_rel_hz = (-0.5 * (double)(bins - 1) + a->fsclipL) * bw;
+	*hzpp = a->bin_per_pix * bw;
+	return *hzpp > 0.0;
+}
+
+static double sm_view_centre_mhz(DP a, double lo_mhz)
+{
+	double bw = (a->size > 0) ? (double)a->sample_rate / (double)a->size : 0.0;
+	return lo_mhz + 0.5 * (a->fsclipL - a->fsclipH) * bw * 1.0e-6;
+}
+
+static double sm_db(DP a, int i, int j)
+{
+	double* av = a->av_sum[i];
+	switch (a->av_mode[i])
+	{
+	case 3:
+		return av[j];
+	case 2:
+		if (a->avail_frames[i] <= 0) return -200.0;
+		return 10.0 * mlog10(a->cd[j] * av[j] * a->scale / (double)a->avail_frames[i] + 1.0e-60);
+	default:
+		return 10.0 * mlog10(a->scale * a->cd[j] * av[j] + 1.0e-60);
+	}
+}
+
+static void sm_invalidate(DP a, int i)
+{
+	memset(a->av_valid[i], 0, dMAX_PIXELS);
+}
+
+static void sm_shift_d(double* arr, int n, int k)	// arr[j] = arr[j + k]
+{
+	if (k > 0)
+		memmove(arr, arr + k, (n - k) * sizeof(double));
+	else if (k < 0)
+		memmove(arr - k, arr, (n + k) * sizeof(double));
+}
+
+static void sm_shift_b(unsigned char* arr, int n, int k)
+{
+	if (k > 0)
+	{
+		memmove(arr, arr + k, n - k);
+		memset(arr + n - k, 0, k);
+	}
+	else if (k < 0)
+	{
+		memmove(arr - k, arr, n + k);
+		memset(arr, 0, -k);
+	}
+}
+
+static void sm_resample(DP a, int i, double new_low, double new_hzpp, int new_n)
+{
+	int j, k, x0, n_old = a->av_n[i];
+	double x, fr, mean;
+	double old_low = a->av_low_hz[i], old_hzpp = a->av_hzpp[i];
+	double* src = a->av_sum[i];
+	double* dst = a->sm_tmp;
+	unsigned char* vs = a->av_valid[i];
+	unsigned char* vd = a->sm_vtmp;
+	for (j = 0; j < new_n; j++)
+	{
+		x = (new_low + (double)j * new_hzpp - old_low) / old_hzpp;
+		x0 = (int)floor(x + 1.0e-9);
+		fr = x - (double)x0;
+		if (fr < 1.0e-9) fr = 0.0;
+		vd[j] = 0;
+		dst[j] = 0.0;
+		if (x0 < 0 || x0 >= n_old)
+			continue;
+		if (fr == 0.0 || x0 + 1 >= n_old)
+		{
+			if (fr == 0.0 && vs[x0]) { dst[j] = src[x0]; vd[j] = 1; }
+		}
+		else if (vs[x0] && vs[x0 + 1])
+		{
+			dst[j] = src[x0] * (1.0 - fr) + src[x0 + 1] * fr;
+			vd[j] = 1;
+		}
+		else if (vs[x0] && fr < 0.5) { dst[j] = src[x0]; vd[j] = 1; }
+		else if (vs[x0 + 1] && fr >= 0.5) { dst[j] = src[x0 + 1]; vd[j] = 1; }
+	}
+	memcpy(src, dst, new_n * sizeof(double));
+	memcpy(vs, vd, new_n);
+	if (new_n < dMAX_PIXELS) memset(vs + new_n, 0, dMAX_PIXELS - new_n);
+	if (a->av_mode[i] == 2)
+	{
+		// window average: rebuild a flat history that has the resampled mean
+		for (j = 0; j < new_n; j++)
+		{
+			mean = (vs[j] && a->avail_frames[i] > 0) ? src[j] / (double)a->avail_frames[i] : 0.0;
+			if (!vs[j]) src[j] = 0.0;
+			for (k = 0; k < dMAX_AVERAGE; k++)
+				a->av_buff[i][k][j] = mean;
+		}
+	}
+	a->av_low_hz[i] = new_low;
+	a->av_hzpp[i] = new_hzpp;
+	a->av_n[i] = new_n;
+}
+
+// move the averaging grid of pixel output i onto the grid that starts at new_low
+static void sm_realign(DP a, int i, double new_low, double new_hzpp, int new_n)
+{
+	long long k;
+	int j;
+	if (new_n < 2 || new_n > dMAX_PIXELS || new_hzpp <= 0.0)
+		return;
+	if (a->av_hzpp[i] <= 0.0 || a->av_n[i] < 2)
+	{
+		sm_invalidate(a, i);
+		a->av_low_hz[i] = new_low;
+		a->av_hzpp[i] = new_hzpp;
+		a->av_n[i] = new_n;
+		return;
+	}
+	if (new_n == a->av_n[i] && fabs(new_hzpp - a->av_hzpp[i]) <= 1.0e-9 * new_hzpp)
+	{
+		k = llround((new_low - a->av_low_hz[i]) / new_hzpp);
+		if (k == 0)
+			return;
+		if (llabs(k) >= new_n)
+		{
+			sm_invalidate(a, i);
+			a->av_low_hz[i] = new_low;
+			return;
+		}
+		sm_shift_d(a->av_sum[i], new_n, (int)k);
+		sm_shift_b(a->av_valid[i], new_n, (int)k);
+		if (a->av_mode[i] == 2)
+			for (j = 0; j < dMAX_AVERAGE; j++)
+				sm_shift_d(a->av_buff[i][j], new_n, (int)k);
+		a->av_low_hz[i] += (double)k * new_hzpp;
+	}
+	else
+		sm_resample(a, i, new_low, new_hzpp, new_n);
+}
+
+static double sm_select(double* v, int n, int kth)	// k-th smallest, reorders v
+{
+	int lo = 0, hi = n - 1, l, r;
+	double pivot, t;
+	while (lo < hi)
+	{
+		pivot = v[(lo + hi) >> 1];
+		l = lo; r = hi;
+		while (l <= r)
+		{
+			while (v[l] < pivot) l++;
+			while (v[r] > pivot) r--;
+			if (l <= r) { t = v[l]; v[l] = v[r]; v[r] = t; l++; r--; }
+		}
+		if (kth <= r) hi = r;
+		else if (kth >= l) lo = l;
+		else break;
+	}
+	return v[kth];
+}
+
+// publish the averaging state of pixel output i as a new pixel frame
+static void sm_publish(DP a, int i, double tag_mhz)
+{
+	int j, c = 0, n = a->num_pixels;
+	double fl;
+	double* db = a->sm_tmp;
+	double* tmp = a->sm_tmp2;
+	unsigned char* v = a->av_valid[i];
+	dOUTREAL* out;
+	if (n != a->av_n[i] || n < 2)
+		return;
+	for (j = 0; j < n; j++)
+		if (v[j])
+		{
+			db[j] = sm_db(a, i, j);
+			tmp[c++] = db[j];
+		}
+	if (c >= 16)
+		a->av_floor[i] = sm_select(tmp, c, c / 5);	// noise floor = 20th percentile of the pixels with data
+	else if (a->av_floor[i] > 1.0e29)
+		return;										// no data yet and no floor to show
+	fl = a->av_floor[i];
+	out = a->pixels[i][a->w_pix_buff[i]];
+	for (j = 0; j < n; j++)
+		out[j] = (dOUTREAL)(v[j] ? db[j] : fl);
+	if (a->normalize[i])
+		for (j = 0; j < n; j++)
+			out[j] += (dOUTREAL)a->norm_oneHz;
+
+	EnterCriticalSection(&a->PB_ControlsSection[i]);
+	EnterCriticalSection(&a->PixelRefSection);
+	a->pixel_refs[i][a->w_pix_buff[i]] = tag_mhz;
+	LeaveCriticalSection(&a->PixelRefSection);
+	a->last_pix_buff[i] = a->w_pix_buff[i];
+	while ((a->w_pix_buff[i] = (a->w_pix_buff[i] + 1) % dNUM_PIXEL_BUFFS) == a->r_pix_buff[i]);
+	LeaveCriticalSection(&a->PB_ControlsSection[i]);
+	InterlockedBitTestAndSet(&(a->pb_ready[i][a->last_pix_buff[i]]), 0);
+}
+
+// average a fresh frame t (frame pixel p <-> averaging pixel p + d) into pixel output i;
+// only frame pixels pv0..pv1 hold valid data
+static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0, int pv1)
+{
+	int j, k, x0, mode = a->av_mode[i];
+	double x, fr, val;
+	double* av = a->av_sum[i];
+	double* ft = a->sm_tmp;
+	unsigned char* v = a->av_valid[i];
+	unsigned char* vt = a->sm_vtmp;
+	double b = a->av_backmult[i], omb = 1.0 - a->av_backmult[i];
+
+	for (j = 0; j < n; j++)
+	{
+		vt[j] = 0;
+		x = (double)j - d;
+		if (x < (double)pv0 - 1.0e-6 || x > (double)pv1 + 1.0e-6)
+			continue;
+		x0 = (int)floor(x + 1.0e-6);
+		if (x0 < pv0) x0 = pv0;
+		fr = x - (double)x0;
+		if (fr < 1.0e-6 || x0 >= pv1)
+			val = t[x0 > pv1 ? pv1 : x0];
+		else
+			val = t[x0] * (1.0 - fr) + t[x0 + 1] * fr;
+		ft[j] = val;
+		vt[j] = 1;
+	}
+
+	switch (mode)
+	{
+	case -1:	// peak hold
+		for (j = 0; j < n; j++)
+			if (vt[j] && (!v[j] || ft[j] > av[j])) { av[j] = ft[j]; v[j] = 1; }
+		break;
+	case 1:		// weighted averaging of linear data
+		for (j = 0; j < n; j++)
+			if (vt[j])
+			{
+				if (!v[j]) { av[j] = ft[j]; v[j] = 1; }
+				else av[j] = b * av[j] + omb * ft[j];
+			}
+		break;
+	case 2:		// window averaging of linear data
+		{
+			int full = a->avail_frames[i] >= a->num_average[i];
+			int avail = a->avail_frames[i];
+			double* inb = a->av_buff[i][a->av_in_idx[i]];
+			double* outb = a->av_buff[i][a->av_out_idx[i]];
+			for (j = 0; j < n; j++)
+			{
+				if (vt[j])
+				{
+					val = ft[j];
+					if (!v[j])
+					{
+						for (k = 0; k < dMAX_AVERAGE; k++)
+							a->av_buff[i][k][j] = val;
+						av[j] = val * (double)avail;
+						v[j] = 1;
+					}
+				}
+				else if (v[j])
+					val = avail > 0 ? av[j] / (double)avail : 0.0;	// no data here: keep the mean
+				else
+				{
+					inb[j] = 0.0;
+					continue;
+				}
+				if (full) av[j] += val - outb[j];
+				else av[j] += val;
+				inb[j] = val;
+			}
+			if (!full) a->avail_frames[i]++;
+			else if (++a->av_out_idx[i] == dMAX_AVERAGE) a->av_out_idx[i] = 0;
+			if (++a->av_in_idx[i] == dMAX_AVERAGE) a->av_in_idx[i] = 0;
+		}
+		break;
+	case 3:		// weighted averaging of log data
+		for (j = 0; j < n; j++)
+			if (vt[j])
+			{
+				val = 10.0 * mlog10(a->scale * a->cd[j] * ft[j] + 1e-60);
+				if (!v[j]) { av[j] = val; v[j] = 1; }
+				else av[j] = b * av[j] + omb * val;
+			}
+		break;
+	case 0:		// no averaging: the state is the last frame
+	default:
+		for (j = 0; j < n; j++)
+			if (vt[j]) { av[j] = ft[j]; v[j] = 1; }
+		break;
+	}
+}
+
+// move all pixel outputs onto the requested view (current LO + current geometry); publish if asked
+static void sm_follow_view(DP a, int publish)
+{
+	int i;
+	double low_rel, hzpp, lo;
+	if (!sm_geometry(a, &low_rel, &hzpp))
+		return;
+	EnterCriticalSection(&a->PixelRefSection);
+	lo = a->pixel_ref;
+	LeaveCriticalSection(&a->PixelRefSection);
+	for (i = 0; i < a->num_pixout; i++)
+	{
+		sm_realign(a, i, lo * 1.0e6 + low_rel, hzpp, a->num_pixels);
+		if (publish && (a->publish_mask & (1 << i)))
+			sm_publish(a, i, sm_view_centre_mhz(a, lo));
+	}
+}
+
+// copy the window into Cfft_in[ss][LO], rotating samples taken before the last LO change onto the newest LO
+static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
+{
+	static const double TWOPI_ = 6.283185307179586476925286766559;
+	long long ws = a->win_start[ss][LO];
+	int size = a->size;
+	int i, m, nev = 0, start, end, idx = a->IQO_idx[ss][LO];
+	long long eidx[dMAX_RETUNE_EV];
+	double elo[dMAX_RETUNE_EV];
+	double Fs[dMAX_RETUNE_EV + 1], Gs[dMAX_RETUNE_EV + 1];
+	double lo0, lo_m, lo_m1, Fmax = 0.0, Fmin = 0.0, F, half, fs = (double)a->sample_rate;
+	double sgn = a->flip[LO] ? 1.0 : -1.0;
+	dINREAL* I = a->I_samples[ss][LO];
+	dINREAL* Q = a->Q_samples[ss][LO];
+	fftw_complex* out = a->Cfft_in[ss][LO];
+
+	EnterCriticalSection(&a->PixelRefSection);
+	while (a->ev_count > 0 && a->ev_idx[0] <= ws)
+	{
+		a->base_lo = a->ev_lo[0];
+		a->ev_count--;
+		memmove(a->ev_idx, a->ev_idx + 1, a->ev_count * sizeof(long long));
+		memmove(a->ev_lo, a->ev_lo + 1, a->ev_count * sizeof(double));
+	}
+	lo0 = a->base_lo;
+	for (m = 0; m < a->ev_count && a->ev_idx[m] < ws + size; m++)
+	{
+		eidx[nev] = a->ev_idx[m] - ws;
+		elo[nev] = a->ev_lo[m];
+		nev++;
+	}
+	LeaveCriticalSection(&a->PixelRefSection);
+
+	fi->smooth = 1;
+	fi->skip = 0;
+	fi->lo = nev ? elo[nev - 1] : lo0;
+	half = 0.5 * fs * (double)(size - 2 * a->clip) / (double)size;
+	fi->vlo_hz = -1.0e12;
+	fi->vhi_hz = 1.0e12;
+
+	if (nev > 0 && fs > 0.0)
+	{
+		// Fs[m]: rotation frequency (Hz) of segment m = newest LO - LO of segment m
+		// Gs[m]: sum of (LO step * step position) over the steps after segment m, so phase(s) = sgn*2pi/fs*(Fs*s - Gs)
+		Fs[nev] = 0.0;
+		Gs[nev] = 0.0;
+		for (m = nev - 1; m >= 0; m--)
+		{
+			lo_m = (m == 0) ? lo0 : elo[m - 1];
+			lo_m1 = elo[m];
+			F = (lo_m1 - lo_m) * 1.0e6;
+			Fs[m] = Fs[m + 1] + F;
+			Gs[m] = Gs[m + 1] + F * (double)eidx[m];
+			if (Fs[m] > Fmax) Fmax = Fs[m];
+			if (Fs[m] < Fmin) Fmin = Fs[m];
+		}
+		// old samples cover [lo_m - half, lo_m + half]; in the newest LO's terms that is [-F - half, -F + half]
+		fi->vlo_hz = -Fmin - half;
+		fi->vhi_hz = -Fmax + half;
+		if (fi->vhi_hz - fi->vlo_hz < 0.1 * fs)
+			fi->skip = 1;
+	}
+
+	if (nev == 0 || fi->skip)
+	{
+		for (i = 0; i < size; i++)
+		{
+			out[i][0] = a->window[i] * (double)I[idx];
+			out[i][1] = a->window[i] * (double)Q[idx];
+			if (++idx >= a->bsize) idx -= a->bsize;
+		}
+	}
+	else
+	{
+		for (m = 0; m <= nev; m++)
+		{
+			start = (m == 0) ? 0 : (int)eidx[m - 1];
+			end = (m == nev) ? size : (int)eidx[m];
+			if (start < 0) start = 0;
+			if (end > size) end = size;
+			if (Fs[m] == 0.0)
+			{
+				for (i = start; i < end; i++)
+				{
+					out[i][0] = a->window[i] * (double)I[idx];
+					out[i][1] = a->window[i] * (double)Q[idx];
+					if (++idx >= a->bsize) idx -= a->bsize;
+				}
+			}
+			else
+			{
+				double w = sgn * TWOPI_ * Fs[m] / fs;
+				double cw = cos(w), sw = sin(w);
+				double c = 1.0, s = 0.0, t, xi, xq;
+				for (i = start; i < end; i++)
+				{
+					if (((i - start) & 1023) == 0)
+					{
+						double ph = sgn * TWOPI_ / fs * (Fs[m] * (double)i - Gs[m]);
+						ph = fmod(ph, TWOPI_);
+						c = cos(ph);
+						s = sin(ph);
+					}
+					xi = (double)I[idx];
+					xq = (double)Q[idx];
+					out[i][0] = a->window[i] * (xi * c - xq * s);
+					out[i][1] = a->window[i] * (xi * s + xq * c);
+					t = c;
+					c = t * cw - s * sw;
+					s = t * sw + s * cw;
+					if (++idx >= a->bsize) idx -= a->bsize;
+				}
+			}
+		}
+	}
+	a->IQO_idx[ss][LO] = idx;
+}
+
+static void sm_stitch(int disp, sm_frame* fi)
+{
+	DP a = pdisp[disp];
+	int i, j, k, m, n, pv0, pv1;
+	double low_rel, hzpp, lo_req, tag;
+
+	EnterCriticalSection(&a->ResampleSection);
+	if (!fi->skip && sm_geometry(a, &low_rel, &hzpp))
+	{
+		n = a->num_pixels;
+		m = a->ss_bins[0] - a->fscL - a->fscH;
+		if (m > 1)
+		{
+			memcpy(a->pre_av_out, a->result[0] + a->fscL, m * sizeof(double));
+			EnterCriticalSection(&a->PixelRefSection);
+			lo_req = a->pixel_ref;
+			LeaveCriticalSection(&a->PixelRefSection);
+			tag = sm_view_centre_mhz(a, lo_req);
+
+			{
+				double p0 = ceil((fi->vlo_hz - low_rel) / hzpp - 1.0e-6);
+				double p1 = floor((fi->vhi_hz - low_rel) / hzpp + 1.0e-6);
+				if (p0 < 0.0) p0 = 0.0;
+				if (p1 > (double)(n - 1)) p1 = (double)(n - 1);
+				if (p0 > (double)n) p0 = (double)n;
+				if (p1 < -1.0) p1 = -1.0;
+				pv0 = (int)p0;
+				pv1 = (int)p1;
+			}
+
+			for (i = 0; i < a->num_pixout; i++)
+			{
+				j = i - 1;
+				k = i;
+				while (j >= 0)
+				{
+					if (a->det_type[i] == a->det_type[j])
+						k = j;
+					j--;
+				}
+				if (k == i)
+					detector(a->det_type[i], m, n, a->pix_per_bin, a->bin_per_pix, a->pre_av_out,
+						a->t_pixels[i], a->inv_enb, a->fsclipL, a->fsclipH, a->det_offset);
+				else
+					memcpy(a->t_pixels[i], a->t_pixels[k], n * sizeof(double));
+
+				sm_realign(a, i, lo_req * 1.0e6 + low_rel, hzpp, n);
+				if (pv0 <= pv1)
+					sm_accumulate(a, i, a->t_pixels[i], n,
+						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1);
+				sm_publish(a, i, tag);
+			}
+		}
+	}
+	LeaveCriticalSection(&a->ResampleSection);
+}
+
 void stitch(int disp)
 {
 	DP a = pdisp[disp];
@@ -851,6 +1374,8 @@ DWORD WINAPI Cspectra (void *pargs)
 	int LO = ((int)(uintptr_t)pargs) & 15;
 	DP a = pdisp[disp];
 	int trans_size = a->size * sizeof(double);
+	sm_frame fi;
+	fi.smooth = 0;
 
 	if (a->stop)
 	{
@@ -860,6 +1385,9 @@ DWORD WINAPI Cspectra (void *pargs)
 
 	if ((ss >= a->begin_ss) && (ss <= a->end_ss))
 	{
+		if (a->smooth_on)
+			sm_fill_window(a, ss, LO, &fi);
+		else
 		for (i = 0; i < a->size; i++)
 		{
 			(a->Cfft_in[ss][LO])[i][0] = a->window[i] * (double)((a->I_samples[ss][LO])[a->IQO_idx[ss][LO]]);
@@ -913,7 +1441,10 @@ DWORD WINAPI Cspectra (void *pargs)
 			for (j = 0; j < dMAX_STITCH; j++)
 				for (i = 0; i < dMAX_NUM_FFT; i++)
 					InterlockedBitTestAndReset(&(a->input_busy[j][i]), 0);
-			stitch(disp);
+			if (fi.smooth)
+				sm_stitch(disp, &fi);
+			else
+				stitch(disp);
 		}
 		else
 			LeaveCriticalSection(&a->StitchSection);
@@ -1075,8 +1606,12 @@ void __cdecl sendbuf(void *arg)
 				{
 					InterlockedBitTestAndSet(&(a->input_busy[a->ss][a->LO]), 0);
 
+					EnterCriticalSection(&(a->BufferControlSection[a->ss][a->LO]));
 					a->IQO_idx[a->ss][a->LO] = a->IQout_index[a->ss][a->LO];
-					
+					// absolute index of the first sample of this window (smooth pan / retune)
+					a->win_start[a->ss][a->LO] = a->in_count[a->ss][a->LO] - a->have_samples[a->ss][a->LO];
+					LeaveCriticalSection(&(a->BufferControlSection[a->ss][a->LO]));
+
 					InterlockedIncrement(a->pnum_threads);
 					if (a->type == 0)
 						QueueUserWorkItem(spectra, (void *)(((uintptr_t)arg << 12) + (a->ss << 4) + a->LO), 0);
@@ -1116,9 +1651,16 @@ void ResetPixelBuffers(int disp)
 	EnterCriticalSection(&a->ResampleSection);
 	EnterCriticalSection(&a->PixelRefSection);
 	a->pixel_ref = 0.0;
+	a->req_valid = 0;		// Jull1ano fork: forget the LO history and the averaging grids
+	a->ev_count = 0;
+	a->base_lo = 0.0;
 	LeaveCriticalSection(&a->PixelRefSection);
 	for (i = 0; i < dMAX_PIXOUTS; i++)
-	{				
+	{
+		sm_invalidate(a, i);
+		a->av_hzpp[i] = 0.0;
+		a->av_n[i] = 0;
+		a->av_floor[i] = 1.0e30;
 		for (j = 0; j < dMAX_PIXELS; j++)
 			a->t_pixels[i][j] = 0.0;
 		for (j = 0; j < dMAX_AVERAGE; j++)
@@ -1208,7 +1750,42 @@ void SetAnalyzer (	int disp,			// display identifier
 				 )
 {
 	DP a = pdisp[disp];
-	int i, j;
+	int i, j, same_flip = 1;
+
+	for (i = 0; i < n_fft && i < dMAX_NUM_FFT; i++)
+		if (a->flip[i] != *(flp + i)) same_flip = 0;
+
+	// Jull1ano fork: only the visible part of the span changed (pan / zoom). Keep the sample history and
+	// the fft cadence, move the averaging state onto the new view and publish it at once.
+	if (a->smooth_on && a->smooth_enable && same_flip &&
+		sz == a->size && n_fft == a->num_fft && typ == a->type && bf_sz == a->buff_size &&
+		win_type == a->window_type && pi == a->PiAlpha && ovrlp == a->overlap && clp == a->clip &&
+		n_pix == a->num_pixels && n_stch == a->num_stitch && max_w == a->max_writeahead &&
+		n_pixout == a->num_pixout && calset == a->cal_set && !a->cal_changed &&
+		fscLin >= 0.0 && fscHin >= 0.0 &&
+		fscLin + fscHin < (double)(a->num_stitch * (a->out_size - 1 - 2 * a->clip)) - 2.0)
+	{
+		EnterCriticalSection(&a->SetAnalyzerSection);
+		EnterCriticalSection(&a->ResampleSection);
+		if (((fmin != a->f_min) || (fmax != a->f_max)) && ((fmin == 0.0) && (fmax == 0.0)))
+			for (i = 0; i < dMAX_PIXELS; i++)
+				a->cd[i] = 1.0;
+		if (((fmax != 0.0) || (fmin != 0.0)) && ((fmin != a->f_min) || (fmax != a->f_max)))
+			interpolate(disp, calset, fmin, fmax, n_pix);
+		a->f_min = fmin;
+		a->f_max = fmax;
+		a->fsclipL = fscLin;
+		a->fsclipH = fscHin;
+		a->fscL = (int)a->fsclipL;
+		a->fscH = (int)a->fsclipH;
+		a->pix_per_bin = (double)a->num_pixels / ((double)(a->num_stitch * (a->out_size - 1 - 2 * a->clip)) - a->fsclipL - a->fsclipH - 1.0);
+		a->det_offset = -a->pix_per_bin * (a->fsclipL - floor(a->fsclipL));
+		a->bin_per_pix = ((double)(a->num_stitch * (a->out_size - 1 - 2 * a->clip)) - 1.0 - a->fsclipL - a->fsclipH) / ((double)a->num_pixels - 1.0);
+		sm_follow_view(a, 1);
+		LeaveCriticalSection(&a->ResampleSection);
+		LeaveCriticalSection(&a->SetAnalyzerSection);
+		return;
+	}
 
 	EnterCriticalSection(&a->SetAnalyzerSection);
 	a->end_dispatcher = 1;
@@ -1331,6 +1908,13 @@ void SetAnalyzer (	int disp,			// display identifier
 			a->IQout_index[i][j] = 0;
 		}
 
+	// Jull1ano fork: smooth pan / retune needs complex data and one sub-span
+	EnterCriticalSection(&a->ResampleSection);
+	a->smooth_on = a->smooth_enable && (a->type == 1) && (a->num_stitch == 1) && (a->num_fft == 1);
+	if (a->smooth_on)
+		sm_follow_view(a, 1);	// keep showing the trace (on the new grid) while the fft history refills
+	LeaveCriticalSection(&a->ResampleSection);
+
 	a->stop = 0;
 	a->end_dispatcher = 0;
 	LeaveCriticalSection(&a->SetAnalyzerSection);
@@ -1392,6 +1976,31 @@ void XCreateAnalyzer(	int disp,
 			a->fft_out[i][j]  = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * a->max_size);
 		}
 	a->pre_av_out = (double*) malloc0 (sizeof(double) * a->max_size * a->max_stitch);
+	// Jull1ano fork: smooth pan / retune
+	a->smooth_enable = 1;
+	a->smooth_on = 0;
+	a->lat_ms = 2.5;
+	a->publish_mask = 1;	// pixel output 0 = panadapter; the waterfall (1) only gets real frames
+	a->ev_count = 0;
+	a->base_lo = 0.0;
+	a->req_valid = 0;
+	a->sm_tmp = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);
+	a->sm_tmp2 = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);
+	a->sm_vtmp = (unsigned char*) malloc0 (dMAX_PIXELS);
+	for (i = 0; i < dMAX_PIXOUTS; i++)
+	{
+		a->av_valid[i] = (unsigned char*) malloc0 (dMAX_PIXELS);
+		a->av_n[i] = 0;
+		a->av_hzpp[i] = 0.0;
+		a->av_low_hz[i] = 0.0;
+		a->av_floor[i] = 1.0e30;
+	}
+	for (i = 0; i < a->max_stitch; i++)
+		for (j = 0; j < a->max_num_fft; j++)
+		{
+			a->in_count[i][j] = 0;
+			a->win_start[i][j] = 0;
+		}
 	for (i = 0; i < dMAX_PIXOUTS; i++)
 	{
 		a->det_type[i] = 0;
@@ -1483,8 +2092,12 @@ void DestroyAnalyzer(int disp)
 		for (j = 0; j < dMAX_AVERAGE; j++)
 			_aligned_free (a->av_buff[i][j]);
 		_aligned_free (a->av_sum[i]);
+		_aligned_free (a->av_valid[i]);
 	}
-	
+	_aligned_free (a->sm_tmp);
+	_aligned_free (a->sm_tmp2);
+	_aligned_free (a->sm_vtmp);
+
 	_aligned_free (a->pre_av_out);
 	for (i = 0; i < a->max_stitch; i++)
 		for (j = 0; j < a->max_num_fft; j++)
@@ -1533,13 +2146,75 @@ void SetPixelRef(int disp, double pixel_ref)
 	// returned via GetPixels. This can be used by a client to index the results of GetPixels
 	// For example be called with the DDC centre frequency, whenever it changes, so that a client
 	// when calling GetPixels can index these pixels to a deterministic frequency
+	// Jull1ano fork: the call is also the LO change marker for the smooth pan / retune code. It must come
+	// right when the new LO is sent to the radio (Thetis: Display.CentreFreqRX1 in UpdateRX1DDSFreq).
 	DP a = pdisp[disp];
+	int changed;
 	if (a == 0)
 		return;
 
+	EnterCriticalSection(&a->ResampleSection);
 	EnterCriticalSection(&a->PixelRefSection);
+	changed = (pixel_ref != a->pixel_ref);
 	a->pixel_ref = pixel_ref;
+	if (changed)
+	{
+		if (!a->req_valid || !a->smooth_on)
+		{
+			// first LO, or no smooth mode: nothing to rotate
+			a->ev_count = 0;
+			a->base_lo = pixel_ref;
+		}
+		else
+		{
+			if (a->ev_count == dMAX_RETUNE_EV)
+			{
+				a->base_lo = a->ev_lo[0];
+				a->ev_count--;
+				memmove(a->ev_idx, a->ev_idx + 1, a->ev_count * sizeof(long long));
+				memmove(a->ev_lo, a->ev_lo + 1, a->ev_count * sizeof(double));
+			}
+			a->ev_idx[a->ev_count] = a->in_count[0][0] + llround(a->lat_ms * 1.0e-3 * (double)a->sample_rate);
+			if (a->ev_count > 0 && a->ev_idx[a->ev_count] < a->ev_idx[a->ev_count - 1])
+				a->ev_idx[a->ev_count] = a->ev_idx[a->ev_count - 1];
+			a->ev_lo[a->ev_count] = pixel_ref;
+			a->ev_count++;
+		}
+		a->req_valid = 1;
+	}
 	LeaveCriticalSection(&a->PixelRefSection);
+	if (changed && a->smooth_on)
+		sm_follow_view(a, 1);
+	LeaveCriticalSection(&a->ResampleSection);
+}
+
+PORT
+void SetAnalyzerSmooth(int disp, int enable)
+{
+	DP a = pdisp[disp];
+	if (a == 0)
+		return;
+	a->smooth_enable = enable ? 1 : 0;	// takes effect on the next SetAnalyzer()
+}
+
+PORT
+void SetAnalyzerRetuneLatency(int disp, double latency_ms)
+{
+	DP a = pdisp[disp];
+	if (a == 0)
+		return;
+	EnterCriticalSection(&a->PixelRefSection);
+	a->lat_ms = latency_ms;
+	LeaveCriticalSection(&a->PixelRefSection);
+}
+
+PORT
+long long GetAnalyzerInputCount(int disp)
+{
+	DP a = pdisp[disp];
+	if (a == 0)
+		return 0;
+	return a->in_count[0][0];
 }
 
 PORT
@@ -1683,6 +2358,7 @@ void CloseBuffer(int disp, int ss, int LO)
 						a->IQout_index[ss][LO] -= a->bsize;
 				a->have_samples[ss][LO] = a->max_writeahead;
 			}
+		a->in_count[ss][LO] += a->buff_size;
 		if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 			InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 	LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
@@ -1722,6 +2398,7 @@ void Spectrum(int disp, int ss, int LO, dINREAL* pI, dINREAL* pQ)
 						a->IQout_index[ss][LO] -= a->bsize;
 				a->have_samples[ss][LO] = a->max_writeahead;
 			}
+		a->in_count[ss][LO] += a->buff_size;
 		if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 			InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 	LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
@@ -1767,6 +2444,7 @@ void Spectrum2(int run, int disp, int ss, int LO, dINREAL* pbuff)
 							a->IQout_index[ss][LO] -= a->bsize;
 					a->have_samples[ss][LO] = a->max_writeahead;
 				}
+			a->in_count[ss][LO] += a->buff_size;
 			if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 				InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 		LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
@@ -1813,6 +2491,7 @@ void Spectrum0(int run, int disp, int ss, int LO, double* pbuff)
 					 	a->IQout_index[ss][LO] -= a->bsize;
 					a->have_samples[ss][LO] = a->max_writeahead;
 				}
+			a->in_count[ss][LO] += a->buff_size;
 			if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 				InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 		LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
@@ -1870,6 +2549,7 @@ void SetDisplayAverageMode (int disp, int pixout, int mode)
 			memset ((void *)a->av_sum[pixout], 0, sizeof(double) * dMAX_PIXELS);
 			break;
 		}
+		sm_invalidate(a, pixout);	// Jull1ano fork: the state was reset, re-seed from the next frame
 		LeaveCriticalSection (&a->ResampleSection);
 	}
 }
@@ -1885,6 +2565,11 @@ void SetDisplayNumAverage (int disp, int pixout, int num)
 		a->avail_frames[pixout] = 0;
 		a->av_in_idx[pixout] = 0;
 		a->av_out_idx[pixout] = 0;
+		if (a->av_mode[pixout] == 2)
+		{
+			memset ((void *)a->av_sum[pixout], 0, sizeof(double) * dMAX_PIXELS);
+			sm_invalidate(a, pixout);	// Jull1ano fork
+		}
 		LeaveCriticalSection (&a->ResampleSection);
 	}
 }
@@ -1910,6 +2595,10 @@ void SetDisplaySampleRate (int disp, int rate)
 		EnterCriticalSection (&a->ResampleSection);
 		a->sample_rate = rate;
 		CalcBandwidthNormalization (a);
+		EnterCriticalSection (&a->PixelRefSection);
+		a->ev_count = 0;			// Jull1ano fork: samples from the old rate cannot be rotated
+		a->base_lo = a->pixel_ref;
+		LeaveCriticalSection (&a->PixelRefSection);
 		LeaveCriticalSection (&a->ResampleSection);
 	}
 }

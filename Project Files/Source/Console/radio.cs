@@ -1424,6 +1424,19 @@ namespace Thetis
 			}
 		}
 
+        // Jull1ano fork: change the shift at the input sample where the DDC retune that is being sent right
+        // now will arrive, so DDC and shift move together (pan under a fixed VFO); see SetRXAShiftFreqAt
+        public void SetRXOscAligned(double value, double delay_ms, double guard_ms, double ramp_ms)
+        {
+            rx_osc = value;
+            if (update && (value != rx_osc_dsp || force))
+            {
+                WDSP.SetRXAShiftFreqAt(WDSP.id(thread, subrx), -value, delay_ms, guard_ms, ramp_ms);
+                WDSP.RXANBPSetShiftFrequency(WDSP.id(thread, subrx), -value);
+                rx_osc_dsp = value;
+            }
+        }
+
         private double rx_fm_deviation = 5000.0;
         private double rx_fm_deviation_dsp = 5000.0;
         public double RXFMDeviation

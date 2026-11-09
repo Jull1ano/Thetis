@@ -672,6 +672,7 @@
     <Compile Include="console.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="SmoothPan.cs" />
     <Compile Include="cwedit.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -27,6 +27,8 @@ warren@wpratt.com
 #ifndef _shift_h
 #define _shift_h
 
+#define SHIFT_MAX_PEND 16
+
 typedef struct _shift
 {
 	int run;
@@ -39,6 +41,14 @@ typedef struct _shift
 	double delta;
 	double cos_delta;
 	double sin_delta;
+	// Jull1ano fork: shift changes scheduled at an exact input sample, with an optional short soft mute
+	long long proc;							// input samples processed so far
+	int npend;								// scheduled changes, oldest first
+	long long pend_at[SHIFT_MAX_PEND];		// sample index where the new shift starts
+	double pend_f[SHIFT_MAX_PEND];
+	long long last_at;						// sample index of the last scheduled change applied
+	int guard;								// muted samples on each side of a scheduled change
+	int ramp;								// fade samples outside the muted part
 } shift, *SHIFT;
 
 extern SHIFT create_shift (int run, int size, double* in, double* out, int rate, double fshift);
@@ -60,5 +70,7 @@ extern void setSize_shift (SHIFT a, int size);
 extern __declspec (dllexport) void SetRXAShiftRun (int channel, int run);
 
 extern __declspec (dllexport) void SetRXAShiftFreq (int channel, double fshift);
+
+extern __declspec (dllexport) void SetRXAShiftFreqAt (int channel, double fshift, double delay_ms, double guard_ms, double ramp_ms);
 
 #endif
