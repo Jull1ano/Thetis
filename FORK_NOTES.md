@@ -150,6 +150,11 @@ the skin's NR button images, and NNR after NR4, up to the end of the display mod
 no room (a narrow window) it hides and NR cycles as before (NR, NR2, NR3, NR4, NNR, off). NR2 on by default
 still applies.
 
+Collapse then Expand put the Zoom slider in the middle of the strip, over the NR row (Expand placed it left of
+ZTB before ZTB, anchored to the display panel, had moved back), so the row hid: Zoom goes left of ZTB again once
+the layout has settled. Test hook `layouttest` (Collapse, Expand, positions logged); `THETIS_NO_AUTOSTART=1` keeps
+a test run from powering the radio on.
+
 Gradients (Setup > Appearance > RX Display > Gradients (fork), off by default): "Two-colour fill" and
 "Two-colour line", each on its own with its own top / bottom colours, over the panadapter height (the fill
 with the Data Fill alpha, the line with the Data Line alpha: strong signals reach the top colour). The

@@ -1138,7 +1138,8 @@ namespace Thetis
             Common.DisableForegroundPriorityBoost(); // prevent process from becoming lower priority when focus is lost
 
             //autostart
-            if (Common.HasArg(args, "-autostart") || m_bAutoPowerOn)
+            if ((Common.HasArg(args, "-autostart") || m_bAutoPowerOn) &&
+                Environment.GetEnvironmentVariable("THETIS_NO_AUTOSTART") != "1") // Jull1ano fork: test runs without the radio
             {
                 autoStartTimer = new System.Timers.Timer(2000);
                 autoStartTimer.Elapsed += OnAutoStartTimerEvent;
@@ -41535,6 +41536,20 @@ namespace Thetis
             if (bSuspendDraw) ResumeDrawing(this);
 
             this.Text = BasicTitleBar; //MW0LGE_21a moved here after expaned is true so that title text gets rebuild correctly
+
+            // Jull1ano fork: Zoom was placed left of ZTB before ZTB (anchored to the display panel) had moved back from
+            // its collapsed place, so it landed in the middle, over the NR row; once the layout has settled it goes
+            // left of ZTB again and the NR row looks at its area again
+            BeginInvoke(new MethodInvoker(forkPlaceZoomAfterExpand));
+        }
+
+        private void forkPlaceZoomAfterExpand()
+        {
+            if (collapsedDisplay) return;
+            panelDisplay.PerformLayout();
+            ptbDisplayZoom.Location = new Point(btnDisplayZTB.Left - ptbDisplayZoom.Width - 4, ptbDisplayZoom.Top);
+            lblDisplayZoom.Location = new Point(ptbDisplayZoom.Left - lblDisplayZoom.Width, lblDisplayZoom.Top);
+            forkLayoutNrButtons();
         }
         private void setPAProfileLabelPos()
         {
@@ -45044,6 +45059,27 @@ namespace Thetis
                     };
                     tn.Start();
                 }
+                else if (parts[0] == "layouttest")
+                {
+                    // layouttest: the layout before, after Collapse and after Expand (menu Collapse / Expand), 3 s apart
+                    int st = 0;
+                    Action dump = () =>
+                    {
+                        HighDpi.Log("layouttest " + st + ": collapsed " + CollapsedDisplay + " NR row " + _forkNrRowShown +
+                            " zoom " + ptbDisplayZoom.Bounds + " lblZoom " + lblDisplayZoom.Bounds + " ZTB " + btnDisplayZTB.Bounds +
+                            " pan " + ptbDisplayPan.Bounds + " panelDSP " + panelDSP.Bounds + " panelDisplay2 " + panelDisplay2.Bounds +
+                            " panelDisplay " + panelDisplay.Bounds + " zoom parent " + (ptbDisplayZoom.Parent != null ? ptbDisplayZoom.Parent.Name : "-"));
+                    };
+                    System.Windows.Forms.Timer tl = new System.Windows.Forms.Timer();
+                    tl.Interval = 3000;
+                    tl.Tick += (s6, e6) =>
+                    {
+                        dump();
+                        if (st == 0 || st == 1) collapseToolStripMenuItem.PerformClick();
+                        if (++st > 3) tl.Stop();
+                    };
+                    tl.Start();
+                }
                 else if (parts[0] == "click")
                 {
                     // click:<control>:<control>...: each control's Click, 2 s apart (band buttons ...), the state logged
@@ -45893,7 +45929,12 @@ namespace Thetis
             bool ok = Visible && panelDSP.Visible && chkNR.Visible && y >= 0;
             if (ok)
                 for (int k = 0; k < 3; k++)
-                    if (!forkAreaFree(r[k])) { ok = false; break; }
+                    if (!forkAreaFree(r[k]))
+                    {
+                        ok = false;
+                        HighDpi.Log("NR row hidden: " + forkAreaBlocker(r[k]) + " covers " + r[k]);
+                        break;
+                    }
             for (int k = 0; k < _forkNrButtons.Length; k++)
             {
                 bool show = ok && (k < 3 || forkAreaFree(r[k])); // NNR only where it fits
@@ -45906,6 +45947,24 @@ namespace Thetis
                 _forkNrRowShown = ok;
                 forkSyncNrButtons();
             }
+        }
+
+        // the first visible control over rc (for the log)
+        private string forkAreaBlocker(Rectangle rc)
+        {
+            foreach (Control c in Controls)
+            {
+                if (!c.Visible || c == panelDSP || c == panelDisplay2 || Array.IndexOf(_forkNrButtons, c) >= 0) continue;
+                if (c == panelDisplay)
+                {
+                    foreach (Control d in panelDisplay.Controls)
+                        if (d.Visible && rc.IntersectsWith(new Rectangle(d.Left + panelDisplay.Left, d.Top + panelDisplay.Top, d.Width, d.Height)))
+                            return "panelDisplay." + d.Name + " " + new Rectangle(d.Left + panelDisplay.Left, d.Top + panelDisplay.Top, d.Width, d.Height);
+                    continue;
+                }
+                if (rc.IntersectsWith(c.Bounds)) return c.Name + " " + c.Bounds;
+            }
+            return "nothing";
         }
 
         // nothing visible of the console (or of the display panel, where the Pan / Zoom row is) covers rc
