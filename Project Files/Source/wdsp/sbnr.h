@@ -47,26 +47,44 @@ https://github.com/lucianodato/libspecbleach
 #ifndef _sbnr_h
 #define _sbnr_h
 
-#include <specbleach_adenoiser.h>
+// Jull1ano fork: NR4 on the libspecbleach AetherSDR uses (folder libspecbleach, built into wdsp.dll): adaptive
+// noise estimation (SPP-MMSE / Brandt / Martin), masking veto depth and suppression strength
+#include <specbleach_denoiser.h>
 
 typedef struct _sbnr
 {
 	int run;
-    	int position;
-        double *in;
-        double *out;
-        float reduction_amount;
-        float smoothing_factor;
-        float whitening_factor;
-        int noise_scaling_type;
-        float noise_rescale;
-        float post_filter_threshold;
-        SpectralBleachHandle st;
-        int buffer_size;
-        int rate;
+	int position;
+	double *in;
+	double *out;
+	float reduction_amount;
+	float smoothing_factor;
+	float whitening_factor;
+	int noise_scaling_type;			// kept for the old API; this libspecbleach has no such setting
+	float noise_rescale;			// kept for the old API; not used
+	float post_filter_threshold;	// kept for the old API; not used
+	int adaptive_noise;				// 1: the noise profile follows the signal
+	int noise_estimation_method;	// 0 SPP-MMSE, 1 Brandt (trimmed mean), 2 Martin (minimum statistics)
+	float masking_depth;			// 0..1
+	float suppression_strength;		// 0..1
+	int params_dirty;
+	int learn;						// samples still passed through while the first noise profile is learned
+	// level normaliser: libspecbleach works on absolute levels (its silence threshold is about -100 dB, its
+	// masking model maps 0 dBFS to 96 dB SPL) and AetherSDR feeds it audio after AGC; before AGC WDSP's
+	// samples are far quieter. A slow gain brings the input to that level and the same gain, delayed by the
+	// library's latency, is taken off the output.
+	double lvl_power;				// smoothed input power
+	double lvl_gain;				// gain applied to the last input sample
+	double* gain_ring;				// gain applied to each input sample, for the output's delay
+	int ring_size;
+	int ring_pos;
+	int latency;					// libspecbleach latency, samples
+	SpectralBleachHandle st;
+	int buffer_size;
+	int rate;
 
-        float* input;
-        float* output;
+	float* input;
+	float* output;
 } sbnr, *SBNR;
 
 // define the public api of this module

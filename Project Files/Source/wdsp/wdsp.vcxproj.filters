@@ -1,6 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="Source Files\libspecbleach">
+      <UniqueIdentifier>{6b1d2f3a-5c4e-4f7a-9e2b-1a3c5d7e9f01}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
@@ -442,6 +445,99 @@
     </ClCompile>
     <ClCompile Include="nnrbypass.c">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\processors\denoiser\spectral_denoiser.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\processors\specbleach_denoiser.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\core\denoiser_post_process.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\core\denoiser_profile_core.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\core\noise_floor_manager.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\core\noise_profile.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\estimators\adaptive_noise_estimator.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\estimators\brandt_noise_estimator.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\estimators\martin_noise_estimator.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\estimators\noise_estimator.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\estimators\spp_mmse_noise_estimator.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\processing\gain_calculator.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\processing\masking_veto.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\processing\nlm_filter.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\processing\spectral_whitening.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\processing\suppression_engine.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\denoiser_logic\processing\tonal_reducer.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\stft\fft_transform.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\stft\stft_buffer.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\stft\stft_processor.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\stft\stft_windows.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\absolute_hearing_thresholds.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\critical_bands.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\general_utils.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\masking_estimator.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\spectral_circular_buffer.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\spectral_features.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\spectral_smoother.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\spectral_utils.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\tonal_detector.c">
+      <Filter>Source Files\libspecbleach</Filter>
+    </ClCompile>
+    <ClCompile Include="libspecbleach\src\shared\utils\transient_detector.c">
+      <Filter>Source Files\libspecbleach</Filter>
     </ClCompile>
     <ClCompile Include="FDnoiseIQ.c">
       <Filter>Source Files</Filter>

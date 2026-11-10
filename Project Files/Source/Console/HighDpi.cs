@@ -1386,7 +1386,7 @@ namespace Thetis
         }
     }
 
-    // Jull1ano fork: NNR (WDSP 2.11 neural noise reduction) settings, as AetherSDR offers them (Setup > DSP > NNR):
+    // Jull1ano fork: NNR (WDSP 2.11 neural noise reduction) settings, as AetherSDR offers them (Setup > DSP > AetherRX > NNR):
     // Strength 0..100 sets the mask floor from -10 dB (0, the least) to -50 dB (100, the most); WDSP's own -25 dB is
     // 37.5, so 38 (-25.2 dB) is the default. Model 0 = Standard, 1 = Premium. The rest are WDSP's tuning values, each
     // starting at WDSP's own. Kept in fork_nnr.txt in the data folder; the same for every receiver.
@@ -1475,6 +1475,122 @@ namespace Thetis
             r.RXANNRTau = Tau;
             r.RXANNRMaxGain = MaxGain;
             r.SetRXANNRSmooth(Attack, Release);
+        }
+    }
+
+    // Jull1ano fork: NR4 settings as AetherSDR offers them (Setup > DSP > AetherRX > NR4): libspecbleach's adaptive
+    // noise estimation (0 SPP-MMSE, 1 Brandt, 2 Martin), reduction 0..40 dB, smoothing / whitening 0..100 %,
+    // masking depth and suppression 0..1; AetherSDR's defaults. Kept in fork_nr4.txt, the same for every receiver.
+    public static class ForkNr4
+    {
+        public const string FILE = "fork_nr4.txt";
+        public static double Reduction = 10.0, Smoothing = 0.0, Whitening = 0.0, Masking = 0.5, Suppression = 0.5;
+        public static bool Adaptive = true;
+        public static int Method = 0;
+        private static string _path;
+
+        public static void Defaults()
+        {
+            Reduction = 10.0; Smoothing = 0.0; Whitening = 0.0; Masking = 0.5; Suppression = 0.5; Adaptive = true; Method = 0;
+        }
+
+        private static double clamp(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+        public static void Load(string dataPath)
+        {
+            _path = System.IO.Path.Combine(dataPath ?? "", FILE);
+            try
+            {
+                if (!System.IO.File.Exists(_path)) return;
+                System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                foreach (string line in System.IO.File.ReadAllLines(_path))
+                {
+                    string[] p = line.Split('\t');
+                    double v;
+                    if (p.Length != 2 || !double.TryParse(p[1], System.Globalization.NumberStyles.Float, ci, out v)) continue;
+                    switch (p[0])
+                    {
+                        case "reduction": Reduction = clamp(v, 0, 40); break;
+                        case "smoothing": Smoothing = clamp(v, 0, 100); break;
+                        case "whitening": Whitening = clamp(v, 0, 100); break;
+                        case "masking": Masking = clamp(v, 0, 1); break;
+                        case "suppression": Suppression = clamp(v, 0, 1); break;
+                        case "adaptive": Adaptive = v != 0; break;
+                        case "method": Method = (int)clamp(Math.Round(v), 0, 2); break;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static void Save()
+        {
+            if (string.IsNullOrEmpty(_path)) return;
+            try
+            {
+                System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                string nl = "\r\n";
+                System.IO.File.WriteAllText(_path,
+                    "reduction\t" + Reduction.ToString("0.###", ci) + nl +
+                    "smoothing\t" + Smoothing.ToString("0.###", ci) + nl +
+                    "whitening\t" + Whitening.ToString("0.###", ci) + nl +
+                    "masking\t" + Masking.ToString("0.###", ci) + nl +
+                    "suppression\t" + Suppression.ToString("0.###", ci) + nl +
+                    "adaptive\t" + (Adaptive ? "1" : "0") + nl +
+                    "method\t" + Method.ToString(ci) + nl);
+            }
+            catch { }
+        }
+
+        public static void ApplyTo(RadioDSPRX r)
+        {
+            r.RXASBNRreductionAmount = (float)Reduction;
+            r.RXASBNRsmoothingFactor = (float)Smoothing;
+            r.RXASBNRwhiteningFactor = (float)Whitening;
+            r.RXASBNRadaptiveNoise = Adaptive ? 1 : 0;
+            r.RXASBNRnoiseEstimationMethod = Method;
+            r.RXASBNRmaskingDepth = (float)Masking;
+            r.RXASBNRsuppressionStrength = (float)Suppression;
+        }
+    }
+
+    // Jull1ano fork: the Final Output trim as AetherSDR has it (Setup > DSP > AetherRX > Final Output): a gain of
+    // -12..+12 dB at the end of the receive chain (WDSP's output gain, before the volume), the same for every
+    // receiver. Kept in fork_output.txt.
+    public static class ForkOutput
+    {
+        public const string FILE = "fork_output.txt";
+        public static double TrimDb = 0.0;
+        private static string _path;
+
+        public static double TrimGain { get { return Math.Pow(10.0, TrimDb / 20.0); } }
+
+        public static void Load(string dataPath)
+        {
+            _path = System.IO.Path.Combine(dataPath ?? "", FILE);
+            try
+            {
+                if (!System.IO.File.Exists(_path)) return;
+                System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                foreach (string line in System.IO.File.ReadAllLines(_path))
+                {
+                    string[] p = line.Split('\t');
+                    double v;
+                    if (p.Length == 2 && p[0] == "trim_db" && double.TryParse(p[1], System.Globalization.NumberStyles.Float, ci, out v))
+                        TrimDb = Math.Max(-12.0, Math.Min(12.0, v));
+                }
+            }
+            catch { }
+        }
+
+        public static void Save()
+        {
+            if (string.IsNullOrEmpty(_path)) return;
+            try
+            {
+                System.IO.File.WriteAllText(_path, "trim_db\t" + TrimDb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "\r\n");
+            }
+            catch { }
         }
     }
 }

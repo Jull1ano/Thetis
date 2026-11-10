@@ -389,6 +389,10 @@ namespace Thetis
             this.RXANNRMaxGain = rx.rx_nnr_gmax;
             this.SetRXANNRSmooth(rx.rx_nnr_att, rx.rx_nnr_rel);
             this.RXANNRRun = rx.rx_nnr_run;
+            this.RXASBNRadaptiveNoise = rx.rx_nr4_adaptive;
+            this.RXASBNRnoiseEstimationMethod = rx.rx_nr4_method;
+            this.RXASBNRmaskingDepth = rx.rx_nr4_masking;
+            this.RXASBNRsuppressionStrength = rx.rx_nr4_suppression;
             //
             this.RXFilterLow = rx.rx_filter_low;
             this.RXFilterHigh = rx.rx_filter_high;
@@ -501,6 +505,10 @@ namespace Thetis
             RXANNRMaxGain = rx_nnr_gmax;
             SetRXANNRSmooth(rx_nnr_att, rx_nnr_rel);
             RXANNRRun = rx_nnr_run;
+            RXASBNRadaptiveNoise = rx_nr4_adaptive;
+            RXASBNRnoiseEstimationMethod = rx_nr4_method;
+            RXASBNRmaskingDepth = rx_nr4_masking;
+            RXASBNRsuppressionStrength = rx_nr4_suppression;
             //
             RXFMLowCut = rx_fm_lowcut;
             RXFMHighCut = rx_fm_highcut;
@@ -1104,7 +1112,7 @@ namespace Thetis
 				{
                     if (value != rx_output_gain_dsp || force)
 					{
-                        WDSP.SetRXAPanelGain1(WDSP.id(thread, subrx), value);
+                        WDSP.SetRXAPanelGain1(WDSP.id(thread, subrx), value * ForkOutput.TrimGain); // Jull1ano fork: x the Final Output trim
 						rx_output_gain_dsp = value;
 
                         //[2.10.3.5]MW0LGE wave recorder volume normalise
@@ -2457,6 +2465,79 @@ namespace Thetis
                 rx_nnr_att_dsp = attack_ms;
                 rx_nnr_rel_dsp = release_ms;
             }
+        }
+
+        // Jull1ano fork: NR4 on the libspecbleach AetherSDR uses; the _dsp copies start at WDSP's own values
+        private int rx_nr4_adaptive = 1;
+        private int rx_nr4_adaptive_dsp = 1;
+        public int RXASBNRadaptiveNoise
+        {
+            get { return rx_nr4_adaptive; }
+            set
+            {
+                rx_nr4_adaptive = value;
+                if (update && (value != rx_nr4_adaptive_dsp || force))
+                {
+                    WDSP.SetRXASBNRadaptiveNoise(WDSP.id(thread, subrx), value);
+                    rx_nr4_adaptive_dsp = value;
+                }
+            }
+        }
+        private int rx_nr4_method = 0;
+        private int rx_nr4_method_dsp = 0;
+        public int RXASBNRnoiseEstimationMethod
+        {
+            get { return rx_nr4_method; }
+            set
+            {
+                rx_nr4_method = value;
+                if (update && (value != rx_nr4_method_dsp || force))
+                {
+                    WDSP.SetRXASBNRnoiseEstimationMethod(WDSP.id(thread, subrx), value);
+                    rx_nr4_method_dsp = value;
+                }
+            }
+        }
+        private float rx_nr4_masking = 0.5f;
+        private float rx_nr4_masking_dsp = 0.5f;
+        public float RXASBNRmaskingDepth
+        {
+            get { return rx_nr4_masking; }
+            set
+            {
+                rx_nr4_masking = value;
+                if (update && (value != rx_nr4_masking_dsp || force))
+                {
+                    WDSP.SetRXASBNRmaskingDepth(WDSP.id(thread, subrx), value);
+                    rx_nr4_masking_dsp = value;
+                }
+            }
+        }
+        private float rx_nr4_suppression = 0.5f;
+        private float rx_nr4_suppression_dsp = 0.5f;
+        public float RXASBNRsuppressionStrength
+        {
+            get { return rx_nr4_suppression; }
+            set
+            {
+                rx_nr4_suppression = value;
+                if (update && (value != rx_nr4_suppression_dsp || force))
+                {
+                    WDSP.SetRXASBNRsuppressionStrength(WDSP.id(thread, subrx), value);
+                    rx_nr4_suppression_dsp = value;
+                }
+            }
+        }
+        // forgets the learned noise profile, NR4 learns it again
+        public void ResetSBNRNoiseProfile()
+        {
+            if (update) WDSP.SetRXASBNRresetNoiseProfile(WDSP.id(thread, subrx));
+        }
+
+        // Jull1ano fork: the Final Output trim (ForkOutput, Setup > DSP > AetherRX) is part of the output gain
+        public void ReapplyOutputGain()
+        {
+            if (update) WDSP.SetRXAPanelGain1(WDSP.id(thread, subrx), rx_output_gain * ForkOutput.TrimGain);
         }
 
         //libspecbleach

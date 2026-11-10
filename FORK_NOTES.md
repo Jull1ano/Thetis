@@ -181,7 +181,7 @@ the network works on the audio after AGC. The network runs at 16 kHz inside, so 
 multiple of 16 kHz (48 kHz is). `wdsp.dll` grows from 5.6 to 12.4 MB (the two models).
 
 NR value 5 is NNR: the NNR button in the NR row, DSP > NNR (RX1) and the RX2 menu's NNR, the old NR button's
-cycle. Setup > DSP > NNR: Strength 0..100 (mask floor -10 dB at 0 to -50 dB at 100; 38 = WDSP's own -25 dB,
+cycle. Setup > DSP > AetherRX > NNR: Strength 0..100 (mask floor -10 dB at 0 to -50 dB at 100; 38 = WDSP's own -25 dB,
 AetherSDR's default), Model Standard / Premium, and WDSP's tuning values (alpha, knee, tau, max gain, attack,
 release; each starts at WDSP's own), Defaults button. A right click on the NNR button opens that tab. Saved in
 `fork_nnr.txt`, the same for every receiver; the tuning values survive a DSP rate / buffer size change (WDSP
@@ -190,6 +190,37 @@ puts them back after rebuilding the networks).
 Test hook: `THETIS_HIDPI_OPEN=nnrtest:14.340:USB:6.005:AM` tunes each frequency and logs, for NR off, NNR
 Standard / Premium, strength 0 / 100, NR2 and off again, the mean post-AGC level (AGC_AV), AGC gain, S meter
 and the process CPU over 3 s (the settings file is not written).
+
+## NR4 as in AetherSDR, and the Final Output trim
+
+NR4 runs on the libspecbleach AetherSDR vendors (`wdsp/libspecbleach`, compiled into wdsp.dll with MSVC in
+C11 mode; patched for MSVC: two VLAs, `SB_WARN_UNUSED_RESULT`, the `_Static_assert` mapping only outside
+C11), replacing the old prebuilt `specbleach.dll` (no longer linked; wdsp.dll now needs `libfftw3f-3.dll`,
+which Thetis already ships). `sbnr.c` works as AetherSDR's SpecbleachFilter: 40 ms frames, parameters loaded
+only when they change, after NR4 comes on (or Reset profile) the input passes through for 1 s while the
+noise profile is learned. Two differences from AetherSDR:
+
+- libspecbleach divides `suppression_strength` by 100 (it takes percent; its header says 0..1). AetherSDR
+  passes 0..1, so its Suppression slider moves the over-subtraction by at most 1 %. Here the 0..1 control is
+  sent as 0..100 %.
+- A slow level normaliser around the library: libspecbleach works on absolute levels (silence below about
+  -100 dB power, 0 dBFS = 96 dB SPL for its masking model) and AetherSDR feeds it audio after AGC; WDSP's
+  samples before AGC are far quieter. The input is brought to a -20 dBFS mean square (1 s tracking) and
+  the same per-sample gain, delayed by the library's latency, is taken off the output.
+
+Setup > DSP > AetherRX > NR4 (AetherSDR's controls and defaults): noise estimation MMSE / Brandt / Martin,
+Reset profile, Defaults, Adaptive noise estimation (on), Reduction 0..40 dB (10), Smoothing (0 %),
+Whitening (0 %), Masking depth (0.50), Suppression (0.50). The same for RX1 and RX2 (`fork_nr4.txt`); they
+replace the NR/ANF tab's NR4 RX1 / RX2 groups (hidden, a link in their place; their reduction / smoothing /
+whitening handlers no longer set NR4). Brandt costs about twice the CPU of MMSE or Martin. With Adaptive off
+nothing is learned, so nothing is reduced (as in AetherSDR). A right click on the NR4 button opens the page.
+
+Final Output (Setup > DSP > AetherRX > Final Output): AetherSDR's RX trim as a slider, -12..+12 dB in 0.1 dB
+steps, 0 dB button; it multiplies each receiver's output gain (WDSP panel gain, after the noise reductions,
+AGC and filters, before the volume). Saved in `fork_output.txt`.
+
+Test hook: `THETIS_HIDPI_OPEN=nr4test:14.340:USB` measures NR4 (suppression, masking, before and after
+AGC), NNR and NR2 like `nnrtest`.
 
 ## Test settings (no rebuild needed)
 

@@ -102,7 +102,7 @@ namespace Thetis
 
         #region Constructor and Destructor
 
-        // Jull1ano fork: Setup > DSP > NNR, the WDSP 2.11 neural noise reduction as AetherSDR offers it: Strength and
+        // Jull1ano fork: Setup > DSP > AetherRX > NNR, the WDSP 2.11 neural noise reduction as AetherSDR offers it: Strength and
         // Model, plus WDSP's tuning values (each starting at WDSP's own)
         private TabPage _forkNnrPage;
 
@@ -112,7 +112,229 @@ namespace Thetis
             Focus();
             WindowState = FormWindowState.Normal;
             TabSetup.SelectedIndex = 3;
-            if (_forkNnrPage != null) tcDSP.SelectedTab = _forkNnrPage;
+            forkSelectAether(_forkNnrPage);
+        }
+
+        public void ShowForkNr4Tab()
+        {
+            Show();
+            Focus();
+            WindowState = FormWindowState.Normal;
+            TabSetup.SelectedIndex = 3;
+            forkSelectAether(_forkNr4Page);
+        }
+
+        private void forkSelectAether(TabPage page)
+        {
+            if (_forkAetherPage != null) tcDSP.SelectedTab = _forkAetherPage;
+            if (page != null && page.Parent is TabControl tc) tc.SelectedTab = page;
+        }
+
+        // Jull1ano fork: Setup > DSP > AetherRX, AetherSDR's AetherRX in a tab: NR4, NNR and the Final Output trim
+        private TabPage _forkAetherPage, _forkNr4Page;
+
+        private void addForkAetherTab()
+        {
+            if (tcDSP == null) return;
+            TabPage tp = new TabPage("AetherRX");
+            tp.Name = "tpForkAetherRX";
+            tp.BackColor = SystemColors.Control;
+            tp.Padding = new Padding(3);
+            _forkAetherPage = tp;
+            TabControl tc = new TabControl();
+            tc.Name = "tcForkAetherRX";
+            tc.Dock = DockStyle.Fill;
+            tp.Controls.Add(tc);
+            addForkNr4Page(tc);
+            addForkNnrTab(tc);
+            addForkOutputPage(tc);
+            tcDSP.TabPages.Add(tp);
+            forkReplaceOldNr4Groups();
+        }
+
+        // a slider row: label, slider, value; returns the slider
+        private TrackBarTS forkSlider(Control parent, string name, string label, int y, int min, int max, int value, int tick,
+            Func<int, string> text, Action<int> changed)
+        {
+            forkNnrLabel(parent, label, 12, y + 4, 124);
+            TrackBarTS tb = new TrackBarTS();
+            tb.Name = name;
+            tb.AutoSize = false;
+            tb.Minimum = min;
+            tb.Maximum = max;
+            tb.TickFrequency = tick;
+            tb.SmallChange = 1;
+            tb.LargeChange = Math.Max(1, tick / 2);
+            tb.Value = Math.Max(min, Math.Min(max, value));
+            tb.Location = new Point(HighDpi.Px(138), HighDpi.Px(y));
+            tb.Size = new Size(HighDpi.Px(470), HighDpi.Px(30));
+            parent.Controls.Add(tb);
+            Label v = forkNnrLabel(parent, text(tb.Value), 612, y + 4, 76);
+            v.TextAlign = ContentAlignment.MiddleRight;
+            tb.ValueChanged += (s, e) => { v.Text = text(tb.Value); changed(tb.Value); };
+            return tb;
+        }
+
+        private void addForkNr4Page(TabControl parentTabs)
+        {
+            System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+            TabPage tp = new TabPage("NR4");
+            tp.Name = "tpForkNR4";
+            tp.BackColor = SystemColors.Control;
+            tp.Padding = new Padding(3);
+            _forkNr4Page = tp;
+            bool loading = false;
+            Action apply = () =>
+            {
+                if (loading) return;
+                ForkNr4.Save();
+                if (console != null) console.ForkApplyNr4();
+            };
+
+            GroupBox est = new GroupBox();
+            est.Name = "grpForkNR4Estimation";
+            est.Text = "Noise estimation";
+            est.Location = new Point(HighDpi.Px(8), HighDpi.Px(8));
+            est.Size = new Size(HighDpi.Px(700), HighDpi.Px(56));
+            RadioButton[] meth = new RadioButton[3];
+            string[] mname = { "MMSE", "Brandt", "Martin" };
+            string[] mtip = { "SPP-MMSE: speech presence probability, unbiased (AetherSDR's default)",
+                "Brandt: trimmed mean of the spectrum history", "Martin: minimum statistics" };
+            for (int k = 0; k < 3; k++)
+            {
+                int m = k;
+                RadioButton r = new RadioButton();
+                r.Name = "radForkNR4Method" + k;
+                r.Text = mname[k];
+                r.AutoSize = false;
+                r.Location = new Point(HighDpi.Px(12 + 96 * k), HighDpi.Px(22));
+                r.Size = new Size(HighDpi.Px(90), HighDpi.Px(22));
+                r.Checked = ForkNr4.Method == k;
+                r.CheckedChanged += (s, e) => { if (r.Checked) { ForkNr4.Method = m; apply(); } };
+                toolTip1.SetToolTip(r, mtip[k]);
+                est.Controls.Add(r);
+                meth[k] = r;
+            }
+            ButtonTS btnReset = new ButtonTS();
+            btnReset.Name = "btnForkNR4Reset";
+            btnReset.Text = "Reset profile";
+            btnReset.Location = new Point(HighDpi.Px(578), HighDpi.Px(18));
+            btnReset.Size = new Size(HighDpi.Px(110), HighDpi.Px(28));
+            btnReset.Click += (s, e) => { if (console != null) console.ForkResetNr4Profile(); };
+            toolTip1.SetToolTip(btnReset, "Forget the learned noise and learn it again (one second unprocessed), as AetherSDR's reset button");
+            est.Controls.Add(btnReset);
+            ButtonTS btnDef = new ButtonTS();
+            btnDef.Name = "btnForkNR4Defaults";
+            btnDef.Text = "Defaults";
+            btnDef.Location = new Point(HighDpi.Px(462), HighDpi.Px(18));
+            btnDef.Size = new Size(HighDpi.Px(110), HighDpi.Px(28));
+            toolTip1.SetToolTip(btnDef, "AetherSDR's NR4 defaults: MMSE, adaptive, reduction 10 dB, smoothing 0, whitening 0, masking 0.50, suppression 0.50");
+            est.Controls.Add(btnDef);
+            tp.Controls.Add(est);
+
+            GroupBox sp = new GroupBox();
+            sp.Name = "grpForkNR4Spectral";
+            sp.Text = "Spectral";
+            sp.Location = new Point(HighDpi.Px(8), HighDpi.Px(70));
+            sp.Size = new Size(HighDpi.Px(700), HighDpi.Px(216));
+            CheckBox chkAd = new CheckBox();
+            chkAd.Name = "chkForkNR4Adaptive";
+            chkAd.Text = "Adaptive noise estimation";
+            chkAd.AutoSize = false;
+            chkAd.Location = new Point(HighDpi.Px(12), HighDpi.Px(20));
+            chkAd.Size = new Size(HighDpi.Px(300), HighDpi.Px(22));
+            chkAd.Checked = ForkNr4.Adaptive;
+            chkAd.CheckedChanged += (s, e) => { ForkNr4.Adaptive = chkAd.Checked; apply(); };
+            toolTip1.SetToolTip(chkAd, "The noise profile follows the signal all the time (AetherSDR's default; off keeps the profile learned at the start)");
+            sp.Controls.Add(chkAd);
+            TrackBarTS tRed = forkSlider(sp, "tbForkNR4Reduction", "Reduction (dB):", 48, 0, 400, (int)Math.Round(ForkNr4.Reduction * 10), 50,
+                v => (v / 10.0).ToString("0.0", ci), v => { ForkNr4.Reduction = v / 10.0; apply(); });
+            TrackBarTS tSmo = forkSlider(sp, "tbForkNR4Smoothing", "Smoothing (%):", 80, 0, 100, (int)Math.Round(ForkNr4.Smoothing), 10,
+                v => v.ToString(ci), v => { ForkNr4.Smoothing = v; apply(); });
+            TrackBarTS tWhi = forkSlider(sp, "tbForkNR4Whitening", "Whitening (%):", 112, 0, 100, (int)Math.Round(ForkNr4.Whitening), 10,
+                v => v.ToString(ci), v => { ForkNr4.Whitening = v; apply(); });
+            TrackBarTS tMas = forkSlider(sp, "tbForkNR4Masking", "Masking depth:", 144, 0, 100, (int)Math.Round(ForkNr4.Masking * 100), 10,
+                v => (v / 100.0).ToString("0.00", ci), v => { ForkNr4.Masking = v / 100.0; apply(); });
+            TrackBarTS tSup = forkSlider(sp, "tbForkNR4Suppression", "Suppression:", 176, 0, 100, (int)Math.Round(ForkNr4.Suppression * 100), 10,
+                v => (v / 100.0).ToString("0.00", ci), v => { ForkNr4.Suppression = v / 100.0; apply(); });
+            toolTip1.SetToolTip(tRed, "How far the noise is pulled down, 0..40 dB");
+            toolTip1.SetToolTip(tSmo, "Averages the reduction frame to frame: less musical noise, but can blur transients");
+            toolTip1.SetToolTip(tWhi, "Makes the remaining noise whiter, which can hide musical noise on coloured noise");
+            toolTip1.SetToolTip(tMas, "How much of the signal's energy is protected by its masking (0..1)");
+            toolTip1.SetToolTip(tSup, "How hard the noise is subtracted (Berouti over-subtraction, 0..1)");
+            tp.Controls.Add(sp);
+
+            GroupBox how = new GroupBox();
+            how.Name = "grpForkNR4How";
+            how.Text = "How it works";
+            how.Location = new Point(HighDpi.Px(8), HighDpi.Px(292));
+            how.Size = new Size(HighDpi.Px(700), HighDpi.Px(80));
+            forkNnrLabel(how, "NR4 is libspecbleach (Luciano Dato) in the newer version AetherSDR uses, built into wdsp.dll. After NR4 " +
+                "comes on, and after Reset profile, it passes the audio through for one second while it learns the noise. The same " +
+                "settings apply to RX1 and RX2; they replace the NR4 groups of the NR/ANF tab. NR4 runs before or after AGC as set " +
+                "on the NR/ANF tab (NRs/ANF Position).", 12, 20, 676, 56);
+            tp.Controls.Add(how);
+
+            btnDef.Click += (s, e) =>
+            {
+                ForkNr4.Defaults();
+                loading = true;
+                meth[ForkNr4.Method].Checked = true;
+                chkAd.Checked = ForkNr4.Adaptive;
+                tRed.Value = (int)Math.Round(ForkNr4.Reduction * 10);
+                tSmo.Value = (int)Math.Round(ForkNr4.Smoothing);
+                tWhi.Value = (int)Math.Round(ForkNr4.Whitening);
+                tMas.Value = (int)Math.Round(ForkNr4.Masking * 100);
+                tSup.Value = (int)Math.Round(ForkNr4.Suppression * 100);
+                loading = false;
+                apply();
+            };
+            parentTabs.TabPages.Add(tp);
+        }
+
+        private void addForkOutputPage(TabControl parentTabs)
+        {
+            System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+            TabPage tp = new TabPage("Final Output");
+            tp.Name = "tpForkOutput";
+            tp.BackColor = SystemColors.Control;
+            tp.Padding = new Padding(3);
+            GroupBox grp = new GroupBox();
+            grp.Name = "grpForkOutput";
+            grp.Text = "Final Output - RX";
+            grp.Location = new Point(HighDpi.Px(8), HighDpi.Px(8));
+            grp.Size = new Size(HighDpi.Px(700), HighDpi.Px(132));
+            Func<int, string> fmt = v => (v > 0 ? "+" : "") + (v / 10.0).ToString("0.0", ci) + " dB";
+            TrackBarTS tb = forkSlider(grp, "tbForkOutputTrim", "Trim:", 24, -120, 120, (int)Math.Round(ForkOutput.TrimDb * 10), 30,
+                fmt, v => { ForkOutput.TrimDb = v / 10.0; ForkOutput.Save(); if (console != null) console.ForkApplyOutputTrim(); });
+            toolTip1.SetToolTip(tb, "Gain at the end of the receive chain, -12..+12 dB (0 = none)");
+            ButtonTS b0 = new ButtonTS();
+            b0.Name = "btnForkOutputZero";
+            b0.Text = "0 dB";
+            b0.Location = new Point(HighDpi.Px(12), HighDpi.Px(92));
+            b0.Size = new Size(HighDpi.Px(90), HighDpi.Px(28));
+            b0.Click += (s, e) => tb.Value = 0;
+            grp.Controls.Add(b0);
+            forkNnrLabel(grp, "As AetherSDR's Final Output trim: a gain after the noise reductions, AGC and filters, before the volume " +
+                "and the audio output; the same for every receiver. Above 0 dB loud signals can clip.", 112, 62, 576, 60);
+            tp.Controls.Add(grp);
+            parentTabs.TabPages.Add(tp);
+        }
+
+        // the NR/ANF tab's NR4 RX1 / RX2 groups: replaced by AetherRX > NR4 (hidden, with a link there)
+        private void forkReplaceOldNr4Groups()
+        {
+            foreach (Control g in new Control[] { groupBoxTS55, groupBoxTS56 })
+                if (g != null) g.Visible = false;
+            if (groupBoxTS55 == null || groupBoxTS55.Parent == null) return;
+            LinkLabel l = new LinkLabel();
+            l.Name = "lnkForkNR4Moved";
+            l.Text = "NR4 settings: DSP > AetherRX > NR4 (the same for RX1 and RX2)";
+            l.AutoSize = false;
+            l.Location = groupBoxTS55.Location;
+            l.Size = new Size(groupBoxTS55.Width, HighDpi.Px(40));
+            l.LinkClicked += (s, e) => forkSelectAether(_forkNr4Page);
+            groupBoxTS55.Parent.Controls.Add(l);
         }
 
         private Label forkNnrLabel(Control parent, string text, int x, int y, int w, int h = 20)
@@ -143,9 +365,9 @@ namespace Thetis
             return n;
         }
 
-        private void addForkNnrTab()
+        private void addForkNnrTab(TabControl parentTabs)
         {
-            if (tcDSP == null) return;
+            if (parentTabs == null) return;
             TabPage tp = new TabPage("NNR");
             tp.Name = "tpForkNNR";
             tp.BackColor = SystemColors.Control;
@@ -271,7 +493,7 @@ namespace Thetis
             toolTip1.SetToolTip(nAtt, "Per-bin gain smoothing, attack; 0 with release 0 = off (WDSP default)");
             toolTip1.SetToolTip(nRel, "Per-bin gain smoothing, release; 0 with attack 0 = off (WDSP default)");
             toolTip1.SetToolTip(btnDef, "Strength 38, Standard, and every advanced value back to WDSP's own");
-            tcDSP.TabPages.Add(tp);
+            parentTabs.TabPages.Add(tp);
         }
 
         // Jull1ano fork: Appearance > RX Display > "Gradients (fork)", under Panadapter Noise Floor: the fill and
@@ -532,7 +754,7 @@ namespace Thetis
             if (HighDpi.Enabled) addHighDpiOptions();
             addForkTuningOptions(); // Jull1ano fork: band-aware tuning
             addForkFillOptions();   // Jull1ano fork: two-colour fill
-            addForkNnrTab();        // Jull1ano fork: Setup > DSP > NNR
+            addForkAetherTab();     // Jull1ano fork: Setup > DSP > AetherRX (NR4, NNR, Final Output)
             if (HighDpi.Enabled) HighDpi.PrepareForm(this);
 
             console = c;
@@ -35054,22 +35276,19 @@ namespace Thetis
         private void nudNR4_red_rx1_ValueChanged(object sender, EventArgs e)
         {
             if (initializing) return;
-            console.radio.GetDSPRX(0, 0).RXASBNRreductionAmount = (float)nudNR4_red_rx1.Value;
-            console.radio.GetDSPRX(0, 1).RXASBNRreductionAmount = (float)nudNR4_red_rx1.Value;
+            // Jull1ano fork: NR4 is set from DSP > AetherRX > NR4 (ForkNr4) now
         }
 
         private void nudNR4_smo_rx1_ValueChanged(object sender, EventArgs e)
         {
             if (initializing) return;
-            console.radio.GetDSPRX(0, 0).RXASBNRsmoothingFactor = (float)nudNR4_smo_rx1.Value;
-            console.radio.GetDSPRX(0, 1).RXASBNRsmoothingFactor = (float)nudNR4_smo_rx1.Value;
+            // Jull1ano fork: NR4 is set from DSP > AetherRX > NR4 (ForkNr4) now
         }
 
         private void nudNR4_whi_rx1_ValueChanged(object sender, EventArgs e)
         {
             if (initializing) return;
-            console.radio.GetDSPRX(0, 0).RXASBNRwhiteningFactor = (float)nudNR4_whi_rx1.Value;
-            console.radio.GetDSPRX(0, 1).RXASBNRwhiteningFactor = (float)nudNR4_whi_rx1.Value;
+            // Jull1ano fork: NR4 is set from DSP > AetherRX > NR4 (ForkNr4) now
         }
 
         private void nudNR4_res_rx1_ValueChanged(object sender, EventArgs e)
@@ -35121,22 +35340,19 @@ namespace Thetis
         private void nudNR4_red_rx2_ValueChanged(object sender, EventArgs e)
         {
             if (initializing) return;
-            console.radio.GetDSPRX(1, 0).RXASBNRreductionAmount = (float)nudNR4_red_rx2.Value;
-            console.radio.GetDSPRX(1, 1).RXASBNRreductionAmount = (float)nudNR4_red_rx2.Value;
+            // Jull1ano fork: NR4 is set from DSP > AetherRX > NR4 (ForkNr4) now
         }
 
         private void nudNR4_smo_rx2_ValueChanged(object sender, EventArgs e)
         {
             if (initializing) return;
-            console.radio.GetDSPRX(1, 0).RXASBNRsmoothingFactor = (float)nudNR4_smo_rx2.Value;
-            console.radio.GetDSPRX(1, 1).RXASBNRsmoothingFactor = (float)nudNR4_smo_rx2.Value;
+            // Jull1ano fork: NR4 is set from DSP > AetherRX > NR4 (ForkNr4) now
         }
 
         private void nudNR4_whi_rx2_ValueChanged(object sender, EventArgs e)
         {
             if (initializing) return;
-            console.radio.GetDSPRX(1, 0).RXASBNRwhiteningFactor = (float)nudNR4_whi_rx2.Value;
-            console.radio.GetDSPRX(1, 1).RXASBNRwhiteningFactor = (float)nudNR4_whi_rx2.Value;
+            // Jull1ano fork: NR4 is set from DSP > AetherRX > NR4 (ForkNr4) now
         }
 
         private void nudNR4_res_rx2_ValueChanged(object sender, EventArgs e)

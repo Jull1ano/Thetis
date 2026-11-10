@@ -699,7 +699,9 @@ namespace Thetis
             AppDataPath = app_data_path;
             HighDpi.LoadTextStep(app_data_path); // Jull1ano fork: Setup > Appearance > High DPI text size
             forkLoadBandMemory(app_data_path);    // Jull1ano fork: band-aware tuning (Setup > Appearance > Tuning)
-            ForkNnr.Load(app_data_path);          // Jull1ano fork: NNR settings (Setup > DSP > NNR)
+            ForkNnr.Load(app_data_path);          // Jull1ano fork: NNR settings (Setup > DSP > AetherRX > NNR)
+            ForkNr4.Load(app_data_path);          // Jull1ano fork: NR4 settings (Setup > DSP > AetherRX > NR4)
+            ForkOutput.Load(app_data_path);       // Jull1ano fork: Final Output trim (Setup > DSP > AetherRX)
             Display.SmoothTrace = HighDpi.LoadSmoothTrace(app_data_path); // Jull1ano fork: Setup > Appearance > RX Display > Smooth
             Display.FftSmooth = HighDpi.LoadForkFloat(app_data_path, HighDpi.FFT_SMOOTH_FILE, 0f, 0f, 16f); // and FFT Smooth
             //AppDataPath has been set at this point
@@ -873,6 +875,7 @@ namespace Thetis
             Splash.SetStatus("Initializing Radio");				// Set progress point
             radio = new Radio(AppDataPath);					    // Initialize the Radio processor   INIT_SLOW
             ForkApplyNnr();                                     // Jull1ano fork: NNR settings to every receiver
+            ForkApplyNr4();                                     // Jull1ano fork: and the NR4 settings
 
             specRX = new SpecRX();
             Display.specready = true;
@@ -44949,8 +44952,13 @@ namespace Thetis
                     };
                     tm.Start();
                 }
-                else if (parts[0] == "nnrtest")
+                else if (parts[0] == "nnrtest" || parts[0] == "nr4test")
                 {
+                    // nr4test:<MHz>:<mode>...: the same measurement for NR4 (each estimator, reduction 40, masking 0 /
+                    // suppression 1, not adaptive, reset), NNR and NR2 for comparison, and the Final Output trim
+                    // (the output gain sent is logged); ForkNr4 / ForkOutput files are not written.
+                    bool nr4 = parts[0] == "nr4test";
+                    int nr4PosBefore = 0;
                     // nnrtest:<MHz>:<mode>[:<MHz>:<mode>...]: on each, NR off / NNR Standard / NNR Premium / strength 0 /
                     // strength 100 / NR2 / off, 2 s to settle then 3 s measured: mean AGC_AV, AGC gain, S meter and the
                     // process CPU (% of one core) logged. The NNR settings file is not written.
@@ -44962,6 +44970,25 @@ namespace Thetis
                         DSPMode m = (DSPMode)Enum.Parse(typeof(DSPMode), parts[i + 1]);
                         plan.Add(new KeyValuePair<string, Action>("tune " + parts[i] + " " + parts[i + 1], () => { RX1DSPMode = m; VFOAFreq = f; SelectNR(1, true, 0); }));
                         plan.Add(new KeyValuePair<string, Action>("NR off", () => SelectNR(1, true, 0)));
+                        if (nr4)
+                        {
+                            Action nr4set = () => ForkApplyNr4();
+                            Action<int> pos = (v) => { radio.GetDSPRX(0, 0).RXANR4Position = v; radio.GetDSPRX(0, 1).RXANR4Position = v; };
+                            plan.Add(new KeyValuePair<string, Action>("NR4 default", () => { nr4PosBefore = radio.GetDSPRX(0, 0).RXANR4Position; ForkNr4.Defaults(); nr4set(); SelectNR(1, true, 4); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 suppression 0", () => { ForkNr4.Suppression = 0; nr4set(); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 suppression 1", () => { ForkNr4.Suppression = 1; nr4set(); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 post AGC default", () => { ForkNr4.Defaults(); nr4set(); pos(1); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 post AGC suppression 0", () => { ForkNr4.Suppression = 0; nr4set(); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 post AGC suppression 1", () => { ForkNr4.Suppression = 1; nr4set(); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 post AGC masking 0", () => { ForkNr4.Suppression = 0.5; ForkNr4.Masking = 0; nr4set(); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 post AGC masking 1", () => { ForkNr4.Masking = 1; nr4set(); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 post AGC reduction 20", () => { ForkNr4.Defaults(); ForkNr4.Reduction = 20; nr4set(); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR4 position back", () => { ForkNr4.Defaults(); nr4set(); pos(nr4PosBefore); }));
+                            plan.Add(new KeyValuePair<string, Action>("NNR 38", () => { SelectNR(1, true, 5); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR2", () => { SelectNR(1, true, 2); }));
+                            plan.Add(new KeyValuePair<string, Action>("NR off", () => { SelectNR(1, true, 0); }));
+                            continue;
+                        }
                         plan.Add(new KeyValuePair<string, Action>("NNR Standard 38", () => { ForkNnr.Model = 0; ForkNnr.Strength = 38; ForkApplyNnr(); SelectNR(1, true, 5); }));
                         plan.Add(new KeyValuePair<string, Action>("NNR Premium 38", () => { ForkNnr.Model = 1; ForkApplyNnr(); }));
                         plan.Add(new KeyValuePair<string, Action>("NNR Standard 0", () => { ForkNnr.Model = 0; ForkNnr.Strength = 0; ForkApplyNnr(); }));
@@ -45751,9 +45778,11 @@ namespace Thetis
                 {
                     if (!IsRightButton(e) || IsSetupFormNull) return;
                     if (nr == 5) SetupForm.ShowForkNnrTab();
+                    else if (nr == 4) SetupForm.ShowForkNr4Tab();
                     else SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab);
                 };
                 toolTip1.SetToolTip(b, nr == 5 ? "NNR, neural noise reduction (WDSP 2.11, as in AetherSDR) on / off (a right click opens its settings)"
+                    : nr == 4 ? "NR4 (libspecbleach, as in AetherSDR) on / off (a right click opens its settings)"
                     : "NR" + nr + " on / off (a right click opens the NR settings)");
                 Controls.Add(b);
                 _forkNrButtons[k] = b;
@@ -45780,13 +45809,49 @@ namespace Thetis
             if (parent == null) return null;
             ToolStripMenuItem m = new ToolStripMenuItem("NNR");
             m.Name = nr4.Name.Replace("NR4", "NNR");
-            m.ToolTipText = "NNR, neural noise reduction (WDSP 2.11, as in AetherSDR); settings in Setup > DSP > NNR";
+            m.ToolTipText = "NNR, neural noise reduction (WDSP 2.11, as in AetherSDR); settings in Setup > DSP > AetherRX > NNR";
             m.Click += click;
             parent.DropDownItems.Insert(parent.DropDownItems.IndexOf(nr4) + 1, m);
             return m;
         }
 
-        // Jull1ano fork: the NNR settings (ForkNnr, Setup > DSP > NNR) to every receiver
+        // Jull1ano fork: the NR4 settings (ForkNr4, Setup > DSP > AetherRX > NR4) to every receiver
+        public void ForkApplyNr4()
+        {
+            if (radio == null) return;
+            for (int t = 0; t < 2; t++)
+                for (int sub = 0; sub < 2; sub++)
+                {
+                    RadioDSPRX r = radio.GetDSPRX(t, sub);
+                    if (r != null) ForkNr4.ApplyTo(r);
+                }
+        }
+
+        // Jull1ano fork: NR4 forgets its noise profile and learns it again, on every receiver
+        public void ForkResetNr4Profile()
+        {
+            if (radio == null) return;
+            for (int t = 0; t < 2; t++)
+                for (int sub = 0; sub < 2; sub++)
+                {
+                    RadioDSPRX r = radio.GetDSPRX(t, sub);
+                    if (r != null) r.ResetSBNRNoiseProfile();
+                }
+        }
+
+        // Jull1ano fork: a new Final Output trim (ForkOutput) to every receiver's output gain
+        public void ForkApplyOutputTrim()
+        {
+            if (radio == null) return;
+            for (int t = 0; t < 2; t++)
+                for (int sub = 0; sub < 2; sub++)
+                {
+                    RadioDSPRX r = radio.GetDSPRX(t, sub);
+                    if (r != null) r.ReapplyOutputGain();
+                }
+        }
+
+        // Jull1ano fork: the NNR settings (ForkNnr, Setup > DSP > AetherRX > NNR) to every receiver
         public void ForkApplyNnr()
         {
             if (radio == null) return;

@@ -299,6 +299,18 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRpostFilterThreshold", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXASBNRpostFilterThreshold(int channel, float threshold);
 
+        // Jull1ano fork: NR4 on the libspecbleach AetherSDR uses
+        [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRadaptiveNoise", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXASBNRadaptiveNoise(int channel, int on);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRnoiseEstimationMethod", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXASBNRnoiseEstimationMethod(int channel, int method);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRmaskingDepth", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXASBNRmaskingDepth(int channel, float depth);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRsuppressionStrength", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXASBNRsuppressionStrength(int channel, float strength);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRresetNoiseProfile", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXASBNRresetNoiseProfile(int channel);
+
         [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRnoiseScalingType", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXASBNRnoiseScalingType(int channel, int noise_scaling_type);        
         //
