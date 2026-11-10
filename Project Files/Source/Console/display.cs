@@ -262,10 +262,10 @@ namespace Thetis
         private static SharpDX.Mathematics.Interop.RawVector2[] _tracePts;
         private static StrokeStyle _traceStyle;
 
-        // Jull1ano fork: two-colour fill (Setup > Appearance > RX Display > Fill gradient (fork)): the fill under
-        // the trace runs from the top colour at the top of the panadapter to the bottom colour at its bottom, with
-        // the Data Fill alpha; optionally the trace too, with the Data Line alpha. Thetis' own multi-stop gradient
-        // (Gradients tab) wins when it is on.
+        // Jull1ano fork: two-colour fill and two-colour line (Setup > Appearance > RX Display > Gradients (fork)),
+        // each on its own with its own colours: from the top colour at the top of the panadapter to the bottom colour
+        // at its bottom; the fill with the Data Fill alpha, the line with the Data Line alpha. Thetis' own multi-stop
+        // gradient (Gradients tab) wins when it is on.
         private static bool _forkFillGradient = false;
         private static bool _forkLineGradient = false;
         private static Color _forkFillTop = Color.FromArgb(255, 30, 144, 255);
@@ -274,6 +274,10 @@ namespace Thetis
         public static bool ForkLineGradient { get { return _forkLineGradient; } set { _forkLineGradient = value; } }
         public static Color ForkFillTop { get { return _forkFillTop; } set { _forkFillTop = value; } }
         public static Color ForkFillBottom { get { return _forkFillBottom; } set { _forkFillBottom = value; } }
+        private static Color _forkLineTop = Color.FromArgb(255, 255, 255, 255);
+        private static Color _forkLineBottom = Color.FromArgb(255, 30, 144, 255);
+        public static Color ForkLineTop { get { return _forkLineTop; } set { _forkLineTop = value; } }
+        public static Color ForkLineBottom { get { return _forkLineBottom; } set { _forkLineBottom = value; } }
         private static readonly SharpDX.Direct2D1.LinearGradientBrush[] _forkFillBrush = new SharpDX.Direct2D1.LinearGradientBrush[2];
         private static readonly SharpDX.Direct2D1.LinearGradientBrush[] _forkLineBrush = new SharpDX.Direct2D1.LinearGradientBrush[2];
         private static readonly string[] _forkGradKey = new string[2];
@@ -306,18 +310,19 @@ namespace Thetis
 
         private static void forkGradient(int rx, int top, int bottom, ref SharpDX.Direct2D1.Brush fillBrush, ref SharpDX.Direct2D1.Brush lineBrush)
         {
-            if (!_forkFillGradient || _d2dRenderTarget == null) return;
+            if ((!_forkFillGradient && !_forkLineGradient) || _d2dRenderTarget == null) return;
             int i = rx == 2 ? 1 : 0;
             int fa = data_fill_color.A, la = data_line_color.A;
-            string key = top + "|" + bottom + "|" + _forkFillTop.ToArgb() + "|" + _forkFillBottom.ToArgb() + "|" + fa + "|" + la;
-            if (_forkGradKey[i] != key || _forkFillBrush[i] == null)
+            string key = top + "|" + bottom + "|" + _forkFillTop.ToArgb() + "|" + _forkFillBottom.ToArgb() + "|" +
+                _forkLineTop.ToArgb() + "|" + _forkLineBottom.ToArgb() + "|" + fa + "|" + la;
+            if (_forkGradKey[i] != key || _forkFillBrush[i] == null || _forkLineBrush[i] == null)
             {
                 forkDisposeGradient(i);
                 _forkFillBrush[i] = forkVertical(top, bottom, Color.FromArgb(fa, _forkFillTop), Color.FromArgb(fa, _forkFillBottom));
-                _forkLineBrush[i] = forkVertical(top, bottom, Color.FromArgb(la, _forkFillTop), Color.FromArgb(la, _forkFillBottom));
+                _forkLineBrush[i] = forkVertical(top, bottom, Color.FromArgb(la, _forkLineTop), Color.FromArgb(la, _forkLineBottom));
                 _forkGradKey[i] = key;
             }
-            fillBrush = _forkFillBrush[i];
+            if (_forkFillGradient) fillBrush = _forkFillBrush[i];
             if (_forkLineGradient) lineBrush = _forkLineBrush[i];
         }
 

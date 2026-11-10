@@ -40646,8 +40646,17 @@ namespace Thetis
         {
             VFOAFreq = record.RXFreq;
             RX1DSPMode = record.DSPMode;
+            if (_forkMemorySimple)
+            {
+                // Jull1ano fork: a memory is a frequency and a mode, as if tuned there by hand: the step comes from
+                // the band memory, the filter, AGC, power, split and repeater settings stay as they are
+                forkApplyStepForMode(RX1DSPMode);
+                return;
+            }
 
-            TuneStepIndex = TuneStepLookup(record.TuneStep);
+            _forkApplyingBand = true; // Jull1ano fork: a memory's step is not the user's step for the band
+            try { TuneStepIndex = TuneStepLookup(record.TuneStep); }
+            finally { _forkApplyingBand = false; }
 
             if (record.DSPMode == DSPMode.FM)
             {
@@ -44872,7 +44881,8 @@ namespace Thetis
                     tm.Tick += (s4, e4) =>
                     {
                         HighDpi.Log("memrow state: mode " + RX1DSPMode + " VFO " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) +
-                            " centre " + CentreFrequency.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) + " CTUN " + ClickTuneDisplay);
+                            " centre " + CentreFrequency.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) + " CTUN " + ClickTuneDisplay +
+                            " step " + tune_step_list[tune_step_index].Name + " filter " + RX1Filter + " band " + rx1_band);
                         if (step == 0)
                         {
                             Control[] g = memoryForm.Controls.Find("dataGridView1", true);
@@ -45718,6 +45728,8 @@ namespace Thetis
             Color top = Color.FromArgb(255, Display.DataFillColor.R, Display.DataFillColor.G, Display.DataFillColor.B);
             Display.ForkFillTop = top;
             Display.ForkFillBottom = Color.FromArgb(255, top.R / 5, top.G / 5, top.B / 5);
+            Display.ForkLineTop = Color.FromArgb(255, Display.DataLineColor.R, Display.DataLineColor.G, Display.DataLineColor.B);
+            Display.ForkLineBottom = top;
             try
             {
                 if (!System.IO.File.Exists(_forkDisplayFile)) return;
@@ -45730,6 +45742,8 @@ namespace Thetis
                     else if (p[0] == "line_gradient") Display.ForkLineGradient = p[1] == "1";
                     else if (p[0] == "fill_top" && int.TryParse(p[1], out v)) Display.ForkFillTop = Color.FromArgb(v);
                     else if (p[0] == "fill_bottom" && int.TryParse(p[1], out v)) Display.ForkFillBottom = Color.FromArgb(v);
+                    else if (p[0] == "line_top" && int.TryParse(p[1], out v)) Display.ForkLineTop = Color.FromArgb(v);
+                    else if (p[0] == "line_bottom" && int.TryParse(p[1], out v)) Display.ForkLineBottom = Color.FromArgb(v);
                 }
             }
             catch { }
@@ -45744,7 +45758,9 @@ namespace Thetis
                     "fill_gradient\t" + (Display.ForkFillGradient ? "1" : "0") + "\r\n" +
                     "line_gradient\t" + (Display.ForkLineGradient ? "1" : "0") + "\r\n" +
                     "fill_top\t" + Display.ForkFillTop.ToArgb() + "\r\n" +
-                    "fill_bottom\t" + Display.ForkFillBottom.ToArgb() + "\r\n");
+                    "fill_bottom\t" + Display.ForkFillBottom.ToArgb() + "\r\n" +
+                    "line_top\t" + Display.ForkLineTop.ToArgb() + "\r\n" +
+                    "line_bottom\t" + Display.ForkLineBottom.ToArgb() + "\r\n");
             }
             catch { }
         }
@@ -45761,6 +45777,7 @@ namespace Thetis
         private bool _forkBandAware = true;
         private bool _forkKeepCtun = true; // band changes keep CTUN on (Setup > Appearance > General > Tuning)
         private bool _forkNr2Default = true; // NR2 comes on in every mode but FM / digital when NR is off
+        private bool _forkMemorySimple = true; // memories recall frequency + mode only, the other columns hidden
         private bool _forkApplyingBand = false;
         private bool _forkInModeStep = false;
         private bool _forkReady = false;
@@ -45772,6 +45789,17 @@ namespace Thetis
         {
             get { return _forkBandAware; }
             set { _forkBandAware = value; forkSaveBandMemory(); }
+        }
+
+        public bool MemorySimple
+        {
+            get { return _forkMemorySimple; }
+            set
+            {
+                _forkMemorySimple = value;
+                forkSaveBandMemory();
+                if (memoryForm != null && !memoryForm.IsDisposed) memoryForm.ApplyColumnView();
+            }
         }
 
         public bool Nr2ByDefault
@@ -45936,6 +45964,7 @@ namespace Thetis
                     if (p.Length == 3 && p[0] == "option" && p[1] == "band_aware") _forkBandAware = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "keep_ctun") _forkKeepCtun = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "nr2_default") _forkNr2Default = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "option" && p[1] == "memory_simple") _forkMemorySimple = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
                     else if (p.Length == 4 && p[0] == "step") _forkBandStep[p[1] + "|" + p[2]] = p[3];
                 }
@@ -45952,6 +45981,7 @@ namespace Thetis
                 sb.Append("option\tband_aware\t").Append(_forkBandAware ? "1" : "0").Append("\r\n");
                 sb.Append("option\tkeep_ctun\t").Append(_forkKeepCtun ? "1" : "0").Append("\r\n");
                 sb.Append("option\tnr2_default\t").Append(_forkNr2Default ? "1" : "0").Append("\r\n");
+                sb.Append("option\tmemory_simple\t").Append(_forkMemorySimple ? "1" : "0").Append("\r\n");
                 foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
                     sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
                 foreach (KeyValuePair<string, string> kv in _forkBandStep)

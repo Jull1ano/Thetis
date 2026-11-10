@@ -102,74 +102,78 @@ namespace Thetis
 
         #region Constructor and Destructor
 
-        // Jull1ano fork: Appearance > RX Display > "Fill gradient (fork)", under Panadapter Noise Floor
+        // Jull1ano fork: Appearance > RX Display > "Gradients (fork)", under Panadapter Noise Floor: the fill and
+        // the line, each on its own with its own top / bottom colours
         private void addForkFillOptions()
         {
             Control anchor = groupBoxTS18; // Panadapter Noise Floor
             if (anchor == null || anchor.Parent == null) return;
             GroupBox grp = new GroupBox();
             grp.Name = "grpForkFillGradient";
-            grp.Text = "Fill gradient (fork)";
+            grp.Text = "Gradients (fork)";
             grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
             grp.Size = new Size(anchor.Width, HighDpi.Px(76));
-            CheckBox chkFill = new CheckBox();
-            chkFill.Name = "chkForkFillGradient";
-            chkFill.Text = "Two-colour fill";
-            chkFill.AutoSize = false;
-            chkFill.Size = new Size(HighDpi.Px(150), HighDpi.Px(20));
-            chkFill.Location = new Point(HighDpi.Px(8), HighDpi.Px(20));
-            chkFill.Checked = Display.ForkFillGradient;
-            CheckBox chkLine = new CheckBox();
-            chkLine.Name = "chkForkLineGradient";
-            chkLine.Text = "Data Line too";
-            chkLine.AutoSize = false;
-            chkLine.Size = new Size(HighDpi.Px(150), HighDpi.Px(20));
-            chkLine.Location = new Point(HighDpi.Px(8), HighDpi.Px(46));
-            chkLine.Checked = Display.ForkLineGradient;
-            Label lblTop = new Label();
-            lblTop.Text = "Top:";
-            lblTop.AutoSize = false;
-            lblTop.Size = new Size(HighDpi.Px(54), HighDpi.Px(18));
-            lblTop.Location = new Point(HighDpi.Px(170), HighDpi.Px(23));
-            ColorButton cTop = new ColorButton();
-            cTop.Name = "clrbtnForkFillTop";
-            cTop.Size = new Size(HighDpi.Px(40), HighDpi.Px(23));
-            cTop.Location = new Point(HighDpi.Px(226), HighDpi.Px(18));
-            cTop.Color = Display.ForkFillTop;
-            Label lblBottom = new Label();
-            lblBottom.Text = "Bottom:";
-            lblBottom.AutoSize = false;
-            lblBottom.Size = new Size(HighDpi.Px(54), HighDpi.Px(18));
-            lblBottom.Location = new Point(HighDpi.Px(170), HighDpi.Px(49));
-            ColorButton cBottom = new ColorButton();
-            cBottom.Name = "clrbtnForkFillBottom";
-            cBottom.Size = new Size(HighDpi.Px(40), HighDpi.Px(23));
-            cBottom.Location = new Point(HighDpi.Px(226), HighDpi.Px(44));
-            cBottom.Color = Display.ForkFillBottom;
+
+            CheckBox chkFill = forkGradCheck("chkForkFillGradient", "Two-colour fill", 20, Display.ForkFillGradient);
+            ColorButton fTop = forkGradColour("clrbtnForkFillTop", 18, Display.ForkFillTop, grp, "Top:", 23);
+            ColorButton fBottom = forkGradColour("clrbtnForkFillBottom", 18, Display.ForkFillBottom, grp, "Bottom:", 23, true);
+            CheckBox chkLine = forkGradCheck("chkForkLineGradient", "Two-colour line", 46, Display.ForkLineGradient);
+            ColorButton lTop = forkGradColour("clrbtnForkLineTop", 44, Display.ForkLineTop, grp, "Top:", 49);
+            ColorButton lBottom = forkGradColour("clrbtnForkLineBottom", 44, Display.ForkLineBottom, grp, "Bottom:", 49, true);
+
             EventHandler apply = (s, e) =>
             {
                 Display.ForkFillGradient = chkFill.Checked;
                 Display.ForkLineGradient = chkLine.Checked;
-                Display.ForkFillTop = Color.FromArgb(255, cTop.Color);
-                Display.ForkFillBottom = Color.FromArgb(255, cBottom.Color);
+                Display.ForkFillTop = Color.FromArgb(255, fTop.Color);
+                Display.ForkFillBottom = Color.FromArgb(255, fBottom.Color);
+                Display.ForkLineTop = Color.FromArgb(255, lTop.Color);
+                Display.ForkLineBottom = Color.FromArgb(255, lBottom.Color);
                 if (console != null) console.ForkSaveDisplayOptions();
             };
             chkFill.CheckedChanged += apply;
             chkLine.CheckedChanged += apply;
-            cTop.Changed += apply;
-            cBottom.Changed += apply;
-            string tip = "The fill under the spectrum line runs from the top colour (top of the panadapter) to the bottom\r\n" +
-                "colour, with the Data Fill alpha; \"Data Line too\" draws the line with the same colours (Data Line alpha).\r\n" +
-                "The Gradients tab's own gradient wins when it is on.";
-            toolTip1.SetToolTip(chkFill, tip);
-            toolTip1.SetToolTip(chkLine, tip);
+            fTop.Changed += apply;
+            fBottom.Changed += apply;
+            lTop.Changed += apply;
+            lBottom.Changed += apply;
+            toolTip1.SetToolTip(chkFill, "The fill under the spectrum line runs from the top colour (top of the panadapter) to the\r\n" +
+                "bottom colour, with the Data Fill alpha. The Gradients tab's own gradient wins when it is on.");
+            toolTip1.SetToolTip(chkLine, "The spectrum line itself runs from its top colour (top of the panadapter) to its bottom\r\n" +
+                "colour, with the Data Line alpha: strong signals reach the top colour. Works with or without the fill gradient.");
             grp.Controls.Add(chkFill);
             grp.Controls.Add(chkLine);
-            grp.Controls.Add(lblTop);
-            grp.Controls.Add(cTop);
-            grp.Controls.Add(lblBottom);
-            grp.Controls.Add(cBottom);
             anchor.Parent.Controls.Add(grp);
+        }
+
+        private CheckBox forkGradCheck(string name, string text, int y, bool on)
+        {
+            CheckBox c = new CheckBox();
+            c.Name = name;
+            c.Text = text;
+            c.AutoSize = false;
+            c.Size = new Size(HighDpi.Px(132), HighDpi.Px(20));
+            c.Location = new Point(HighDpi.Px(8), HighDpi.Px(y));
+            c.Checked = on;
+            return c;
+        }
+
+        // a colour button with its label, in the Top (or Bottom) column
+        private ColorButton forkGradColour(string name, int y, Color colour, GroupBox grp, string label, int labelY, bool bottom = false)
+        {
+            Label l = new Label();
+            l.Text = label;
+            l.AutoSize = false;
+            l.Size = new Size(HighDpi.Px(bottom ? 50 : 32), HighDpi.Px(18));
+            l.Location = new Point(HighDpi.Px(bottom ? 222 : 142), HighDpi.Px(labelY));
+            ColorButton b = new ColorButton();
+            b.Name = name;
+            b.Size = new Size(HighDpi.Px(40), HighDpi.Px(23));
+            b.Location = new Point(HighDpi.Px(bottom ? 272 : 176), HighDpi.Px(y));
+            b.Color = colour;
+            grp.Controls.Add(l);
+            grp.Controls.Add(b);
+            return b;
         }
 
         // Jull1ano fork: Appearance > General > "Receive (fork)", under Cursor/Peak Readout
@@ -181,7 +185,19 @@ namespace Thetis
             grp.Name = "grpForkTuning";
             grp.Text = "Receive (fork)";
             grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
-            grp.Size = new Size(anchor.Width, HighDpi.Px(90));
+            grp.Size = new Size(anchor.Width, HighDpi.Px(112));
+            CheckBox chkMem = new CheckBox();
+            chkMem.Name = "chkForkMemorySimple";
+            chkMem.Text = "Memory: freq + mode";
+            chkMem.AutoSize = false;
+            chkMem.Size = new Size(grp.Width - HighDpi.Px(16), HighDpi.Px(20));
+            chkMem.Location = new Point(HighDpi.Px(8), HighDpi.Px(86));
+            chkMem.Checked = console == null || console.MemorySimple;
+            chkMem.CheckedChanged += (s, e) => { if (console != null) console.MemorySimple = chkMem.Checked; };
+            toolTip1.SetToolTip(chkMem, "A memory recalls its frequency and mode only, as if tuned there by hand (the step from the band\r\n" +
+                "memory); its filter, AGC, power, split, repeater and schedule settings are not applied, and the Memory\r\n" +
+                "window shows Group, RX Freq, Name and DSP Mode only.");
+            grp.Controls.Add(chkMem);
             CheckBox chkNr2 = new CheckBox();
             chkNr2.Name = "chkForkNr2Default";
             chkNr2.Text = "NR2 on by default";

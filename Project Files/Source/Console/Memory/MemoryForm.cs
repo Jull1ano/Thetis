@@ -85,6 +85,7 @@ namespace Thetis
             InitializeComponent();
             console = c;
             dataGridView1.RowHeaderMouseClick += rowHeaderRecall; // Jull1ano fork: one click on the row's left edge tunes there
+            this.Load += (s, e) => ApplyColumnView(); // Jull1ano fork
             Common.RestoreForm(this, "MemoryForm", true); // ke9ns bring up memory window in place you left it last time
 
             dataGridView1.RowHeadersVisible = true;
@@ -174,6 +175,7 @@ namespace Thetis
             {
                 comboboxColumnTuneStep.Items.Add(console.TuneStepList[i].Name);
             }
+            comboboxColumnTuneStep.Items.Add(""); // Jull1ano fork: a memory without a step
 
             comboboxColumnRPTR.Items.Add(FMTXMode.High);
             comboboxColumnRPTR.Items.Add(FMTXMode.Simplex);
@@ -476,7 +478,7 @@ namespace Thetis
 
                 // ke9ns Below URLTEXT goes where normally the comment goes with a ""
 
-            console.MemoryList.List.Add(new MemoryRecord("", console.VFOAFreq, mem_name, console.RX1DSPMode, true, console.TuneStepList[console.TuneStepIndex].Name,
+            console.MemoryList.List.Add(new MemoryRecord("", console.VFOAFreq, mem_name, console.RX1DSPMode, true, (console.MemorySimple ? "" : console.TuneStepList[console.TuneStepIndex].Name),
                 console.CurrentFMTXMode, console.FMTXOffsetMHz, console.radio.GetDSPTX(0).CTCSSFlag, console.radio.GetDSPTX(0).CTCSSFreqHz, console.PWR,
                 (int)console.radio.GetDSPTX(0).TXFMDeviation, console.VFOSplit, console.TXFreq, console.RX1Filter, console.RX1FilterLow,
                 console.RX1FilterHigh, URLTEXT, console.radio.GetDSPRX(0, 0).RXAGCMode, console.RF,
@@ -510,7 +512,7 @@ namespace Thetis
 
             if (Console.ALTM == true) // ke9ns add  add memory from ALT + M keys 
             {
-                console.MemoryList.List.Add(new MemoryRecord("New Spot", console.VFOAFreq, mem_name, console.RX1DSPMode, true, console.TuneStepList[console.TuneStepIndex].Name,
+                console.MemoryList.List.Add(new MemoryRecord("New Spot", console.VFOAFreq, mem_name, console.RX1DSPMode, true, (console.MemorySimple ? "" : console.TuneStepList[console.TuneStepIndex].Name),
                    console.CurrentFMTXMode, console.FMTXOffsetMHz, console.radio.GetDSPTX(0).CTCSSFlag, console.radio.GetDSPTX(0).CTCSSFreqHz, console.PWR,
                    (int)console.radio.GetDSPTX(0).TXFMDeviation, console.VFOSplit, console.TXFreq, console.RX1Filter, console.RX1FilterLow,
                    console.RX1FilterHigh, "", console.radio.GetDSPRX(0, 0).RXAGCMode, console.RF,
@@ -522,7 +524,7 @@ namespace Thetis
             }
             else
             {
-                console.MemoryList.List.Add(new MemoryRecord("", console.VFOAFreq, mem_name, console.RX1DSPMode, true, console.TuneStepList[console.TuneStepIndex].Name,
+                console.MemoryList.List.Add(new MemoryRecord("", console.VFOAFreq, mem_name, console.RX1DSPMode, true, (console.MemorySimple ? "" : console.TuneStepList[console.TuneStepIndex].Name),
                     console.CurrentFMTXMode, console.FMTXOffsetMHz, console.radio.GetDSPTX(0).CTCSSFlag, console.radio.GetDSPTX(0).CTCSSFreqHz, console.PWR,
                     (int)console.radio.GetDSPTX(0).TXFMDeviation, console.VFOSplit, console.TXFreq, console.RX1Filter, console.RX1FilterLow,
                     console.RX1FilterHigh, "", console.radio.GetDSPRX(0, 0).RXAGCMode, console.RF,
@@ -607,6 +609,14 @@ namespace Thetis
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
+        // Jull1ano fork: with memories as frequency + mode only, the grid shows Group, RX Freq, Name and DSP Mode
+        private static readonly string[] _simpleColumns = new string[] { "Group", "RXFreq", "Name", "DSPMode" };
+        public void ApplyColumnView()
+        {
+            foreach (DataGridViewColumn col in dataGridView1.Columns)
+                col.Visible = !console.MemorySimple || Array.IndexOf(_simpleColumns, col.Name) >= 0 || Array.IndexOf(_simpleColumns, col.DataPropertyName) >= 0;
+        }
+
         // Jull1ano fork: a left click on a row's header (the small field on its left) recalls that memory at once,
         // as Select / a double click do, and centres the view on the VFO
         private void rowHeaderRecall(object sender, DataGridViewCellMouseEventArgs e)

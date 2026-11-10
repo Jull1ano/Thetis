@@ -149,10 +149,15 @@ NR1 is the old NR button; NR2 / NR3 / NR4 sit in the free row above NR / ANF / t
 the skin's NR button images (room left at its end for another NR). Where that row has no room (a narrow
 window) it hides and NR cycles as before. NR2 on by default still applies.
 
-Fill gradient (Setup > Appearance > RX Display > Fill gradient (fork), off by default): the fill under the
-trace runs from a top to a bottom colour over the panadapter height, with the Data Fill alpha; "Data Line
-too" draws the trace with the same colours. The Gradients tab's own gradient wins when it is on. Saved in
-`fork_display.txt`.
+Gradients (Setup > Appearance > RX Display > Gradients (fork), off by default): "Two-colour fill" and
+"Two-colour line", each on its own with its own top / bottom colours, over the panadapter height (the fill
+with the Data Fill alpha, the line with the Data Line alpha: strong signals reach the top colour). The
+Gradients tab's own gradient wins when it is on. Saved in `fork_display.txt`.
+
+Memory: freq + mode (Receive (fork) group, on by default): a memory recalls its frequency and mode only, as if
+tuned there by hand (the step from the band memory); its filter, AGC, power, split, repeater and schedule
+settings are not applied, and the Memory window shows Group, RX Freq, Name and DSP Mode. New memories store no
+step. A memory's step is never learned as the band's step (the old recall taught 500 Hz everywhere).
 
 Memory window: rows get their height from the row template before the memories are bound (setting it row
 by row re-laid the grid out for each row: 3 s for 76 rows); it opens in about 0.5 s (the original 0.3 s).
