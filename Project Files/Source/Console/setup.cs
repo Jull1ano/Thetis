@@ -132,6 +132,25 @@ namespace Thetis
             grp.Controls.Add(cmb);
             grp.Controls.Add(note);
             anchor.Parent.Controls.Add(grp);
+
+            // RX Display > Panadapter: smooth spectrum line, next to Line Width
+            if (udDisplayLineWidth != null && udDisplayLineWidth.Parent != null)
+            {
+                CheckBox chkSmooth = new CheckBox();
+                chkSmooth.Name = "chkHighDpiSmoothTrace";
+                chkSmooth.Text = "Smooth";
+                chkSmooth.AutoSize = true;
+                chkSmooth.Location = new Point(udDisplayLineWidth.Right + HighDpi.Px(8), udDisplayLineWidth.Top + HighDpi.Px(1));
+                chkSmooth.Checked = Display.SmoothTrace;
+                chkSmooth.CheckedChanged += (s, e) =>
+                {
+                    Display.SmoothTrace = chkSmooth.Checked;
+                    if (console != null) HighDpi.SaveSmoothTrace(console.AppDataPath, chkSmooth.Checked);
+                };
+                toolTip1.SetToolTip(chkSmooth, "Anti-aliased spectrum line at sub-pixel heights, as AltSDR, NereusSDR and AetherSDR draw it.\r\n" +
+                    "Line Width is then in screen points: 1.0 = 2 pixels at 200 %. Off: the original Thetis line, width in pixels.");
+                udDisplayLineWidth.Parent.Controls.Add(chkSmooth);
+            }
         }
 
         public Setup(Console c)

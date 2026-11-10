@@ -154,6 +154,32 @@ namespace Thetis
             catch { }
         }
 
+        // smooth spectrum line (Display.SmoothTrace): on unless the file says 0; THETIS_SMOOTH_TRACE=0/1 overrides
+        private const string SMOOTH_TRACE_FILE = "hidpi_smooth_trace.txt";
+
+        public static bool LoadSmoothTrace(string appDataPath)
+        {
+            string env = Environment.GetEnvironmentVariable("THETIS_SMOOTH_TRACE");
+            if (env == "0") return false;
+            if (env == "1") return true;
+            try
+            {
+                string f = System.IO.Path.Combine(appDataPath ?? "", SMOOTH_TRACE_FILE);
+                if (System.IO.File.Exists(f)) return System.IO.File.ReadAllText(f).Trim() != "0";
+            }
+            catch { }
+            return true;
+        }
+
+        public static void SaveSmoothTrace(string appDataPath, bool on)
+        {
+            try
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(appDataPath ?? "", SMOOTH_TRACE_FILE), on ? "1" : "0");
+            }
+            catch { }
+        }
+
         private static void setTextStep(int n)
         {
             TextStep = Math.Max(0, Math.Min(2, n));

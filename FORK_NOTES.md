@@ -43,10 +43,17 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
 
 - WinForms scales the layout; the console's own resize code, the skins (positions in 96 DPI units),
   status bar widths, mouse distances, the VFO digit boxes and Setup's window size were fixed for it.
-- Direct2D spectrum / waterfall: fonts scaled; hairlines (grid, cursor) and the spectrum trace are one
-  device pixel, like NereusSDR (Setup > Appearance > RX Display > Line Width is in device pixels; 1.0 is
-  crisp at 4K); wider lines keep their designed weight; the waterfall adds 2 pixel rows per update at
-  200 % so it covers the same time.
+- Direct2D spectrum / waterfall: fonts scaled; hairlines (grid, cursor) are one device pixel; wider lines
+  keep their designed weight; the waterfall adds 2 pixel rows per update at 200 % so it covers the same
+  time.
+- Smooth spectrum line (Setup > Appearance > RX Display > Smooth, next to Line Width; on by default):
+  one anti-aliased polyline through the column centres at sub-pixel heights with round joins, the way
+  AltSDR, NereusSDR and AetherSDR draw it. Line Width is then in screen points (1.0 = 2 device pixels
+  at 200 %, the same as AltSDR's 1 px stroke; 0.1 steps in between look right too, since the edge is
+  anti-aliased). Upstream drew each segment on whole pixel rows, so 1 looked thin and jagged and 2
+  heavy. It follows its own anti-aliasing, not Setup > Display > Anti-aliased. Off: the upstream line
+  (width in device pixels). `THETIS_SMOOTH_TRACE=0/1` overrides the saved choice. No measurable CPU
+  cost (about 66 % of one core either way at 4K, 60 fps).
 - Window positions and sizes are saved in 96 DPI units, so one settings database works in both modes.
 - Off: command line `-nohidpi` or `THETIS_HIDPI=0`. At 100 % scaling nothing changes.
 - Text size: Setup > Appearance > General > High DPI (fork): Default, +1, +2 (one point each on the

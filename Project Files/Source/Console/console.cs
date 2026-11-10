@@ -698,6 +698,7 @@ namespace Thetis
 #endif
             AppDataPath = app_data_path;
             HighDpi.LoadTextStep(app_data_path); // Jull1ano fork: Setup > Appearance > High DPI text size
+            Display.SmoothTrace = HighDpi.LoadSmoothTrace(app_data_path); // Jull1ano fork: Setup > Appearance > RX Display > Smooth
             //AppDataPath has been set at this point
 
             if (_check_error_log)

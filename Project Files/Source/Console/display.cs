@@ -249,6 +249,51 @@ namespace Thetis
             set { _smoothSpectrum = value; }
         }
 
+        // Jull1ano fork: smooth spectrum line at high DPI (as AltSDR, NereusSDR, AetherSDR): one anti-aliased
+        // polyline through the column centres at sub-pixel heights, round joins. Its width is in logical pixels
+        // (Line Width 1.0 = 2 device px at 200 %), the anti-aliasing gives the soft edge. Off: the upstream
+        // per-segment lines on whole pixel rows, width in device pixels.
+        private static bool _smoothTrace = true;
+        public static bool SmoothTrace
+        {
+            get { return _smoothTrace; }
+            set { _smoothTrace = value; }
+        }
+        private static SharpDX.Mathematics.Interop.RawVector2[] _tracePts;
+        private static StrokeStyle _traceStyle;
+
+        private static void drawSmoothTrace(SharpDX.Mathematics.Interop.RawVector2[] pts, SharpDX.Direct2D1.Brush brush, float width)
+        {
+            if (pts == null || pts.Length < 2) return;
+            if (_traceStyle == null)
+                _traceStyle = new StrokeStyle(_d2dFactory, new StrokeStyleProperties()
+                {
+                    LineJoin = LineJoin.Round,
+                    StartCap = CapStyle.Round,
+                    EndCap = CapStyle.Round
+                });
+            AntialiasMode was = _d2dRenderTarget.AntialiasMode;
+            _d2dRenderTarget.AntialiasMode = AntialiasMode.PerPrimitive;
+            try
+            {
+                using (PathGeometry geo = new PathGeometry(_d2dFactory))
+                {
+                    using (GeometrySink sink = geo.Open())
+                    {
+                        sink.BeginFigure(pts[0], FigureBegin.Hollow);
+                        sink.AddLines(pts); // the first point again: a zero-length start, harmless with round joins
+                        sink.EndFigure(FigureEnd.Open);
+                        sink.Close();
+                    }
+                    _d2dRenderTarget.DrawGeometry(geo, brush, width, _traceStyle);
+                }
+            }
+            finally
+            {
+                _d2dRenderTarget.AntialiasMode = was;
+            }
+        }
+
         private static bool _allowWaterfallSmear = false;
         public static bool AllowWaterfallSmear
         {
@@ -5257,6 +5302,11 @@ namespace Thetis
                 double local_frame_start = m_dElapsedFrameStart;
                 //
 
+                bool smoothTrace = HighDpi.Enabled && _smoothTrace; // Jull1ano fork: see drawSmoothTrace
+                if (smoothTrace && (_tracePts == null || _tracePts.Length != nDecimatedWidth))
+                    _tracePts = new SharpDX.Mathematics.Interop.RawVector2[nDecimatedWidth];
+                float traceTop = nVerticalShift - 4f, traceBottom = nVerticalShift + H + 4f;
+
                 for (int i = 0; i < nDecimatedWidth; i++)
                 {
                     point.X = i * local_Decimation;
@@ -5361,7 +5411,7 @@ namespace Thetis
                             }
                             else
                             {
-                                _d2dRenderTarget.DrawLine(oldSpectralPeakPoint, spectralPeakPoint, fillPeaksBrush, line_width);
+                                _d2dRenderTarget.DrawLine(oldSpectralPeakPoint, spectralPeakPoint, fillPeaksBrush, smoothTrace ? line_width * HighDpi.Scale : line_width);
                                 oldSpectralPeakPoint = spectralPeakPoint;
                             }
 
@@ -5371,6 +5421,16 @@ namespace Thetis
                                 peak.max_dBm -= dBmSpectralPeakFall;
                             }
                         }
+                    }
+
+                    if (smoothTrace)
+                    {
+                        // sub-pixel height at the column centre (the upstream line sits on whole rows)
+                        float yf = (grid_max - max) * dbmToPixel + nVerticalShift - 0.5f;
+                        if (float.IsNaN(yf) || yf > traceBottom) yf = traceBottom;
+                        else if (yf < traceTop) yf = traceTop;
+                        _tracePts[i] = new SharpDX.Mathematics.Interop.RawVector2(point.X + 0.5f * local_Decimation, yf);
+                        continue;
                     }
 
                     // ignore point if same Y as last point
@@ -5391,6 +5451,8 @@ namespace Thetis
                     _d2dRenderTarget.DrawLine(previousPoint, point, lineBrush, line_width);
                     previousPoint = point;
                 }
+
+                if (smoothTrace) drawSmoothTrace(_tracePts, lineBrush, line_width * HighDpi.Scale);
 
                 //noise floor
                 if (!local_mox)
@@ -8186,6 +8248,7 @@ namespace Thetis
             if (m_bDX2_grid_text_pen != null) Utilities.Dispose(ref m_bDX2_grid_text_pen);
 
             if (m_styleDots != null) Utilities.Dispose(ref m_styleDots);
+            if (_traceStyle != null) Utilities.Dispose(ref _traceStyle); // Jull1ano fork
 
             if (m_bDX2_noisefloor != null) Utilities.Dispose(ref m_bDX2_noisefloor);
             if (m_bDX2_noisefloor_text != null) Utilities.Dispose(ref m_bDX2_noisefloor_text);
@@ -8272,6 +8335,7 @@ namespace Thetis
             m_bDX2_grid_text_pen = null;
 
             m_styleDots = null;
+            _traceStyle = null;
 
             m_bDX2_noisefloor = null;
             m_bDX2_noisefloor_text = null;
