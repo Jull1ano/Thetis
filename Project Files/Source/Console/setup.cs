@@ -102,6 +102,178 @@ namespace Thetis
 
         #region Constructor and Destructor
 
+        // Jull1ano fork: Setup > DSP > NNR, the WDSP 2.11 neural noise reduction as AetherSDR offers it: Strength and
+        // Model, plus WDSP's tuning values (each starting at WDSP's own)
+        private TabPage _forkNnrPage;
+
+        public void ShowForkNnrTab()
+        {
+            Show();
+            Focus();
+            WindowState = FormWindowState.Normal;
+            TabSetup.SelectedIndex = 3;
+            if (_forkNnrPage != null) tcDSP.SelectedTab = _forkNnrPage;
+        }
+
+        private Label forkNnrLabel(Control parent, string text, int x, int y, int w, int h = 20)
+        {
+            Label l = new Label();
+            l.Text = text;
+            l.AutoSize = false;
+            l.Location = new Point(HighDpi.Px(x), HighDpi.Px(y));
+            l.Size = new Size(HighDpi.Px(w), HighDpi.Px(h));
+            l.TextAlign = h > 24 ? ContentAlignment.TopLeft : ContentAlignment.MiddleLeft;
+            parent.Controls.Add(l);
+            return l;
+        }
+
+        private NumericUpDownTS forkNnrNumber(Control parent, string name, int x, int y, double min, double max, double inc, int dec, double value)
+        {
+            NumericUpDownTS n = new NumericUpDownTS();
+            n.Name = name;
+            n.Location = new Point(HighDpi.Px(x), HighDpi.Px(y));
+            n.Size = new Size(HighDpi.Px(64), HighDpi.Px(20));
+            n.DecimalPlaces = dec;
+            n.Minimum = (decimal)min;
+            n.Maximum = (decimal)max;
+            n.Increment = (decimal)inc;
+            n.Value = (decimal)Math.Max(min, Math.Min(max, value));
+            n.TextAlign = HorizontalAlignment.Right;
+            parent.Controls.Add(n);
+            return n;
+        }
+
+        private void addForkNnrTab()
+        {
+            if (tcDSP == null) return;
+            TabPage tp = new TabPage("NNR");
+            tp.Name = "tpForkNNR";
+            tp.BackColor = SystemColors.Control;
+            tp.Padding = new Padding(3);
+            _forkNnrPage = tp;
+
+            GroupBox grp = new GroupBox();
+            grp.Name = "grpForkNNR";
+            grp.Text = "NNR - neural noise reduction (WDSP 2.11)";
+            grp.Location = new Point(HighDpi.Px(8), HighDpi.Px(8));
+            grp.Size = new Size(HighDpi.Px(340), HighDpi.Px(160));
+            forkNnrLabel(grp, "Strength:", 12, 24, 64);
+            TrackBarTS tb = new TrackBarTS();
+            tb.Name = "tbForkNNRStrength";
+            tb.AutoSize = false;
+            tb.Minimum = 0;
+            tb.Maximum = 100;
+            tb.TickFrequency = 10;
+            tb.SmallChange = 1;
+            tb.LargeChange = 5;
+            tb.Value = Math.Max(0, Math.Min(100, ForkNnr.Strength));
+            tb.Location = new Point(HighDpi.Px(76), HighDpi.Px(20));
+            tb.Size = new Size(HighDpi.Px(170), HighDpi.Px(30));
+            grp.Controls.Add(tb);
+            Label lblStrength = forkNnrLabel(grp, "", 250, 24, 84);
+            forkNnrLabel(grp, "Model:", 12, 60, 64);
+            ComboBoxTS cmb = new ComboBoxTS();
+            cmb.Name = "comboForkNNRModel";
+            cmb.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmb.Items.AddRange(new object[] { "Standard", "Premium" });
+            cmb.SelectedIndex = ForkNnr.Model == 1 ? 1 : 0;
+            cmb.Location = new Point(HighDpi.Px(76), HighDpi.Px(60));
+            cmb.Size = new Size(HighDpi.Px(110), HighDpi.Px(21));
+            grp.Controls.Add(cmb);
+            forkNnrLabel(grp, "The NNR button (next to NR4, above the display mode list) or DSP > NNR turns it on. " +
+                "Strength sets how deep the network may cut the noise (mask floor -10 dB at 0 to -50 dB at 100; " +
+                "38 is WDSP's own -25 dB). On a weak signal a lower strength lets more of the band through.", 12, 92, 320, 62);
+            tp.Controls.Add(grp);
+
+            GroupBox adv = new GroupBox();
+            adv.Name = "grpForkNNRAdvanced";
+            adv.Text = "Advanced (each starts at WDSP's own value)";
+            adv.Location = new Point(HighDpi.Px(356), HighDpi.Px(8));
+            adv.Size = new Size(HighDpi.Px(360), HighDpi.Px(160));
+            forkNnrLabel(adv, "Alpha:", 12, 26, 90);
+            NumericUpDownTS nAlpha = forkNnrNumber(adv, "udForkNNRAlpha", 104, 26, 0, 4, 0.05, 2, ForkNnr.Alpha);
+            forkNnrLabel(adv, "Knee (dB):", 12, 54, 90);
+            NumericUpDownTS nKnee = forkNnrNumber(adv, "udForkNNRKnee", 104, 54, 0, 40, 0.5, 1, ForkNnr.Knee);
+            forkNnrLabel(adv, "Tau (s):", 12, 82, 90);
+            NumericUpDownTS nTau = forkNnrNumber(adv, "udForkNNRTau", 104, 82, 0.05, 30, 0.05, 2, ForkNnr.Tau);
+            forkNnrLabel(adv, "Max gain (dB):", 184, 26, 100);
+            NumericUpDownTS nGain = forkNnrNumber(adv, "udForkNNRMaxGain", 286, 26, 0, 24, 0.5, 1, ForkNnr.MaxGain);
+            forkNnrLabel(adv, "Attack (ms):", 184, 54, 100);
+            NumericUpDownTS nAtt = forkNnrNumber(adv, "udForkNNRAttack", 286, 54, 0, 500, 1, 0, ForkNnr.Attack);
+            forkNnrLabel(adv, "Release (ms):", 184, 82, 100);
+            NumericUpDownTS nRel = forkNnrNumber(adv, "udForkNNRRelease", 286, 82, 0, 500, 1, 0, ForkNnr.Release);
+            ButtonTS btnDef = new ButtonTS();
+            btnDef.Name = "btnForkNNRDefaults";
+            btnDef.Text = "Defaults";
+            btnDef.Location = new Point(HighDpi.Px(12), HighDpi.Px(120));
+            btnDef.Size = new Size(HighDpi.Px(90), HighDpi.Px(26));
+            adv.Controls.Add(btnDef);
+            tp.Controls.Add(adv);
+
+            GroupBox how = new GroupBox();
+            how.Name = "grpForkNNRHow";
+            how.Text = "How it works";
+            how.Location = new Point(HighDpi.Px(8), HighDpi.Px(176));
+            how.Size = new Size(HighDpi.Px(708), HighDpi.Px(92));
+            forkNnrLabel(how, "In SSB, CW and DIG the network gets the signal filtered to its training band ahead of the demodulator " +
+                "and takes the place of the receive chain up to AGC: the RX EQ, the notches and a pre-AGC ANF are not applied while " +
+                "NNR is on (as in WDSP 2.11); the receive filter still is, after the network. In AM, SAM, DSB and FM it works on the " +
+                "audio after AGC. It needs a DSP rate that is a multiple of 16 kHz (48 kHz is). The same settings apply to RX1 and RX2.",
+                12, 20, 684, 66);
+            tp.Controls.Add(how);
+
+            bool loading = false;
+            Action show = () =>
+            {
+                lblStrength.Text = ForkNnr.Strength + "  (" + ForkNnr.MaskFloorDb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " dB)";
+            };
+            Action apply = () =>
+            {
+                if (loading) return;
+                ForkNnr.Strength = tb.Value;
+                ForkNnr.Model = cmb.SelectedIndex == 1 ? 1 : 0;
+                ForkNnr.Alpha = (double)nAlpha.Value;
+                ForkNnr.Knee = (double)nKnee.Value;
+                ForkNnr.Tau = (double)nTau.Value;
+                ForkNnr.MaxGain = (double)nGain.Value;
+                ForkNnr.Attack = (double)nAtt.Value;
+                ForkNnr.Release = (double)nRel.Value;
+                show();
+                ForkNnr.Save();
+                if (console != null) console.ForkApplyNnr();
+            };
+            tb.ValueChanged += (s, e) => apply();
+            cmb.SelectedIndexChanged += (s, e) => apply();
+            foreach (NumericUpDownTS n in new NumericUpDownTS[] { nAlpha, nKnee, nTau, nGain, nAtt, nRel })
+                n.ValueChanged += (s, e) => apply();
+            btnDef.Click += (s, e) =>
+            {
+                ForkNnr.Defaults();
+                loading = true;
+                tb.Value = ForkNnr.Strength;
+                cmb.SelectedIndex = ForkNnr.Model;
+                nAlpha.Value = (decimal)ForkNnr.Alpha;
+                nKnee.Value = (decimal)ForkNnr.Knee;
+                nTau.Value = (decimal)ForkNnr.Tau;
+                nGain.Value = (decimal)ForkNnr.MaxGain;
+                nAtt.Value = (decimal)ForkNnr.Attack;
+                nRel.Value = (decimal)ForkNnr.Release;
+                loading = false;
+                apply();
+            };
+            show();
+            toolTip1.SetToolTip(tb, "How deep the network may cut the noise: 0 = mask floor -10 dB (the least), 100 = -50 dB (the most)");
+            toolTip1.SetToolTip(cmb, "Standard: the smaller network. Premium: the larger network (more CPU).");
+            toolTip1.SetToolTip(nAlpha, "Expansion exponent for bins below the knee; 1 = off (WDSP default 1)");
+            toolTip1.SetToolTip(nKnee, "Where the expansion starts, as depth below unity gain (WDSP default 10 dB)");
+            toolTip1.SetToolTip(nTau, "Time constant of the input level tracking (WDSP default 2 s)");
+            toolTip1.SetToolTip(nGain, "The most any bin may be lifted (WDSP default 12 dB)");
+            toolTip1.SetToolTip(nAtt, "Per-bin gain smoothing, attack; 0 with release 0 = off (WDSP default)");
+            toolTip1.SetToolTip(nRel, "Per-bin gain smoothing, release; 0 with attack 0 = off (WDSP default)");
+            toolTip1.SetToolTip(btnDef, "Strength 38, Standard, and every advanced value back to WDSP's own");
+            tcDSP.TabPages.Add(tp);
+        }
+
         // Jull1ano fork: Appearance > RX Display > "Gradients (fork)", under Panadapter Noise Floor: the fill and
         // the line, each on its own with its own top / bottom colours
         private void addForkFillOptions()
@@ -195,8 +367,8 @@ namespace Thetis
             chkMem.Checked = console == null || console.MemorySimple;
             chkMem.CheckedChanged += (s, e) => { if (console != null) console.MemorySimple = chkMem.Checked; };
             toolTip1.SetToolTip(chkMem, "A memory recalls its frequency and mode only, as if tuned there by hand (the step from the band\r\n" +
-                "memory); its filter, AGC, power, split, repeater and schedule settings are not applied, and the Memory\r\n" +
-                "window shows Group, RX Freq, Name and DSP Mode only.");
+                "memory); its filter, AGC, power, split, repeater and schedule settings stay in the memory but are\r\n" +
+                "not applied.");
             grp.Controls.Add(chkMem);
             CheckBox chkNr2 = new CheckBox();
             chkNr2.Name = "chkForkNr2Default";
@@ -360,6 +532,7 @@ namespace Thetis
             if (HighDpi.Enabled) addHighDpiOptions();
             addForkTuningOptions(); // Jull1ano fork: band-aware tuning
             addForkFillOptions();   // Jull1ano fork: two-colour fill
+            addForkNnrTab();        // Jull1ano fork: Setup > DSP > NNR
             if (HighDpi.Enabled) HighDpi.PrepareForm(this);
 
             console = c;

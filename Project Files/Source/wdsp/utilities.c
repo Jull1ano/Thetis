@@ -633,3 +633,21 @@ void test_bfcu()
 	_aligned_free(segment);
 	destroy_bfcu(0);
 }
+
+/********************************************************************************************************
+*																										*
+*								           General Debug Utilities								        *
+*																										*
+********************************************************************************************************/
+
+// Jull1ano fork: from WDSP 2.11 (NNR). Prints to the debugger output; works like printf(...)
+#include <stdarg.h>
+void dprintf(const char* format, ...)
+{
+	char buffer[512];
+	va_list args;
+	va_start(args, format);
+	vsnprintf(buffer, sizeof(buffer), format, args);
+	va_end(args);
+	OutputDebugStringA(buffer);
+}

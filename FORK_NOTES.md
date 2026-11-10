@@ -146,8 +146,9 @@ change and at start, on both receivers; the NR button still turns it off until t
 
 NR buttons (as NereusSDR): each NR on its own button, a click switches it on, a second click off, no cycling.
 NR1 is the old NR button; NR2 / NR3 / NR4 sit in the free row above NR / ANF / the display mode list, with
-the skin's NR button images (room left at its end for another NR). Where that row has no room (a narrow
-window) it hides and NR cycles as before. NR2 on by default still applies.
+the skin's NR button images, and NNR after NR4, up to the end of the display mode list. Where that row has
+no room (a narrow window) it hides and NR cycles as before (NR, NR2, NR3, NR4, NNR, off). NR2 on by default
+still applies.
 
 Gradients (Setup > Appearance > RX Display > Gradients (fork), off by default): "Two-colour fill" and
 "Two-colour line", each on its own with its own top / bottom colours, over the panadapter height (the fill
@@ -156,8 +157,9 @@ Gradients tab's own gradient wins when it is on. Saved in `fork_display.txt`.
 
 Memory: freq + mode (Receive (fork) group, on by default): a memory recalls its frequency and mode only, as if
 tuned there by hand (the step from the band memory); its filter, AGC, power, split, repeater and schedule
-settings are not applied, and the Memory window shows Group, RX Freq, Name and DSP Mode. New memories store no
-step. A memory's step is never learned as the band's step (the old recall taught 500 Hz everywhere).
+settings stay in the memory (every column of the Memory window still shows them) but are not applied. New
+memories store no step. A memory's step is never learned as the band's step (the old recall taught 500 Hz
+everywhere).
 
 Memory window: rows get their height from the row template before the memories are bound (setting it row
 by row re-laid the grid out for each row: 3 s for 76 rows); it opens in about 0.5 s (the original 0.3 s).
@@ -166,6 +168,28 @@ The row header is twice the original's width.
 Memory window: one left click on a row's header (the small field left of the row) recalls that memory, as
 Select or a double click do; every recall from the window centres the view on the VFO (as a right click on
 CTUN). Test hooks: `click:<control>:...`, `memrow:<n>`.
+
+## NNR, neural noise reduction (WDSP 2.11, as in AetherSDR)
+
+Warren Pratt's NNR from WDSP 2.11 (`nnr.c`, `nnet.c`, `nnio.c`, `nnrbypass.c`, the built-in models
+`nnr_model_0.c` Standard and `nnr_model_1.c` Premium; `NNET_NSLOTS` 2, as AetherSDR offers), wired into this
+WDSP 1.29's receive chain as 2.11 does it: in SSB / CW / DIG a bypass takes the I/Q ahead of the notched
+filter, filters it to the model's training band and hands it to the network before AGC, skipping the
+demodulator chain up to the pre-AGC noise reductions (so the RX EQ, the notches and a pre-AGC ANF are not
+applied while NNR is on); the receive filter (bp1) runs once, right after the network. In AM / SAM / DSB / FM
+the network works on the audio after AGC. The network runs at 16 kHz inside, so the DSP rate must be a
+multiple of 16 kHz (48 kHz is). `wdsp.dll` grows from 5.6 to 12.4 MB (the two models).
+
+NR value 5 is NNR: the NNR button in the NR row, DSP > NNR (RX1) and the RX2 menu's NNR, the old NR button's
+cycle. Setup > DSP > NNR: Strength 0..100 (mask floor -10 dB at 0 to -50 dB at 100; 38 = WDSP's own -25 dB,
+AetherSDR's default), Model Standard / Premium, and WDSP's tuning values (alpha, knee, tau, max gain, attack,
+release; each starts at WDSP's own), Defaults button. A right click on the NNR button opens that tab. Saved in
+`fork_nnr.txt`, the same for every receiver; the tuning values survive a DSP rate / buffer size change (WDSP
+puts them back after rebuilding the networks).
+
+Test hook: `THETIS_HIDPI_OPEN=nnrtest:14.340:USB:6.005:AM` tunes each frequency and logs, for NR off, NNR
+Standard / Premium, strength 0 / 100, NR2 and off again, the mean post-AGC level (AGC_AV), AGC gain, S meter
+and the process CPU over 3 s (the settings file is not written).
 
 ## Test settings (no rebuild needed)
 

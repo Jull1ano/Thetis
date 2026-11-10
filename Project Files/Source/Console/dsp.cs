@@ -257,6 +257,26 @@ namespace Thetis
         public static extern void SetRXARNNRUseDefaultGain(int channel, int use_default_gain);
         //
 
+        // Jull1ano fork: NNR, neural noise reduction (WDSP 2.11)
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRRun", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRRun(int channel, int run);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRMaskFloor", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRMaskFloor(int channel, double floor_db);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRModel", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int SetRXANNRModel(int channel, int slot);
+        [DllImport("wdsp.dll", EntryPoint = "GetRXANNRModel", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int GetRXANNRModel(int channel);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRAlpha", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRAlpha(int channel, double alpha);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRAlphaKnee", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRAlphaKnee(int channel, double knee_db);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRTau", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRTau(int channel, double tau);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRMaxGain", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRMaxGain(int channel, double gmax_db);
+        [DllImport("wdsp.dll", EntryPoint = "SetRXANNRSmooth", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXANNRSmooth(int channel, double att_ms, double rel_ms);
+
         //libspecbleach
         [DllImport("wdsp.dll", EntryPoint = "SetRXASBNRRun", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXASBNRRun(int channel, int run);

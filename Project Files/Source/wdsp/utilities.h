@@ -88,3 +88,6 @@ extern __declspec (dllexport) void getFilterCurve(int id, int size, int w_type, 
 extern void test_bfcu();
 
 #endif
+
+// Jull1ano fork: from WDSP 2.11 (NNR); prints to the debugger output
+extern void dprintf(const char* format, ...);

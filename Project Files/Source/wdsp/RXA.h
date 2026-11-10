@@ -164,6 +164,14 @@ struct _rxa
     {
         SBNR p; // NR3 + NR4 support (nr4)
     } sbnr;
+	struct
+	{
+		NNR p; // Jull1ano fork: NNR (WDSP 2.11)
+	} nnr;
+	struct
+	{
+		NNRBYPASS p; // Jull1ano fork: NNR (WDSP 2.11)
+	} nnrbypass;
 
 	struct
 	{

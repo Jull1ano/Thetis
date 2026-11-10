@@ -1385,4 +1385,96 @@ namespace Thetis
             catch { }
         }
     }
+
+    // Jull1ano fork: NNR (WDSP 2.11 neural noise reduction) settings, as AetherSDR offers them (Setup > DSP > NNR):
+    // Strength 0..100 sets the mask floor from -10 dB (0, the least) to -50 dB (100, the most); WDSP's own -25 dB is
+    // 37.5, so 38 (-25.2 dB) is the default. Model 0 = Standard, 1 = Premium. The rest are WDSP's tuning values, each
+    // starting at WDSP's own. Kept in fork_nnr.txt in the data folder; the same for every receiver.
+    public static class ForkNnr
+    {
+        public const string FILE = "fork_nnr.txt";
+        public const int DefaultStrength = 38;
+        public static int Strength = DefaultStrength;
+        public static int Model = 0;
+        public static double Alpha = 1.0, Knee = 10.0, Tau = 2.0, MaxGain = 12.0, Attack = 0.0, Release = 0.0;
+        private static string _path;
+
+        public static double MaskFloorDb
+        {
+            get { return -10.0 - 40.0 * Math.Max(0, Math.Min(100, Strength)) / 100.0; }
+        }
+
+        public static void Defaults()
+        {
+            Strength = DefaultStrength;
+            Model = 0;
+            Alpha = 1.0;
+            Knee = 10.0;
+            Tau = 2.0;
+            MaxGain = 12.0;
+            Attack = 0.0;
+            Release = 0.0;
+        }
+
+        private static double clamp(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+        public static void Load(string dataPath)
+        {
+            _path = System.IO.Path.Combine(dataPath ?? "", FILE);
+            try
+            {
+                if (!System.IO.File.Exists(_path)) return;
+                System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                foreach (string line in System.IO.File.ReadAllLines(_path))
+                {
+                    string[] p = line.Split('\t');
+                    double v;
+                    if (p.Length != 2 || !double.TryParse(p[1], System.Globalization.NumberStyles.Float, ci, out v)) continue;
+                    switch (p[0])
+                    {
+                        case "strength": Strength = (int)Math.Round(clamp(v, 0, 100)); break;
+                        case "model": Model = v >= 1 ? 1 : 0; break;
+                        case "alpha": Alpha = clamp(v, 0, 4); break;
+                        case "knee": Knee = clamp(v, 0, 40); break;
+                        case "tau": Tau = clamp(v, 0.05, 30); break;
+                        case "max_gain": MaxGain = clamp(v, 0, 24); break;
+                        case "attack": Attack = clamp(v, 0, 500); break;
+                        case "release": Release = clamp(v, 0, 500); break;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static void Save()
+        {
+            if (string.IsNullOrEmpty(_path)) return;
+            try
+            {
+                System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                string nl = "\r\n";
+                System.IO.File.WriteAllText(_path,
+                    "strength\t" + Strength.ToString(ci) + nl +
+                    "model\t" + Model.ToString(ci) + nl +
+                    "alpha\t" + Alpha.ToString("0.###", ci) + nl +
+                    "knee\t" + Knee.ToString("0.###", ci) + nl +
+                    "tau\t" + Tau.ToString("0.###", ci) + nl +
+                    "max_gain\t" + MaxGain.ToString("0.###", ci) + nl +
+                    "attack\t" + Attack.ToString("0.###", ci) + nl +
+                    "release\t" + Release.ToString("0.###", ci) + nl);
+            }
+            catch { }
+        }
+
+        public static void ApplyTo(RadioDSPRX r)
+        {
+            r.RXANNRModel = Model;
+            r.RXANNRMaskFloor = MaskFloorDb;
+            r.RXANNRAlpha = Alpha;
+            r.RXANNRKnee = Knee;
+            r.RXANNRTau = Tau;
+            r.RXANNRMaxGain = MaxGain;
+            r.SetRXANNRSmooth(Attack, Release);
+        }
+    }
 }

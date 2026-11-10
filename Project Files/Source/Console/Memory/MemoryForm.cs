@@ -609,12 +609,11 @@ namespace Thetis
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        // Jull1ano fork: with memories as frequency + mode only, the grid shows Group, RX Freq, Name and DSP Mode
-        private static readonly string[] _simpleColumns = new string[] { "Group", "RXFreq", "Name", "DSPMode" };
+        // Jull1ano fork: every column stays visible (the user's choice): with memories as frequency + mode only the
+        // other values are kept in the file but not applied on recall
         public void ApplyColumnView()
         {
-            foreach (DataGridViewColumn col in dataGridView1.Columns)
-                col.Visible = !console.MemorySimple || Array.IndexOf(_simpleColumns, col.Name) >= 0 || Array.IndexOf(_simpleColumns, col.DataPropertyName) >= 0;
+            foreach (DataGridViewColumn col in dataGridView1.Columns) col.Visible = true;
         }
 
         // Jull1ano fork: a left click on a row's header (the small field on its left) recalls that memory at once,

@@ -380,6 +380,15 @@ namespace Thetis
             this.RXASBNRnoiseRescale = rx.rx_nr4_noiseRescale;
             this.RXASBNRpostFilterThreshold = rx.rx_nr4_postFilterThreshold;
             this.RXASBNRnoiseScalingType = rx.rx_nr4_noiseScalingType;
+            // Jull1ano fork: NNR
+            this.RXANNRModel = rx.rx_nnr_model;
+            this.RXANNRMaskFloor = rx.rx_nnr_floor;
+            this.RXANNRAlpha = rx.rx_nnr_alpha;
+            this.RXANNRKnee = rx.rx_nnr_knee;
+            this.RXANNRTau = rx.rx_nnr_tau;
+            this.RXANNRMaxGain = rx.rx_nnr_gmax;
+            this.SetRXANNRSmooth(rx.rx_nnr_att, rx.rx_nnr_rel);
+            this.RXANNRRun = rx.rx_nnr_run;
             //
             this.RXFilterLow = rx.rx_filter_low;
             this.RXFilterHigh = rx.rx_filter_high;
@@ -483,6 +492,15 @@ namespace Thetis
             RXASBNRnoiseRescale = rx_nr4_noiseRescale;
             RXASBNRpostFilterThreshold = rx_nr4_postFilterThreshold;
             RXASBNRnoiseScalingType = rx_nr4_noiseScalingType;
+            // Jull1ano fork: NNR
+            RXANNRModel = rx_nnr_model;
+            RXANNRMaskFloor = rx_nnr_floor;
+            RXANNRAlpha = rx_nnr_alpha;
+            RXANNRKnee = rx_nnr_knee;
+            RXANNRTau = rx_nnr_tau;
+            RXANNRMaxGain = rx_nnr_gmax;
+            SetRXANNRSmooth(rx_nnr_att, rx_nnr_rel);
+            RXANNRRun = rx_nnr_run;
             //
             RXFMLowCut = rx_fm_lowcut;
             RXFMHighCut = rx_fm_highcut;
@@ -2321,6 +2339,126 @@ namespace Thetis
                 }
             }
         }
+        // Jull1ano fork: NNR, neural noise reduction (WDSP 2.11, as AetherSDR); the _dsp copies start at WDSP's own values
+        private int rx_nnr_run = 0;
+        private int rx_nnr_run_dsp = 0;
+        public int RXANNRRun
+        {
+            get { return rx_nnr_run; }
+            set
+            {
+                rx_nnr_run = value;
+                if (update && (value != rx_nnr_run_dsp || force))
+                {
+                    WDSP.SetRXANNRRun(WDSP.id(thread, subrx), value);
+                    rx_nnr_run_dsp = value;
+                }
+            }
+        }
+        private int rx_nnr_model = 0;
+        private int rx_nnr_model_dsp = 0;
+        public int RXANNRModel
+        {
+            get { return rx_nnr_model; }
+            set
+            {
+                rx_nnr_model = value;
+                if (update && (value != rx_nnr_model_dsp || force))
+                {
+                    WDSP.SetRXANNRModel(WDSP.id(thread, subrx), value);
+                    rx_nnr_model_dsp = value;
+                }
+            }
+        }
+        private double rx_nnr_floor = -25.0;
+        private double rx_nnr_floor_dsp = -25.0;
+        public double RXANNRMaskFloor
+        {
+            get { return rx_nnr_floor; }
+            set
+            {
+                rx_nnr_floor = value;
+                if (update && (value != rx_nnr_floor_dsp || force))
+                {
+                    WDSP.SetRXANNRMaskFloor(WDSP.id(thread, subrx), value);
+                    rx_nnr_floor_dsp = value;
+                }
+            }
+        }
+        private double rx_nnr_alpha = 1.0;
+        private double rx_nnr_alpha_dsp = 1.0;
+        public double RXANNRAlpha
+        {
+            get { return rx_nnr_alpha; }
+            set
+            {
+                rx_nnr_alpha = value;
+                if (update && (value != rx_nnr_alpha_dsp || force))
+                {
+                    WDSP.SetRXANNRAlpha(WDSP.id(thread, subrx), value);
+                    rx_nnr_alpha_dsp = value;
+                }
+            }
+        }
+        private double rx_nnr_knee = 10.0;
+        private double rx_nnr_knee_dsp = 10.0;
+        public double RXANNRKnee
+        {
+            get { return rx_nnr_knee; }
+            set
+            {
+                rx_nnr_knee = value;
+                if (update && (value != rx_nnr_knee_dsp || force))
+                {
+                    WDSP.SetRXANNRAlphaKnee(WDSP.id(thread, subrx), value);
+                    rx_nnr_knee_dsp = value;
+                }
+            }
+        }
+        private double rx_nnr_tau = 2.0;
+        private double rx_nnr_tau_dsp = 2.0;
+        public double RXANNRTau
+        {
+            get { return rx_nnr_tau; }
+            set
+            {
+                rx_nnr_tau = value;
+                if (update && (value != rx_nnr_tau_dsp || force))
+                {
+                    WDSP.SetRXANNRTau(WDSP.id(thread, subrx), value);
+                    rx_nnr_tau_dsp = value;
+                }
+            }
+        }
+        private double rx_nnr_gmax = 12.0;
+        private double rx_nnr_gmax_dsp = 12.0;
+        public double RXANNRMaxGain
+        {
+            get { return rx_nnr_gmax; }
+            set
+            {
+                rx_nnr_gmax = value;
+                if (update && (value != rx_nnr_gmax_dsp || force))
+                {
+                    WDSP.SetRXANNRMaxGain(WDSP.id(thread, subrx), value);
+                    rx_nnr_gmax_dsp = value;
+                }
+            }
+        }
+        private double rx_nnr_att = 0.0, rx_nnr_rel = 0.0;
+        private double rx_nnr_att_dsp = 0.0, rx_nnr_rel_dsp = 0.0;
+        public void SetRXANNRSmooth(double attack_ms, double release_ms)
+        {
+            rx_nnr_att = attack_ms;
+            rx_nnr_rel = release_ms;
+            if (update && (attack_ms != rx_nnr_att_dsp || release_ms != rx_nnr_rel_dsp || force))
+            {
+                WDSP.SetRXANNRSmooth(WDSP.id(thread, subrx), attack_ms, release_ms);
+                rx_nnr_att_dsp = attack_ms;
+                rx_nnr_rel_dsp = release_ms;
+            }
+        }
+
         //libspecbleach
         private int rx_nr4_run = 0;
         private int rx_nr4_run_dsp = 0;

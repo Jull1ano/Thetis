@@ -348,7 +348,31 @@ void create_rxa (int channel)
 		rxa[channel].midbuff,							// input buffer
 		rxa[channel].midbuff,							// output buffer
 		ch[channel].dsp_rate);							// samplerate
-	
+
+	// Jull1ano fork: NNR, neural noise reduction (WDSP 2.11)
+	rxa[channel].nnr.p = create_nnr (
+		0,												// run
+		1,												// position - see setNNRbypassRun()
+		ch[channel].dsp_size,							// buffer size
+		rxa[channel].midbuff,							// input buffer
+		rxa[channel].midbuff,							// output buffer
+		ch[channel].dsp_rate,							// samplerate
+		-25.0,											// mask floor
+		1);												// output mode, 1 => (Q=0.0)
+
+	// Jull1ano fork: NNRBYPASS (WDSP 2.11): in SSB / CW / DIG the network gets the I/Q filtered to its
+	// training band instead of the demodulated chain
+	rxa[channel].nnrbypass.p = create_nnrbypass (
+		0,                                              // run
+		ch[channel].dsp_size,							// buffer size
+		2048,                                           // nc default
+		rxa[channel].midbuff,							// input buffer
+		rxa[channel].midbuff,							// output buffer
+		200.0,                                          // f_low
+		3000.0,                                         // f_high
+		ch[channel].dsp_rate,							// samplerate
+		1.0);                                           // gain
+
 	// AGC
 	rxa[channel].agc.p = create_wcpagc (
 		1,												// run
@@ -573,6 +597,8 @@ void destroy_rxa (int channel)
 	destroy_bandpass (rxa[channel].bp1.p);
 	destroy_meter (rxa[channel].agcmeter.p);
 	destroy_wcpagc (rxa[channel].agc.p);
+	destroy_nnrbypass (rxa[channel].nnrbypass.p); // Jull1ano fork: NNR
+	destroy_nnr (rxa[channel].nnr.p); // Jull1ano fork: NNR
 	destroy_emnr (rxa[channel].emnr.p);
 	destroy_rnnr (rxa[channel].rnnr.p);	// NR3 + NR4 support (nr3)
     destroy_sbnr (rxa[channel].sbnr.p);	// NR3 + NR4 support (nr4)
@@ -620,6 +646,8 @@ void flush_rxa (int channel)
 	flush_anf (rxa[channel].anf.p);
 	flush_anr (rxa[channel].anr.p);
 	flush_emnr (rxa[channel].emnr.p);
+	flush_nnr (rxa[channel].nnr.p); // Jull1ano fork: NNR
+	flush_nnrbypass (rxa[channel].nnrbypass.p); // Jull1ano fork: NNR
 	flush_wcpagc (rxa[channel].agc.p);
 	flush_meter (rxa[channel].agcmeter.p);
 	flush_bandpass (rxa[channel].bp1.p);
@@ -637,29 +665,40 @@ void flush_rxa (int channel)
 
 void xrxa (int channel)
 {
+	// Jull1ano fork: NNR (WDSP 2.11): while the bypass runs (NNR in SSB / CW / DIG) the network gets the I/Q
+	// captured ahead of the notched filter, filtered to its training band; the demodulator chain up to the
+	// pre-AGC noise reductions is skipped and bp1 (the receive filter) runs once, right after the network
+	int nnrbyp = getRun_nnrbypass (rxa[channel].nnrbypass.p);
 	xshift (rxa[channel].shift.p);
 	xresample (rxa[channel].rsmpin.p);
 	xgen (rxa[channel].gen0.p);
 	xmeter (rxa[channel].adcmeter.p);
+	xnnrbypin (rxa[channel].nnrbypass.p); // Jull1ano fork: NNR
 	xbpsnbain (rxa[channel].bpsnba.p, 0);
 	xnbp (rxa[channel].nbp0.p, 0);
 	xmeter (rxa[channel].smeter.p);
 	xsender (rxa[channel].sender.p);
 	xamsqcap (rxa[channel].amsq.p);
-	xbpsnbaout (rxa[channel].bpsnba.p, 0);
-	xamd (rxa[channel].amd.p);
-	xfmd (rxa[channel].fmd.p);
-	xfmsq (rxa[channel].fmsq.p);
-	xbpsnbain (rxa[channel].bpsnba.p, 1);
-	xbpsnbaout (rxa[channel].bpsnba.p, 1);
-	xsnba (rxa[channel].snba.p);
-	xeqp (rxa[channel].eqp.p);
-	xanf (rxa[channel].anf.p, 0);
-	xanr (rxa[channel].anr.p, 0);
-	xemnr (rxa[channel].emnr.p, 0);
-	xrnnr (rxa[channel].rnnr.p, 0);	// NR3 + NR4 support (nr3)
-    xsbnr (rxa[channel].sbnr.p, 0);	// NR3 + NR4 support (nr4)
-	xbandpass (rxa[channel].bp1.p, 0);
+	if (!nnrbyp)
+	{
+		xbpsnbaout (rxa[channel].bpsnba.p, 0);
+		xamd (rxa[channel].amd.p);
+		xfmd (rxa[channel].fmd.p);
+		xfmsq (rxa[channel].fmsq.p);
+		xbpsnbain (rxa[channel].bpsnba.p, 1);
+		xbpsnbaout (rxa[channel].bpsnba.p, 1);
+		xsnba (rxa[channel].snba.p);
+		xeqp (rxa[channel].eqp.p);
+		xanf (rxa[channel].anf.p, 0);
+		xanr (rxa[channel].anr.p, 0);
+		xemnr (rxa[channel].emnr.p, 0);
+		xrnnr (rxa[channel].rnnr.p, 0);	// NR3 + NR4 support (nr3)
+		xsbnr (rxa[channel].sbnr.p, 0);	// NR3 + NR4 support (nr4)
+	}
+	xnnrbypout (rxa[channel].nnrbypass.p); // Jull1ano fork: NNR
+	xnnr (rxa[channel].nnr.p, 0); // Jull1ano fork: NNR
+	if (nnrbyp) { if (rxa[channel].bp1.p->run) xfircore (rxa[channel].bp1.p->p); }
+	else xbandpass (rxa[channel].bp1.p, 0);
 	xcbl(rxa[channel].cbl.p, 0);	// [2.10.3.13]MW0LGE carrier removal before AGC
 	xwcpagc (rxa[channel].agc.p);
 	xanf (rxa[channel].anf.p, 1);
@@ -667,7 +706,8 @@ void xrxa (int channel)
 	xemnr (rxa[channel].emnr.p, 1);
     xrnnr (rxa[channel].rnnr.p, 1);	// NR3 + NR4 support (nr3)
     xsbnr (rxa[channel].sbnr.p, 1);	// NR3 + NR4 support (nr4)
-	xbandpass (rxa[channel].bp1.p, 1);
+	xnnr (rxa[channel].nnr.p, 1); // Jull1ano fork: NNR
+	if (!nnrbyp) xbandpass (rxa[channel].bp1.p, 1);
 	xmeter (rxa[channel].agcmeter.p);
 	xsiphon (rxa[channel].sip1.p, 0);
 	xcbl (rxa[channel].cbl.p, 1);	// carrier removal after AGC (default)
@@ -742,6 +782,8 @@ void setDSPSamplerate_rxa (int channel)
 	setSamplerate_emnr (rxa[channel].emnr.p, ch[channel].dsp_rate);
 	setSamplerate_rnnr(rxa[channel].rnnr.p, ch[channel].dsp_rate); // NR3 + NR4 support (nr3)
 	setSamplerate_sbnr(rxa[channel].sbnr.p, ch[channel].dsp_rate); // NR3 + NR4 support (nr4)
+	setSamplerate_nnr (rxa[channel].nnr.p, ch[channel].dsp_rate); // Jull1ano fork: NNR
+	setSamplerate_nnrbypass (rxa[channel].nnrbypass.p, ch[channel].dsp_rate); // Jull1ano fork: NNR
 	setSamplerate_bandpass (rxa[channel].bp1.p, ch[channel].dsp_rate);
 	setSamplerate_wcpagc (rxa[channel].agc.p, ch[channel].dsp_rate);
 	setSamplerate_meter (rxa[channel].agcmeter.p, ch[channel].dsp_rate);
@@ -758,6 +800,7 @@ void setDSPSamplerate_rxa (int channel)
 	setBuffers_resample (rxa[channel].rsmpout.p, rxa[channel].midbuff, rxa[channel].outbuff);
 	setInRate_resample (rxa[channel].rsmpout.p, ch[channel].dsp_rate);
 	RXAResCheck (channel);
+	setNNRbypassRun (channel); // Jull1ano fork: NNR
 }
 
 void setDSPBuffsize_rxa (int channel)
@@ -810,6 +853,10 @@ void setDSPBuffsize_rxa (int channel)
 	setSize_sbnr(rxa[channel].sbnr.p, ch[channel].dsp_size); // NR3 + NR4 support (nr4)
     setBuffers_sbnr (rxa[channel].sbnr.p, rxa[channel].midbuff, rxa[channel].midbuff); // NR3 + NR4 support (nr4)
 	setSize_emnr (rxa[channel].emnr.p, ch[channel].dsp_size);
+	setBuffers_nnr (rxa[channel].nnr.p, rxa[channel].midbuff, rxa[channel].midbuff); // Jull1ano fork: NNR
+	setSize_nnr (rxa[channel].nnr.p, ch[channel].dsp_size); // Jull1ano fork: NNR
+	setBuffers_nnrbypass (rxa[channel].nnrbypass.p, rxa[channel].midbuff, rxa[channel].midbuff); // Jull1ano fork: NNR
+	setSize_nnrbypass (rxa[channel].nnrbypass.p, ch[channel].dsp_size); // Jull1ano fork: NNR
 	setBuffers_bandpass (rxa[channel].bp1.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_bandpass (rxa[channel].bp1.p, ch[channel].dsp_size);
 	setBuffers_wcpagc (rxa[channel].agc.p, rxa[channel].midbuff, rxa[channel].midbuff);
@@ -837,6 +884,7 @@ void setDSPBuffsize_rxa (int channel)
 	// output resampler
 	setBuffers_resample (rxa[channel].rsmpout.p, rxa[channel].midbuff, rxa[channel].outbuff);
 	setSize_resample (rxa[channel].rsmpout.p, ch[channel].dsp_size);
+	setNNRbypassRun (channel); // Jull1ano fork: NNR
 }
 
 /********************************************************************************************************
@@ -885,6 +933,7 @@ void SetRXAMode (int channel, int mode)
 		}
 		RXAbp1Set (channel);
 		RXAbpsnbaSet (channel);							// update variables
+		setNNRbypassRun (channel);						// Jull1ano fork: NNR
 		LeaveCriticalSection (&ch[channel].csDSP);
 	}
 }
@@ -911,6 +960,7 @@ void RXAbp1Check (int channel, int amd_run, int snba_run,
 		emnr_run ||
         rnnr_run || // NR3 + NR4 support (nr3)
         sbnr_run || // NR3 + NR4 support (nr4)
+		getRun_nnrbypass (rxa[channel].nnrbypass.p) || // Jull1ano fork: NNR
 		anf_run  ||
 		anr_run)	gain = 2.0;
 	else			gain = 1.0;
@@ -927,6 +977,7 @@ void RXAbp1Set (int channel)
 		(rxa[channel].emnr.p->run == 1) ||
         (rxa[channel].rnnr.p->run == 1) ||  // NR3 + NR4 support (nr3)
         (rxa[channel].sbnr.p->run == 1) ||  // NR3 + NR4 support (nr4)
+		getRun_nnrbypass (rxa[channel].nnrbypass.p) ||  // Jull1ano fork: NNR
 		(rxa[channel].anf.p->run  == 1) ||
 		(rxa[channel].anr.p->run  == 1))	a->run = 1;
 	else									a->run = 0;

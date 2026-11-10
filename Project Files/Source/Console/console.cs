@@ -699,6 +699,7 @@ namespace Thetis
             AppDataPath = app_data_path;
             HighDpi.LoadTextStep(app_data_path); // Jull1ano fork: Setup > Appearance > High DPI text size
             forkLoadBandMemory(app_data_path);    // Jull1ano fork: band-aware tuning (Setup > Appearance > Tuning)
+            ForkNnr.Load(app_data_path);          // Jull1ano fork: NNR settings (Setup > DSP > NNR)
             Display.SmoothTrace = HighDpi.LoadSmoothTrace(app_data_path); // Jull1ano fork: Setup > Appearance > RX Display > Smooth
             Display.FftSmooth = HighDpi.LoadForkFloat(app_data_path, HighDpi.FFT_SMOOTH_FILE, 0f, 0f, 16f); // and FFT Smooth
             //AppDataPath has been set at this point
@@ -871,6 +872,7 @@ namespace Thetis
             LogTool.AddLogEntry("Initialising radio...", "RADIO");
             Splash.SetStatus("Initializing Radio");				// Set progress point
             radio = new Radio(AppDataPath);					    // Initialize the Radio processor   INIT_SLOW
+            ForkApplyNnr();                                     // Jull1ano fork: NNR settings to every receiver
 
             specRX = new SpecRX();
             Display.specready = true;
@@ -42599,6 +42601,12 @@ namespace Thetis
                         SelectNR(1, true, is_on ? 0 : 4);
                     }
                     break;
+                case "NNR": // Jull1ano fork
+                    {
+                        bool is_on = _nr_selected[0] == 5;
+                        SelectNR(1, true, is_on ? 0 : 5);
+                    }
+                    break;
                 case "ANF":
                     chkANF.Checked = !chkANF.Checked;
                     break;
@@ -42658,6 +42666,12 @@ namespace Thetis
                     {
                         bool is_on = _nr_selected[1] == 4;
                         SelectNR(2, true, is_on ? 0 : 4);
+                    }
+                    break;
+                case "NNR": // Jull1ano fork
+                    {
+                        bool is_on = _nr_selected[1] == 5;
+                        SelectNR(2, true, is_on ? 0 : 5);
                     }
                     break;
                 case "ANF":
@@ -43388,7 +43402,7 @@ namespace Thetis
             int old_nr = _nr_selected[rx - 1];
 
             _nr_selected[rx - 1] += 1;
-            if (_nr_selected[rx - 1] > 4) _nr_selected[rx - 1] = 0;
+            if (_nr_selected[rx - 1] > 5) _nr_selected[rx - 1] = 0; // Jull1ano fork: 5 = NNR
 
             setupNR(rx, false);
             setupNR(rx, true);
@@ -43398,7 +43412,7 @@ namespace Thetis
         public void SelectNR(int rx, bool incude_sub, int nr)
         {
             if (rx < 1 || rx > 2) return;
-            if (nr < 0 || nr > 4) return;
+            if (nr < 0 || nr > 5) return; // Jull1ano fork: 5 = NNR
 
             int old_nr = _nr_selected[rx - 1];
 
@@ -43430,7 +43444,8 @@ namespace Thetis
 
             int nr = _nr_selected[rx - 1];
             if (nr < 0) nr = 0;
-            if (nr > 4) nr = 4;
+            if (nr > 5) nr = 5; // Jull1ano fork: 5 = NNR
+            if (nr != 5) rad.RXANNRRun = 0; // Jull1ano fork: NNR off before another NR comes on
 
             switch (nr)
             {
@@ -43594,7 +43609,44 @@ namespace Thetis
                             break;
                     }
                     break;
+                case 5: // Jull1ano fork: NNR, neural noise reduction (WDSP 2.11)
+                    rad.RXANR4Run = 0;
+                    rad.RXANR3Run = 0;
+                    rad.RXANR2Run = 0;
+                    rad.RXANR1Run = 0;
+                    rad.RXANNRRun = 1;
+
+                    switch (rx)
+                    {
+                        case 1:
+                            cat_nr_status = 0;
+                            cat_nr2_status = 0;
+                            NRToolStripMenuItem.Checked = false;
+                            NR2ToolStripMenuItem1.Checked = false;
+                            NR3ToolStripMenuItem.Checked = false;
+                            NR4ToolStripMenuItem.Checked = false;
+                            chkNR.Text = "NNR";
+                            lblNRLabel.Text = "NNR";
+                            chkNR.Checked = true;
+                            break;
+                        case 2:
+                            cat_rx2_nr_status = 0;
+                            cat_rx2_nr2_status = 0;
+                            nR2ToolStripMenuItem.Checked = false;
+                            NR2StripMenuItem2.Checked = false;
+                            NR3ToolStripMenuItem_rx2.Checked = false;
+                            NR4ToolStripMenuItem_rx2.Checked = false;
+                            chkRX2NR.Text = "NNR";
+                            lblRX2NRLabel.Text = "NNR";
+                            chkRX2NR.Checked = true;
+                            break;
+                    }
+                    break;
             }
+
+            // Jull1ano fork: the NNR menu items
+            ToolStripMenuItem nnrMenu = rx == 1 ? _forkNnrMenu1 : _forkNnrMenu2;
+            if (nnrMenu != null) nnrMenu.Checked = nr == 5;
 
             AndromedaIndicatorCheck(EIndicatorActions.eINNR, rx == 1, _nr_selected[rx - 1] > 0);
         }
@@ -44897,6 +44949,74 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "nnrtest")
+                {
+                    // nnrtest:<MHz>:<mode>[:<MHz>:<mode>...]: on each, NR off / NNR Standard / NNR Premium / strength 0 /
+                    // strength 100 / NR2 / off, 2 s to settle then 3 s measured: mean AGC_AV, AGC gain, S meter and the
+                    // process CPU (% of one core) logged. The NNR settings file is not written.
+                    System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                    List<KeyValuePair<string, Action>> plan = new List<KeyValuePair<string, Action>>();
+                    for (int i = 1; i + 1 < parts.Length; i += 2)
+                    {
+                        double f = double.Parse(parts[i], ci);
+                        DSPMode m = (DSPMode)Enum.Parse(typeof(DSPMode), parts[i + 1]);
+                        plan.Add(new KeyValuePair<string, Action>("tune " + parts[i] + " " + parts[i + 1], () => { RX1DSPMode = m; VFOAFreq = f; SelectNR(1, true, 0); }));
+                        plan.Add(new KeyValuePair<string, Action>("NR off", () => SelectNR(1, true, 0)));
+                        plan.Add(new KeyValuePair<string, Action>("NNR Standard 38", () => { ForkNnr.Model = 0; ForkNnr.Strength = 38; ForkApplyNnr(); SelectNR(1, true, 5); }));
+                        plan.Add(new KeyValuePair<string, Action>("NNR Premium 38", () => { ForkNnr.Model = 1; ForkApplyNnr(); }));
+                        plan.Add(new KeyValuePair<string, Action>("NNR Standard 0", () => { ForkNnr.Model = 0; ForkNnr.Strength = 0; ForkApplyNnr(); }));
+                        plan.Add(new KeyValuePair<string, Action>("NNR Standard 100", () => { ForkNnr.Strength = 100; ForkApplyNnr(); }));
+                        plan.Add(new KeyValuePair<string, Action>("NR2", () => { ForkNnr.Strength = ForkNnr.DefaultStrength; ForkApplyNnr(); SelectNR(1, true, 2); }));
+                        plan.Add(new KeyValuePair<string, Action>("NR off again", () => SelectNR(1, true, 0)));
+                    }
+                    int step = -1, tick = 0;
+                    double sumAv = 0, sumGain = 0, sumS = 0;
+                    int n = 0;
+                    TimeSpan cpu0 = TimeSpan.Zero;
+                    DateTime t0 = DateTime.Now;
+                    System.Diagnostics.Process proc = System.Diagnostics.Process.GetCurrentProcess();
+                    System.Windows.Forms.Timer tn = new System.Windows.Forms.Timer();
+                    tn.Interval = 100;
+                    tn.Tick += (s5, e5) =>
+                    {
+                        if (step < 0)
+                        {
+                            if (!PowerOn || ++tick < 80) return; // 8 s after power on
+                            step = 0; tick = 0;
+                            HighDpi.Log("nnrtest: " + plan[0].Key);
+                            plan[0].Value();
+                            return;
+                        }
+                        tick++;
+                        if (tick == 20)
+                        {
+                            sumAv = sumGain = sumS = 0; n = 0;
+                            proc.Refresh();
+                            cpu0 = proc.TotalProcessorTime; t0 = DateTime.Now;
+                        }
+                        if (tick > 20)
+                        {
+                            sumAv += WDSP.CalculateRXMeter(0, 0, WDSP.MeterType.AGC_AV);
+                            sumGain += WDSP.CalculateRXMeter(0, 0, WDSP.MeterType.AGC_GAIN);
+                            sumS += WDSP.CalculateRXMeter(0, 0, WDSP.MeterType.AVG_SIGNAL_STRENGTH);
+                            n++;
+                        }
+                        if (tick >= 50)
+                        {
+                            proc.Refresh();
+                            double cpu = (proc.TotalProcessorTime - cpu0).TotalMilliseconds / Math.Max(1.0, (DateTime.Now - t0).TotalMilliseconds) * 100.0;
+                            HighDpi.Log("nnrtest result: " + plan[step].Key + " | mode " + RX1DSPMode + " VFO " + VFOAFreq.ToString("0.000000", ci) +
+                                " NR " + _nr_selected[0] + " model " + WDSP.GetRXANNRModel(WDSP.id(0, 0)) +
+                                " | AGC_AV " + (sumAv / n).ToString("0.0", ci) + " dB, AGC gain " + (sumGain / n).ToString("0.0", ci) +
+                                " dB, S " + (sumS / n).ToString("0.0", ci) + " dBm, CPU " + cpu.ToString("0", ci) + " %");
+                            step++; tick = 0;
+                            if (step >= plan.Count) { tn.Stop(); HighDpi.Log("nnrtest: done"); return; }
+                            HighDpi.Log("nnrtest: " + plan[step].Key);
+                            plan[step].Value();
+                        }
+                    };
+                    tn.Start();
+                }
                 else if (parts[0] == "click")
                 {
                     // click:<control>:<control>...: each control's Click, 2 s apart (band buttons ...), the state logged
@@ -45603,13 +45723,13 @@ namespace Thetis
 
         private void forkCreateNrButtons()
         {
-            _forkNrButtons = new CheckBox[3];
-            for (int k = 0; k < 3; k++)
+            _forkNrButtons = new CheckBox[4];
+            for (int k = 0; k < 4; k++)
             {
-                int nr = k + 2;
+                int nr = k + 2; // 5 = NNR
                 CheckBoxTS b = new CheckBoxTS();
-                b.Name = "chkForkNR" + nr;
-                b.Text = "NR" + nr;
+                b.Name = nr == 5 ? "chkForkNNR" : "chkForkNR" + nr;
+                b.Text = nr == 5 ? "NNR" : "NR" + nr;
                 b.Appearance = chkNR.Appearance;
                 b.FlatStyle = chkNR.FlatStyle;
                 b.FlatAppearance.BorderSize = chkNR.FlatAppearance.BorderSize;
@@ -45627,8 +45747,14 @@ namespace Thetis
                 b.TabStop = false;
                 b.Visible = false;
                 b.Click += (s, e) => { SelectNR(1, true, _nr_selected[0] == nr ? 0 : nr); forkSyncNrButtons(); };
-                b.MouseDown += (s, e) => { if (IsRightButton(e) && !IsSetupFormNull) SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab); };
-                toolTip1.SetToolTip(b, "NR" + nr + " on / off (a right click opens the NR settings)");
+                b.MouseDown += (s, e) =>
+                {
+                    if (!IsRightButton(e) || IsSetupFormNull) return;
+                    if (nr == 5) SetupForm.ShowForkNnrTab();
+                    else SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab);
+                };
+                toolTip1.SetToolTip(b, nr == 5 ? "NNR, neural noise reduction (WDSP 2.11, as in AetherSDR) on / off (a right click opens its settings)"
+                    : "NR" + nr + " on / off (a right click opens the NR settings)");
                 Controls.Add(b);
                 _forkNrButtons[k] = b;
             }
@@ -45641,6 +45767,35 @@ namespace Thetis
             this.Resize += relayout;
             this.Shown += relayout;
             NRChangedHandlers += (rx, o, n) => { if (rx == 1) forkSyncNrButtons(); };
+            _forkNnrMenu1 = forkAddNnrMenu(NR4ToolStripMenuItem, mnuDSP_Click);
+            _forkNnrMenu2 = forkAddNnrMenu(NR4ToolStripMenuItem_rx2, mnuDSPRX2_Click);
+        }
+
+        private ToolStripMenuItem _forkNnrMenu1, _forkNnrMenu2;
+
+        // an "NNR" item right under NR4, in the DSP menu (RX1) and in the RX2 menu
+        private ToolStripMenuItem forkAddNnrMenu(ToolStripMenuItem nr4, EventHandler click)
+        {
+            ToolStripDropDownItem parent = nr4.OwnerItem as ToolStripDropDownItem;
+            if (parent == null) return null;
+            ToolStripMenuItem m = new ToolStripMenuItem("NNR");
+            m.Name = nr4.Name.Replace("NR4", "NNR");
+            m.ToolTipText = "NNR, neural noise reduction (WDSP 2.11, as in AetherSDR); settings in Setup > DSP > NNR";
+            m.Click += click;
+            parent.DropDownItems.Insert(parent.DropDownItems.IndexOf(nr4) + 1, m);
+            return m;
+        }
+
+        // Jull1ano fork: the NNR settings (ForkNnr, Setup > DSP > NNR) to every receiver
+        public void ForkApplyNnr()
+        {
+            if (radio == null) return;
+            for (int t = 0; t < 2; t++)
+                for (int sub = 0; sub < 2; sub++)
+                {
+                    RadioDSPRX r = radio.GetDSPRX(t, sub);
+                    if (r != null) ForkNnr.ApplyTo(r);
+                }
         }
 
         // the NR buttons drawn with the NR button's skin images (after every skin change)
@@ -45661,21 +45816,25 @@ namespace Thetis
             if (_forkNrButtons == null) return;
             int h = chkNR.Height;
             int y = panelDSP.Top + chkNR.Top - h;
+            int gap = chkANF.Left - chkNR.Right;
+            Rectangle r3 = new Rectangle(panelDisplay2.Left + comboDisplayMode.Left, y, chkNR.Width, h);
             Rectangle[] r = new Rectangle[]
             {
                 new Rectangle(panelDSP.Left + chkNR.Left, y, chkNR.Width, h),
                 new Rectangle(panelDSP.Left + chkANF.Left, y, chkANF.Width, h),
-                new Rectangle(panelDisplay2.Left + comboDisplayMode.Left, y, chkNR.Width, h)
+                r3,
+                new Rectangle(r3.Right + gap, y, chkNR.Width, h) // NNR, up to the end of the display mode list
             };
             bool ok = Visible && panelDSP.Visible && chkNR.Visible && y >= 0;
             if (ok)
-                foreach (Rectangle rc in r)
-                    if (!forkAreaFree(rc)) { ok = false; break; }
+                for (int k = 0; k < 3; k++)
+                    if (!forkAreaFree(r[k])) { ok = false; break; }
             for (int k = 0; k < _forkNrButtons.Length; k++)
             {
+                bool show = ok && (k < 3 || forkAreaFree(r[k])); // NNR only where it fits
                 _forkNrButtons[k].Bounds = r[k];
-                _forkNrButtons[k].Visible = ok;
-                if (ok) _forkNrButtons[k].BringToFront();
+                _forkNrButtons[k].Visible = show;
+                if (show) _forkNrButtons[k].BringToFront();
             }
             if (ok != _forkNrRowShown)
             {
@@ -45714,7 +45873,7 @@ namespace Thetis
             }
             else
             {
-                chkNR.Text = nr >= 2 ? "NR" + nr : "NR"; // the original cycling button
+                chkNR.Text = nr == 5 ? "NNR" : nr >= 2 ? "NR" + nr : "NR"; // the original cycling button
                 if (chkNR.Checked != (nr != 0)) chkNR.Checked = nr != 0;
             }
         }

@@ -56,6 +56,8 @@ warren@wpratt.com
 #include "emnr.h"
 #include "rnnr.h" // NR3 + NR4 support
 #include "sbnr.h" // NR3 + NR4 support
+#include "nnr.h" // Jull1ano fork: NNR (WDSP 2.11)
+#include "nnrbypass.h" // Jull1ano fork: NNR (WDSP 2.11)
 #include "emph.h"
 #include "eq.h"
 #include "fcurve.h"
