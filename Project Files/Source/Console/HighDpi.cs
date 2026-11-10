@@ -180,6 +180,54 @@ namespace Thetis
             catch { }
         }
 
+        // a small whole-number fork setting kept in its own file in the settings folder
+        public static int LoadForkInt(string appDataPath, string file, int def, int min, int max)
+        {
+            try
+            {
+                string f = System.IO.Path.Combine(appDataPath ?? "", file);
+                if (System.IO.File.Exists(f) && int.TryParse(System.IO.File.ReadAllText(f).Trim(), out int n))
+                    return Math.Max(min, Math.Min(max, n));
+            }
+            catch { }
+            return def;
+        }
+
+        public static void SaveForkInt(string appDataPath, string file, int value)
+        {
+            try
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(appDataPath ?? "", file), value.ToString());
+            }
+            catch { }
+        }
+
+        public static float LoadForkFloat(string appDataPath, string file, float def, float min, float max)
+        {
+            try
+            {
+                string f = System.IO.Path.Combine(appDataPath ?? "", file);
+                if (System.IO.File.Exists(f) && float.TryParse(System.IO.File.ReadAllText(f).Trim(),
+                        System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v)
+                    && !float.IsNaN(v))
+                    return Math.Max(min, Math.Min(max, v));
+            }
+            catch { }
+            return def;
+        }
+
+        public static void SaveForkFloat(string appDataPath, string file, float value)
+        {
+            try
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(appDataPath ?? "", file),
+                    value.ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            catch { }
+        }
+
+        public const string FFT_SMOOTH_FILE = "hidpi_fft_smooth.txt";
+
         private static void setTextStep(int n)
         {
             TextStep = Math.Max(0, Math.Min(2, n));

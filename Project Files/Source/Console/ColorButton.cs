@@ -245,6 +245,12 @@ namespace Thetis
 				if(colorButton.moreButton != "")
 					Height += 23;
 
+				if(HighDpi.Enabled)	// Jull1ano fork: the panel is drawn in 96 DPI units, scaled in OnPaint
+				{
+					Width = HighDpi.Px(Width);
+					Height = HighDpi.Px(Height);
+				}
+
 				CenterToScreen();
 				Location = pt;
 
@@ -262,6 +268,7 @@ namespace Thetis
 			protected override void OnPaint(PaintEventArgs e)
 			{
 				base.OnPaint(e);
+				if(HighDpi.Enabled) e.Graphics.ScaleTransform(HighDpi.Scale, HighDpi.Scale); // Jull1ano fork
 
 				Pen darkPen = new Pen(SystemColors.ControlDark);
 				Pen lightPen = new Pen(SystemColors.ControlLightLight);
@@ -379,6 +386,7 @@ namespace Thetis
 				if(RectangleToScreen(ClientRectangle).Contains(Cursor.Position))
 				{
 					Point pt = PointToClient(Cursor.Position) ;
+					if(HighDpi.Enabled) pt = new Point((int)(pt.X / HighDpi.Scale), (int)(pt.Y / HighDpi.Scale)); // Jull1ano fork
 					int x = 6, y = 5 ;
 
 					if(colorButton.autoButton != "")
@@ -473,7 +481,13 @@ namespace Thetis
 				textFormat.LineAlignment = StringAlignment.Center;
 
 				e.Graphics.DrawRectangle(darkPen, rc);
-				e.Graphics.DrawString(text, colorButton.Font, textBrush, rc, textFormat);
+				if(HighDpi.Enabled)	// Jull1ano fork: the scale transform already enlarges the text
+				{
+					using(Font f = new Font(colorButton.Font.FontFamily, colorButton.Font.Size / HighDpi.Scale, colorButton.Font.Style))
+						e.Graphics.DrawString(text, f, textBrush, rc, textFormat);
+				}
+				else
+					e.Graphics.DrawString(text, colorButton.Font, textBrush, rc, textFormat);
 			}
 
 			protected bool SetColorIndex(Rectangle rc, Point pt, int index)

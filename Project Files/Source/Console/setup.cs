@@ -150,6 +150,41 @@ namespace Thetis
                 toolTip1.SetToolTip(chkSmooth, "Anti-aliased spectrum line at sub-pixel heights, as AltSDR, NereusSDR and AetherSDR draw it.\r\n" +
                     "Line Width is then in screen points: 1.0 = 2 pixels at 200 %. Off: the original Thetis line, width in pixels.");
                 udDisplayLineWidth.Parent.Controls.Add(chkSmooth);
+
+                // FFT Smooth (as AetherSDR) in the free row between MultiRX 0 Line and Active Peak
+                Label lblSmooth = new Label();
+                lblSmooth.Name = "lblHighDpiFftSmooth";
+                lblSmooth.Text = "FFT Smooth:";
+                lblSmooth.AutoSize = true;
+                lblSmooth.Location = new Point(lblSubRXZeroLine.Left, (lblSubRXZeroLine.Top + lblActiveSpectralPeakColour.Top) / 2);
+                NumericUpDown udSmooth = new NumericUpDown();
+                udSmooth.Name = "udHighDpiFftSmooth";
+                udSmooth.DecimalPlaces = 1;
+                udSmooth.Increment = 0.5m;
+                udSmooth.Minimum = 0;
+                udSmooth.Maximum = 16;
+                udSmooth.Value = (decimal)Display.FftSmooth;
+                udSmooth.Size = udDisplayLineWidth.Size;
+                udSmooth.Location = new Point(udDisplayLineWidth.Left, lblSmooth.Top - HighDpi.Px(2));
+                udSmooth.ValueChanged += (s, e) =>
+                {
+                    Display.FftSmooth = (float)udSmooth.Value;
+                    if (console != null) HighDpi.SaveForkFloat(console.AppDataPath, HighDpi.FFT_SMOOTH_FILE, (float)udSmooth.Value);
+                };
+                Label lblSmoothUnit = new Label();
+                lblSmoothUnit.Name = "lblHighDpiFftSmoothUnit";
+                lblSmoothUnit.Text = "px, 0 = off";
+                lblSmoothUnit.AutoSize = true;
+                lblSmoothUnit.Location = new Point(udSmooth.Right + HighDpi.Px(8), lblSmooth.Top);
+                string tip = "Smooths the drawn spectrum across frequency, as AetherSDR's FFT Smooth: each point becomes the mean of\r\n" +
+                    "its neighbours within this many screen points on each side (in linear power, so the noise floor stays where it is).\r\n" +
+                    "0 = off, 0.5 = the gentlest (each point with its next neighbour on each side at 200 %).\r\n" +
+                    "Display only: the noise floor estimate and the waterfall are not changed.";
+                toolTip1.SetToolTip(udSmooth, tip);
+                toolTip1.SetToolTip(lblSmooth, tip);
+                udDisplayLineWidth.Parent.Controls.Add(lblSmooth);
+                udDisplayLineWidth.Parent.Controls.Add(udSmooth);
+                udDisplayLineWidth.Parent.Controls.Add(lblSmoothUnit);
             }
         }
 

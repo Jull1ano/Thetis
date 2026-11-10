@@ -699,6 +699,7 @@ namespace Thetis
             AppDataPath = app_data_path;
             HighDpi.LoadTextStep(app_data_path); // Jull1ano fork: Setup > Appearance > High DPI text size
             Display.SmoothTrace = HighDpi.LoadSmoothTrace(app_data_path); // Jull1ano fork: Setup > Appearance > RX Display > Smooth
+            Display.FftSmooth = HighDpi.LoadForkFloat(app_data_path, HighDpi.FFT_SMOOTH_FILE, 0f, 0f, 16f); // and FFT Smooth
             //AppDataPath has been set at this point
 
             if (_check_error_log)
@@ -44787,7 +44788,7 @@ namespace Thetis
         private void Console_Shown(object sender, EventArgs e)
         {
             // Jull1ano fork: test hook for high-DPI captures (THETIS_HIDPI_OPEN=setup opens Setup at start)
-            // THETIS_HIDPI_OPEN: "setup:tpA:tpB" opens Setup on those tab pages, "cwx" the CW memories window,
+            // THETIS_HIDPI_OPEN: "setup:tpA:tpB[:button]" opens Setup on those tab pages (and clicks that button), "cwx" the CW memories window,
             // "finder:text" Finder with that search text
             string hidpiOpen = Environment.GetEnvironmentVariable("THETIS_HIDPI_OPEN");
             if (!string.IsNullOrEmpty(hidpiOpen)) BeginInvoke(new MethodInvoker(() =>
@@ -44800,8 +44801,15 @@ namespace Thetis
                     {
                         Control[] found = SetupForm.Controls.Find(parts[t], true);
                         if (found.Length > 0 && found[0] is TabPage tp && tp.Parent is TabControl tc) tc.SelectedTab = tp;
+                        else if (found.Length > 0 && found[0] is Button bb) bb.PerformClick(); // e.g. a colour button: its drop-down
                     }
                     HighDpi.Log("Setup: Size " + SetupForm.Size + " Client " + SetupForm.ClientSize);
+                }
+                else if (parts[0] == "bandstack")
+                {
+                    BandStack2Form.Show();
+                    HighDpi.Log("BandStack: Size " + BandStack2Form.Size + " Client " + BandStack2Form.ClientSize);
+                    foreach (Control c in BandStack2Form.Controls) HighDpi.Log("  " + c.Name + " " + c.Bounds + " anchor " + c.Anchor);
                 }
                 else if (parts[0] == "cwx")
                 {

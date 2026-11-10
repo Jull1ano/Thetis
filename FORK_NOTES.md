@@ -53,7 +53,13 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   anti-aliased). Upstream drew each segment on whole pixel rows, so 1 looked thin and jagged and 2
   heavy. It follows its own anti-aliasing, not Setup > Display > Anti-aliased. Off: the upstream line
   (width in device pixels). `THETIS_SMOOTH_TRACE=0/1` overrides the saved choice. No measurable CPU
-  cost (about 66 % of one core either way at 4K, 60 fps).
+  cost (about 66 % of one core either way at 4K, 60 fps). Measured on screenshots, the line is as wide
+  as AltSDR's at 1; Thetis' trace looks bolder only because its noise zig-zags taller.
+- FFT Smooth (Setup > Appearance > RX Display, in the row above Active Peak; 0 = off, 0.5 steps up to 16),
+  as AetherSDR's: each drawn point becomes the mean of its neighbours within that many screen points on
+  each side, in linear power, then back to dB (so the noise floor stays where it is). 0.5 = each point
+  with its next neighbour on each side at 200 %. Display only (trace, fill, peak markers): the noise floor
+  estimate and the waterfall are unchanged. Saved as `hidpi_fft_smooth.txt`.
 - Window positions and sizes are saved in 96 DPI units, so one settings database works in both modes.
 - Off: command line `-nohidpi` or `THETIS_HIDPI=0`. At 100 % scaling nothing changes.
 - Text size: Setup > Appearance > General > High DPI (fork): Default, +1, +2 (one point each on the
@@ -65,10 +71,12 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   that scales by font (Finder ...) grows as a whole. The VFO digits, the meter text and the info bar's
   Feedback / Pure Signal labels keep their own sizes.
 - Dialogs fixed for 200 %: CWX (an old AutoScaleBaseSize form, and its hand-drawn key area), Finder
-  rows, owner-drawn list rows (Setup > Appearance > Meters/Gadgets).
+  rows, owner-drawn list rows (Setup > Appearance > Meters/Gadgets), the colour buttons' drop-down
+  palette (hand-drawn in pixels), Band Stack 2 (fixed 256 / 512 px widths; the form scales by its font,
+  about 2.17 at 200 %, so its width now comes from its laid-out controls).
 - `THETIS_HIDPI_LOG=<file>` logs the DPI work; with `THETIS_HIDPI_LOGFIT=1` also every text fit.
-  `THETIS_HIDPI_OPEN=setup:<tab>:<tab>` / `cwx` / `finder:<text>` opens that window after start
-  (used for screen captures).
+  `THETIS_HIDPI_OPEN=setup:<tab>:<tab>[:<button>]` / `cwx` / `finder:<text>` / `bandstack` opens that
+  window after start, a button name clicks it (a colour button opens its palette); used for captures.
 
 ## Test settings (no rebuild needed)
 

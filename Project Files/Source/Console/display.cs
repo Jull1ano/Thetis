@@ -262,6 +262,44 @@ namespace Thetis
         private static SharpDX.Mathematics.Interop.RawVector2[] _tracePts;
         private static StrokeStyle _traceStyle;
 
+        // Jull1ano fork: FFT Smooth, as AetherSDR (FftTraceSmoothing.h): each point of the drawn spectrum becomes
+        // the mean of its +-N neighbours in linear power, then back to dB, so the noise does not drag the trace
+        // down the way a dB mean would. N is in logical pixels (0 = off, 0.5 steps up to 16). Display only: the
+        // noise floor estimate still reads the raw data.
+        private static float _fftSmoothPx = 0f;
+        public static float FftSmooth
+        {
+            get { return _fftSmoothPx; }
+            set { _fftSmoothPx = Math.Max(0f, Math.Min(16f, value)); }
+        }
+        private static float[] _fftSmoothBuf;
+        private static double[] _fftSmoothLin;
+
+        private static float[] fftSmoothData(float[] src, int n, int halfWidth)
+        {
+            if (src == null || n < 2 || halfWidth <= 0) return src;
+            n = Math.Min(n, src.Length);
+            if (_fftSmoothBuf == null || _fftSmoothBuf.Length < src.Length) _fftSmoothBuf = new float[src.Length];
+            if (_fftSmoothLin == null || _fftSmoothLin.Length < n) _fftSmoothLin = new double[n];
+            const double ln10over10 = 0.23025850929940457;
+            for (int i = 0; i < n; i++)
+            {
+                float db = src[i];
+                _fftSmoothLin[i] = (float.IsNaN(db) || float.IsInfinity(db)) ? 0.0 : Math.Exp(db * ln10over10);
+            }
+            // summed directly, not by a running sum: a trace spans more than 150 dB, a running sum loses the
+            // noise beside a strong carrier
+            for (int i = 0; i < n; i++)
+            {
+                int lo = Math.Max(0, i - halfWidth), hi = Math.Min(n - 1, i + halfWidth);
+                double sum = 0.0;
+                for (int j = lo; j <= hi; j++) sum += _fftSmoothLin[j];
+                _fftSmoothBuf[i] = (float)(10.0 * Math.Log10(Math.Max(sum / (hi - lo + 1), 1e-30)));
+            }
+            for (int i = n; i < src.Length; i++) _fftSmoothBuf[i] = src[i];
+            return _fftSmoothBuf;
+        }
+
         private static void drawSmoothTrace(SharpDX.Mathematics.Interop.RawVector2[] pts, SharpDX.Direct2D1.Brush brush, float width)
         {
             if (pts == null || pts.Length < 2) return;
@@ -5289,6 +5327,14 @@ namespace Thetis
                 if (bDoVisualNotch && m_bShowVisualNotch && !local_mox)
                 {
                     modifyDataForNotches(ref data, rx, bottom, local_mox, displayduplex, W);
+                }
+
+                // Jull1ano fork: FFT Smooth into its own buffer (data is the shared display buffer, drawn again
+                // when no new frame came: smoothing it in place would add up frame after frame)
+                if (_fftSmoothPx > 0)
+                {
+                    int halfPts = (int)Math.Round(_fftSmoothPx * HighDpi.Scale / Math.Max(1, m_nDecimation), MidpointRounding.AwayFromZero);
+                    if (halfPts > 0) data = fftSmoothData(data, nDecimatedWidth, halfPts);
                 }
 
                 float averageSum = 0;

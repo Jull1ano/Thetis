@@ -103,7 +103,7 @@ namespace Thetis
 
             Common.RestoreForm(this, "BandStack2Form", true);
 
-            this.Width = 256;
+            this.Width = HighDpi.Enabled ? fitWidth(false) : 256; // Jull1ano fork: DPI-scaled
             btnOptions.Text = "Options >>";
 
             btnLockSelected.Enabled = false;
@@ -264,16 +264,27 @@ namespace Thetis
             }
         }
 
+        // Jull1ano fork: at high DPI the window width comes from the scaled layout: this form scales by its font,
+        // about 2.17 at 200 % (not 2), so twice the 96 DPI width cuts its right side off. Collapsed: the list with
+        // its margin on both sides; expanded: every control.
+        private int fitWidth(bool expanded)
+        {
+            int right = bandStackListBox.Right;
+            if (expanded)
+                foreach (Control c in Controls) right = Math.Max(right, c.Right);
+            return right + bandStackListBox.Left + (Width - ClientSize.Width);
+        }
+
         private void btnOptions_Click(object sender, EventArgs e)
         {
-            if (this.Width > 256)
+            if (this.Width > (HighDpi.Enabled ? fitWidth(false) : 256))
             {
-                this.Width = 256;
+                this.Width = HighDpi.Enabled ? fitWidth(false) : 256; // Jull1ano fork: DPI-scaled
                 btnOptions.Text = "Options >>";
             }
             else
             {
-                this.Width = 512;
+                this.Width = HighDpi.Enabled ? fitWidth(true) : 512; // Jull1ano fork: DPI-scaled
                 btnOptions.Text = "Options <<";
             }
         }
@@ -580,16 +591,16 @@ namespace Thetis
                 {
                     if (bse.Locked)
                     {
-                        e.Graphics.DrawImage(m_LockLockedImage, new Point(e.Bounds.Width - 20, e.Bounds.Y + (e.Bounds.Height / 2) - (m_LockLockedImage.Height / 2)));
+                        e.Graphics.DrawImage(m_LockLockedImage, new Point(e.Bounds.Width - HighDpi.Px(20), e.Bounds.Y + (e.Bounds.Height / 2) - (m_LockLockedImage.Height / 2)));
                     }
                     else
                     {
-                        e.Graphics.DrawImage(m_LockUnlockedImage, new Point(e.Bounds.Width - 20, e.Bounds.Y + (e.Bounds.Height / 2) - (m_LockLockedImage.Height / 2)));
+                        e.Graphics.DrawImage(m_LockUnlockedImage, new Point(e.Bounds.Width - HighDpi.Px(20), e.Bounds.Y + (e.Bounds.Height / 2) - (m_LockLockedImage.Height / 2)));
                     }
 
                     if (e.Index == m_specficReturnIndex)
                     {
-                        e.Graphics.DrawImage(m_SpecificReturnImage, new Point(e.Bounds.Width - 30, e.Bounds.Y + (e.Bounds.Height / 2) - (m_SpecificReturnImage.Height / 2)));
+                        e.Graphics.DrawImage(m_SpecificReturnImage, new Point(e.Bounds.Width - HighDpi.Px(30), e.Bounds.Y + (e.Bounds.Height / 2) - (m_SpecificReturnImage.Height / 2)));
                     }
 
                     //using (SolidBrush sb = new SolidBrush(this.ForeColor))
@@ -616,7 +627,7 @@ namespace Thetis
 
                         e.Graphics.DrawString(nFreq.ToString(), e.Font, sb, r, StringFormat.GenericDefault);
 
-                        r.X = m_nNumberWidth + m_nFrequencyMHzWidth - 8;
+                        r.X = m_nNumberWidth + m_nFrequencyMHzWidth - HighDpi.Px(8); // Jull1ano fork: DPI-scaled
 
                         e.Graphics.DrawString("." + sTmp3After + "." + sTmp3After3, e.Font, sb, r, StringFormat.GenericDefault);
 
@@ -624,7 +635,7 @@ namespace Thetis
                         {
                             string s = bse.Mode.ToString();
                             Size modeSize = TextRenderer.MeasureText(s, m_SmallModeFont);
-                            e.Graphics.DrawString(bse.Mode.ToString(), m_SmallModeFont, sb, e.Bounds.Width - modeSize.Width - 24, e.Bounds.Y + ((e.Bounds.Height/2) - (modeSize.Height/2)), StringFormat.GenericDefault);
+                            e.Graphics.DrawString(bse.Mode.ToString(), m_SmallModeFont, sb, e.Bounds.Width - modeSize.Width - HighDpi.Px(24), e.Bounds.Y + ((e.Bounds.Height/2) - (modeSize.Height/2)), StringFormat.GenericDefault);
 
                             //e.Graphics.DrawString(bse.GUID, m_SmallModeFont, sb, e.Bounds.Width - 120, e.Bounds.Y + ((e.Bounds.Height / 2) - (modeSize.Height / 2)), StringFormat.GenericDefault);
                         }
