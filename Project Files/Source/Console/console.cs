@@ -44801,7 +44801,12 @@ namespace Thetis
             // Jull1ano fork: test hook for high-DPI captures (THETIS_HIDPI_OPEN=setup opens Setup at start)
             // THETIS_HIDPI_OPEN: "setup:tpA:tpB[:button]" opens Setup on those tab pages (and clicks that button), "cwx" the CW memories window,
             // "finder:text" Finder with that search text
-            BeginInvoke(new MethodInvoker(() => _forkReady = true)); // Jull1ano fork: band memory records from here on
+            BeginInvoke(new MethodInvoker(() =>
+            {
+                _forkReady = true; // Jull1ano fork: band memory records from here on
+                forkDefaultNR(1, RX1DSPMode); // and NR2 by default
+                forkDefaultNR(2, RX2DSPMode);
+            }));
             string hidpiOpen = Environment.GetEnvironmentVariable("THETIS_HIDPI_OPEN");
             if (!string.IsNullOrEmpty(hidpiOpen)) BeginInvoke(new MethodInvoker(() =>
             {
@@ -44834,6 +44839,31 @@ namespace Thetis
                         else HighDpi.Log("menu item not found: " + parts[t]);
                     }
                 }
+                else if (parts[0] == "memrow")
+                {
+                    memoryToolStripMenuItem_Click(this, EventArgs.Empty);
+                    int row = parts.Length > 1 ? int.Parse(parts[1]) : 0;
+                    System.Windows.Forms.Timer tm = new System.Windows.Forms.Timer();
+                    tm.Interval = 1500;
+                    int step = 0;
+                    tm.Tick += (s4, e4) =>
+                    {
+                        HighDpi.Log("memrow state: mode " + RX1DSPMode + " VFO " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) +
+                            " centre " + CentreFrequency.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) + " CTUN " + ClickTuneDisplay);
+                        if (step == 0)
+                        {
+                            Control[] g = memoryForm.Controls.Find("dataGridView1", true);
+                            if (g.Length > 0)
+                            {
+                                HighDpi.Log("memrow: header click on row " + row);
+                                typeof(DataGridView).GetMethod("OnRowHeaderMouseClick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                                    .Invoke(g[0], new object[] { new DataGridViewCellMouseEventArgs(-1, row, 5, 5, new MouseEventArgs(MouseButtons.Left, 1, 5, 5, 0)) });
+                            }
+                        }
+                        if (++step > 2) tm.Stop();
+                    };
+                    tm.Start();
+                }
                 else if (parts[0] == "click")
                 {
                     // click:<control>:<control>...: each control's Click, 2 s apart (band buttons ...), the state logged
@@ -44842,7 +44872,8 @@ namespace Thetis
                     tc.Interval = 2000;
                     tc.Tick += (s3, e3) =>
                     {
-                        HighDpi.Log("click state: CTUN " + ClickTuneDisplay + " band " + rx1_band + " mode " + RX1DSPMode + " VFO " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture));
+                        HighDpi.Log("click state: CTUN " + ClickTuneDisplay + " band " + rx1_band + " mode " + RX1DSPMode + " VFO " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) +
+                            " centre " + CentreFrequency.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) + " NR " + _nr_selected[0] + "/" + _nr_selected[1]);
                         if (k >= parts.Length) { tc.Stop(); return; }
                         Control[] hit = Controls.Find(parts[k], true);
                         if (hit.Length > 0)
@@ -45542,6 +45573,7 @@ namespace Thetis
         private DSPMode _forkModeAtUserTune = DSPMode.FIRST;
         private bool _forkBandAware = true;
         private bool _forkKeepCtun = true; // band changes keep CTUN on (Setup > Appearance > General > Tuning)
+        private bool _forkNr2Default = true; // NR2 comes on in every mode but FM / digital when NR is off
         private bool _forkApplyingBand = false;
         private bool _forkInModeStep = false;
         private bool _forkReady = false;
@@ -45553,6 +45585,38 @@ namespace Thetis
         {
             get { return _forkBandAware; }
             set { _forkBandAware = value; forkSaveBandMemory(); }
+        }
+
+        public bool Nr2ByDefault
+        {
+            get { return _forkNr2Default; }
+            set
+            {
+                _forkNr2Default = value;
+                forkSaveBandMemory();
+                if (value) { forkDefaultNR(1, RX1DSPMode); forkDefaultNR(2, RX2DSPMode); }
+            }
+        }
+
+        // NR2 on by default (the user's choice): Thetis turns NR off itself in FM and, with the digital mode
+        // settings, in DIGU / DIGL, and never back on; in every other mode NR2 comes on when NR is off, after a
+        // mode change and at start. The NR button still turns it off until the next mode change.
+        private void forkDefaultNR(int rx, DSPMode mode)
+        {
+            if (!_forkNr2Default || rx < 1 || rx > 2) return;
+            if (mode == DSPMode.FM || mode == DSPMode.DIGU || mode == DSPMode.DIGL || mode == DSPMode.DRM ||
+                mode == DSPMode.SPEC || !isDSPModeValid(mode)) return;
+            if (_nr_selected[rx - 1] != 0) return;
+            SelectNR(rx, true, 2);
+            HighDpi.Log("NR2 by default: RX" + rx + " " + mode);
+        }
+
+        // the view centred on the VFO (CTUN on): the same as a right click on CTUN
+        public void CentreViewOnVfo()
+        {
+            if (!ClickTuneDisplay) return; // without CTUN the view is centred on the VFO already
+            chkFWCATU.Checked = false;
+            chkFWCATU.Checked = true;
         }
 
         public bool KeepCtunOn
@@ -45684,6 +45748,7 @@ namespace Thetis
                     string[] p = line.Split('\t');
                     if (p.Length == 3 && p[0] == "option" && p[1] == "band_aware") _forkBandAware = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "keep_ctun") _forkKeepCtun = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "option" && p[1] == "nr2_default") _forkNr2Default = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
                     else if (p.Length == 4 && p[0] == "step") _forkBandStep[p[1] + "|" + p[2]] = p[3];
                 }
@@ -45699,6 +45764,7 @@ namespace Thetis
                 System.Text.StringBuilder sb = new System.Text.StringBuilder();
                 sb.Append("option\tband_aware\t").Append(_forkBandAware ? "1" : "0").Append("\r\n");
                 sb.Append("option\tkeep_ctun\t").Append(_forkKeepCtun ? "1" : "0").Append("\r\n");
+                sb.Append("option\tnr2_default\t").Append(_forkNr2Default ? "1" : "0").Append("\r\n");
                 foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
                     sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
                 foreach (KeyValuePair<string, string> kv in _forkBandStep)
@@ -46128,6 +46194,7 @@ namespace Thetis
             //recover the stepindex.
             updateStepIndexForMode(rx, newMode);
             if (rx == 1 && !m_bSetBandRunning) forkApplyStepForMode(newMode); // Jull1ano fork: the step set for this band and mode
+            if (_forkReady) { int nrRx = rx; DSPMode nrMode = newMode; BeginInvoke(new MethodInvoker(() => forkDefaultNR(nrRx, nrMode))); } // Jull1ano fork: NR2 by default
 
             //vfosync
             handleVfoSyncMode(rx, newMode);

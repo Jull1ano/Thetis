@@ -84,6 +84,7 @@ namespace Thetis
         {
             InitializeComponent();
             console = c;
+            dataGridView1.RowHeaderMouseClick += rowHeaderRecall; // Jull1ano fork: one click on the row's left edge tunes there
             Common.RestoreForm(this, "MemoryForm", true); // ke9ns bring up memory window in place you left it last time
 
             dataGridView1.RowHeadersVisible = true;
@@ -602,6 +603,17 @@ namespace Thetis
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
+        // Jull1ano fork: a left click on a row's header (the small field on its left) recalls that memory at once,
+        // as Select / a double click do, and centres the view on the VFO
+        private void rowHeaderRecall(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || e.RowIndex < 0 || e.RowIndex >= dataGridView1.Rows.Count) return;
+            foreach (DataGridViewCell cell in dataGridView1.Rows[e.RowIndex].Cells)
+                if (cell.Visible) { dataGridView1.CurrentCell = cell; break; }
+            RIndex = e.RowIndex;
+            btnSelect_Click(sender, EventArgs.Empty);
+        }
+
         private void btnSelect_Click(object sender, EventArgs e)
         {
 
@@ -615,6 +627,7 @@ namespace Thetis
                 return;
 
             console.changeComboFMMemory(index); // ke9ns this will call recallmemory in console 
+            console.BeginInvoke(new MethodInvoker(console.CentreViewOnVfo)); // Jull1ano fork: the VFO in the middle of the view
 
             Debug.WriteLine("INDEX clicked "+index);
            

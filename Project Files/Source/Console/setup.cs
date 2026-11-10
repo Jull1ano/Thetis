@@ -102,16 +102,27 @@ namespace Thetis
 
         #region Constructor and Destructor
 
-        // Jull1ano fork: Appearance > General > "Tuning (fork)", under Cursor/Peak Readout
+        // Jull1ano fork: Appearance > General > "Receive (fork)", under Cursor/Peak Readout
         private void addForkTuningOptions()
         {
             Control anchor = grpDisplayPeakCursor;
             if (anchor == null || anchor.Parent == null) return;
             GroupBox grp = new GroupBox();
             grp.Name = "grpForkTuning";
-            grp.Text = "Tuning (fork)";
+            grp.Text = "Receive (fork)";
             grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
-            grp.Size = new Size(anchor.Width, HighDpi.Px(68));
+            grp.Size = new Size(anchor.Width, HighDpi.Px(90));
+            CheckBox chkNr2 = new CheckBox();
+            chkNr2.Name = "chkForkNr2Default";
+            chkNr2.Text = "NR2 on by default";
+            chkNr2.AutoSize = false;
+            chkNr2.Size = new Size(grp.Width - HighDpi.Px(16), HighDpi.Px(20));
+            chkNr2.Location = new Point(HighDpi.Px(8), HighDpi.Px(64));
+            chkNr2.Checked = console == null || console.Nr2ByDefault;
+            chkNr2.CheckedChanged += (s, e) => { if (console != null) console.Nr2ByDefault = chkNr2.Checked; };
+            toolTip1.SetToolTip(chkNr2, "NR2 comes on in every mode except FM and the digital modes (where Thetis turns NR off),\r\n" +
+                "after each mode change and at start, on both receivers. The NR button still turns it off until the next mode change.");
+            grp.Controls.Add(chkNr2);
             CheckBox chkCtun = new CheckBox();
             chkCtun.Name = "chkForkKeepCtun";
             chkCtun.Text = "Keep CTUN on";

@@ -127,7 +127,7 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   `menu:<menu item name>` opens that window after start, a button name clicks it (a colour button opens its
   palette); used for captures (build-tools: capture-thetis.ps1 -AlsoTitle "<other>" grabs the window).
 
-## Band-aware tuning (Setup > Appearance > General > Tuning (fork), on by default)
+## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
 As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band
 selects the mode last used in that band, the first time AM on LW/MW, the SW broadcast bands and WWV, LSB on
@@ -139,6 +139,14 @@ those frequencies as if by hand and logs band, mode and step.
 
 Keep CTUN on (same Setup group, on by default): band buttons and band stack entries saved without CTUN no
 longer turn it off (drag to pan needs CTUN); the CTUN button still turns it off until the next band change.
+
+NR2 on by default (same group, on by default): Thetis turns NR off itself in FM and, with the digital mode
+settings, in DIGU / DIGL, and never back on. In every other mode NR2 comes on when NR is off, after each mode
+change and at start, on both receivers; the NR button still turns it off until the next mode change.
+
+Memory window: one left click on a row's header (the small field left of the row) recalls that memory, as
+Select or a double click do; every recall from the window centres the view on the VFO (as a right click on
+CTUN). Test hooks: `click:<control>:...`, `memrow:<n>`.
 
 ## Test settings (no rebuild needed)
 
