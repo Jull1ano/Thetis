@@ -133,6 +133,15 @@ namespace Thetis
 				offset = 1;
 			}
 
+			// Jull1ano fork: the swatch, the separator and the arrow are drawn in 96 DPI units, scaled
+			int W = this.Width, H = this.Height;
+			if(HighDpi.Enabled)
+			{
+				e.Graphics.ScaleTransform(HighDpi.Scale, HighDpi.Scale);
+				W = (int)Math.Round(this.Width / HighDpi.Scale);
+				H = (int)Math.Round(this.Height / HighDpi.Scale);
+			}
+
 			/*Rectangle rc = new Rectangle(e.ClipRectangle.Left + 5 + offset,
 										e.ClipRectangle.Top + 5 + offset,
 										e.ClipRectangle.Width - 24,
@@ -142,8 +151,8 @@ namespace Thetis
 			// was in the ClipRectangle.
 			Rectangle rc = new Rectangle(5 + offset,
 				5 + offset,
-				this.Width - 24,
-				this.Height - 11);
+				W - 24,
+				H - 11);
 
 			Pen darkPen = new Pen(SystemColors.ControlDark);
 

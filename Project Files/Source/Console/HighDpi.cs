@@ -274,10 +274,12 @@ namespace Thetis
             try
             {
                 normalizeFontScaledForm(form);
+                normalizeNestedFontControls(form);
                 applyTextScale(form);
                 FixOwnerDrawLists(form);
                 FixGrids(form, form);
                 ScaleButtonImages(form);
+                FixAutoSizeBounds(form);
             }
             catch (Exception ex) { Log("PrepareForm " + form.Name + ": " + ex); }
         }
@@ -288,6 +290,39 @@ namespace Thetis
         // the same as the original's 96 DPI layout stretched by Windows; sizes saved later use this scale.
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.ContainerControl, float[]> _layoutScale =
             new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.ContainerControl, float[]>();
+
+        // A font-scaled user control inside a window (Setup's gradient preset picker ...) gets its own size from
+        // the window (exactly the DPI scale) but lays its contents out at about 2.17, so anchored contents no
+        // longer fit and get squeezed (the preset list vanished, "Set" was a thin strip). When the contents
+        // overflow the control, they are brought to the DPI scale too (the control's own size stays).
+        private static void normalizeNestedFontControls(System.Windows.Forms.Control parent)
+        {
+            foreach (System.Windows.Forms.Control c in parent.Controls)
+            {
+                // (the info bar places its labels itself: left alone)
+                if (c is System.Windows.Forms.UserControl uc && uc.AutoScaleMode == System.Windows.Forms.AutoScaleMode.Font &&
+                    !(uc is ucInfoBar) && !_layoutScale.TryGetValue(uc, out float[] _))
+                {
+                    float fx = FormScale(uc), fy = FormScale(uc, true);
+                    _layoutScale.Add(uc, new float[] { Scale, Scale });
+                    int right = 0, bottom = 0;
+                    foreach (System.Windows.Forms.Control ch in uc.Controls) { right = Math.Max(right, ch.Right); bottom = Math.Max(bottom, ch.Bottom); }
+                    bool overflows = right > uc.ClientSize.Width + Px(1) || bottom > uc.ClientSize.Height + Px(1);
+                    if (overflows && (Math.Abs(fx - Scale) > 0.02f || Math.Abs(fy - Scale) > 0.02f))
+                    {
+                        Log("normalize nested " + uc.Name + " (" + uc.GetType().Name + ") " + fx.ToString("0.000") + " x " + fy.ToString("0.000"));
+                        uc.SuspendLayout();
+                        try
+                        {
+                            foreach (System.Windows.Forms.Control ch in uc.Controls)
+                                ch.Scale(new System.Drawing.SizeF(Scale / fx, Scale / fy));
+                        }
+                        finally { uc.ResumeLayout(true); }
+                    }
+                }
+                if (c.HasChildren) normalizeNestedFontControls(c);
+            }
+        }
 
         private static void normalizeFontScaledForm(System.Windows.Forms.Form form)
         {
@@ -400,6 +435,66 @@ namespace Thetis
             catch { }
         }
 
+        // Auto-sized check boxes, radio buttons and labels: WinForms works out their size here as if the text were
+        // twice as large ("RX1" radio 166 x 64 px instead of about 92 x 34). The text draws at its real size, but
+        // the oversized box covers the neighbours ("RX1 Sub" -> ":1 Sub"). They get the size their text needs
+        // (measured the way they draw it), and keep it up to date when their text changes.
+        public static void FixAutoSizeBounds(System.Windows.Forms.Control root)
+        {
+            if (!Enabled || root == null) return;
+            foreach (System.Windows.Forms.Control c in root.Controls)
+            {
+                if (c.AutoSize && !string.IsNullOrEmpty(c.Text) && (plainCheck(c) || c is System.Windows.Forms.Label))
+                {
+                    try
+                    {
+                        System.Drawing.Size want = autoSizeFor(c);
+                        if (c.Width > want.Width * 1.2f || c.Height > want.Height * 1.3f)
+                        {
+                            applyAutoSize(c, want);
+                            c.TextChanged += autoSizeOnText;
+                            c.FontChanged += autoSizeOnText;
+                        }
+                    }
+                    catch (Exception ex) { Log("FixAutoSizeBounds " + c.Name + ": " + ex.Message); }
+                }
+                if (c.HasChildren) FixAutoSizeBounds(c);
+            }
+        }
+
+        private static System.Drawing.Size autoSizeFor(System.Windows.Forms.Control c)
+        {
+            System.Drawing.SizeF t = measure(c, c.Font, 0);
+            bool check = plainCheck(c);
+            int w = (check ? Px(20) : 0) + (int)Math.Ceiling(t.Width) + c.Padding.Horizontal;
+            int h = (int)Math.Ceiling(t.Height) + (check ? Px(4) : 0);
+            if (check) h = Math.Max(h, Px(17));
+            return new System.Drawing.Size(w, h + c.Padding.Vertical);
+        }
+
+        private static void applyAutoSize(System.Windows.Forms.Control c, System.Drawing.Size want)
+        {
+            System.Windows.Forms.AnchorStyles a = c.Anchor;
+            bool growLeft = (a & System.Windows.Forms.AnchorStyles.Right) != 0 && (a & System.Windows.Forms.AnchorStyles.Left) == 0;
+            int right = c.Right;
+            c.AutoSize = false;
+            c.Size = want;
+            if (growLeft) c.Left = right - want.Width;
+        }
+
+        private static void autoSizeOnText(object sender, EventArgs e)
+        {
+            if (sender is System.Windows.Forms.Control c && !string.IsNullOrEmpty(c.Text))
+            {
+                try
+                {
+                    System.Drawing.Size want = autoSizeFor(c);
+                    if (want != c.Size) applyAutoSize(c, want);
+                }
+                catch { }
+            }
+        }
+
         // button icons (Database Manager ...): WinForms draws a button's Image at its own pixel size, so a 96 DPI
         // icon came out half size in its 200 % button. Redrawn once at the DPI scale when it still fits the button.
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Drawing.Image, object> _scaledImages =
@@ -410,13 +505,18 @@ namespace Thetis
             if (!Enabled || root == null) return;
             foreach (System.Windows.Forms.Control c in root.Controls)
             {
-                if (c is System.Windows.Forms.ButtonBase b && b.Image != null && !_scaledImages.TryGetValue(b.Image, out object _))
+                System.Drawing.Image img0 = null;
+                if (c is System.Windows.Forms.ButtonBase bb0) img0 = bb0.Image;
+                else if (c is System.Windows.Forms.PictureBox pb0 &&
+                         (pb0.SizeMode == System.Windows.Forms.PictureBoxSizeMode.Normal || pb0.SizeMode == System.Windows.Forms.PictureBoxSizeMode.CenterImage))
+                    img0 = pb0.Image;
+                if (img0 != null && !_scaledImages.TryGetValue(img0, out object _))
                 {
                     try
                     {
-                        System.Drawing.Image img = b.Image;
+                        System.Drawing.Image img = img0;
                         int w = Px(img.Width), h = Px(img.Height);
-                        if (w <= b.Width && h <= b.Height)
+                        if (w <= c.Width && h <= c.Height)
                         {
                             System.Drawing.Bitmap bmp = new System.Drawing.Bitmap(w, h);
                             using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(bmp))
@@ -426,7 +526,8 @@ namespace Thetis
                                 g.DrawImage(img, new System.Drawing.Rectangle(0, 0, w, h));
                             }
                             _scaledImages.Add(bmp, null);
-                            b.Image = bmp;
+                            if (c is System.Windows.Forms.ButtonBase bb1) bb1.Image = bmp;
+                            else if (c is System.Windows.Forms.PictureBox pb1) pb1.Image = bmp;
                         }
                     }
                     catch (Exception ex) { Log("ScaleButtonImages " + c.Name + ": " + ex.Message); }
@@ -466,6 +567,16 @@ namespace Thetis
                                 ? g.ColumnHeadersDefaultCellStyle.Font.Height + Px(8) : g.Font.Height + Px(8));
                     }
                     catch (Exception ex) { Log("FixGrids " + g.Name + ": " + ex.Message); }
+                }
+                if (c is System.Windows.Forms.ListView lv && lv.View == System.Windows.Forms.View.Details)
+                {
+                    try
+                    {
+                        float sx = FormScale(form);
+                        foreach (System.Windows.Forms.ColumnHeader ch in lv.Columns)
+                            if (ch.Width > 0) ch.Width = (int)Math.Round(ch.Width * sx);
+                    }
+                    catch (Exception ex) { Log("FixGrids " + lv.Name + ": " + ex.Message); }
                 }
                 if (c.HasChildren) FixGrids(form, c);
             }
@@ -844,6 +955,121 @@ namespace Thetis
                 int lines1 = (int)Math.Round(wrap1.Height / Math.Max(1f, one1.Height));
                 return lines1 <= lines0 && wrap1.Width <= w && wrap1.Height <= Math.Max(h, wrap0.Height);
             }
+        }
+
+        // ---------------------------------------------------------------- screen captures for comparisons
+
+        [DllImport("user32.dll")] private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+
+        // a picture of a window as it is drawn (PrintWindow, PW_RENDERFULLCONTENT), in this process' own scale
+        public static void CaptureForm(System.Windows.Forms.Form f, string file)
+        {
+            using (System.Drawing.Bitmap bmp = new System.Drawing.Bitmap(Math.Max(1, f.Width), Math.Max(1, f.Height)))
+            {
+                using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(bmp))
+                {
+                    IntPtr hdc = g.GetHdc();
+                    try { PrintWindow(f.Handle, hdc, 2); }
+                    finally { g.ReleaseHdc(hdc); }
+                }
+                bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+            }
+        }
+
+        // every leaf tab page of a form in turn (the pages that hold no further tabs), one picture each:
+        // <dir>\<n|o>_<page>-<page>.png (n = this high-DPI mode, o = the original look)
+        public static void SweepTabs(System.Windows.Forms.Form f, string dir, string[] skip)
+        {
+            if (f == null || string.IsNullOrEmpty(dir)) return;
+            try
+            {
+                System.IO.Directory.CreateDirectory(dir);
+                var leaves = new System.Collections.Generic.List<System.Windows.Forms.TabPage[]>();
+                collectLeafPages(f, new System.Collections.Generic.List<System.Windows.Forms.TabPage>(), leaves, skip);
+                string mode = Enabled ? "n" : "o";
+                var report = new System.Text.StringBuilder();
+                var overlaps = new System.Collections.Generic.List<string>();
+                foreach (var chain in leaves)
+                {
+                    foreach (var tp in chain)
+                        if (tp.Parent is System.Windows.Forms.TabControl tc) tc.SelectedTab = tp;
+                    for (int k = 0; k < 4; k++) System.Windows.Forms.Application.DoEvents();
+                    f.Refresh();
+                    string name = string.Join("-", Array.ConvertAll(chain, t => t.Name));
+                    CaptureForm(f, System.IO.Path.Combine(dir, mode + "_" + name + ".png"));
+                    overlaps.Clear();
+                    collectOverlaps(chain[chain.Length - 1], overlaps);
+                    foreach (string o in overlaps) report.AppendLine(name + "\t" + o);
+                }
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "overlaps_" + mode + ".txt"), report.ToString());
+                Log("SweepTabs: " + leaves.Count + " pages");
+                // THETIS_HIDPI_DUMP=<name>: bounds of that control and its children, after the sweep
+                string dump = Environment.GetEnvironmentVariable("THETIS_HIDPI_DUMP");
+                if (!string.IsNullOrEmpty(dump))
+                    foreach (System.Windows.Forms.Control c in f.Controls.Find(dump, true)) dumpTree(c, "");
+            }
+            catch (Exception ex) { Log("SweepTabs: " + ex); }
+        }
+
+        private static void collectLeafPages(System.Windows.Forms.Control c, System.Collections.Generic.List<System.Windows.Forms.TabPage> chain,
+            System.Collections.Generic.List<System.Windows.Forms.TabPage[]> leaves, string[] skip)
+        {
+            foreach (System.Windows.Forms.Control ch in c.Controls)
+            {
+                if (ch is System.Windows.Forms.TabControl tc)
+                {
+                    foreach (System.Windows.Forms.TabPage tp in tc.TabPages)
+                    {
+                        if (Array.IndexOf(skip, tp.Name) >= 0) continue;
+                        chain.Add(tp);
+                        int before = leaves.Count;
+                        collectLeafPages(tp, chain, leaves, skip);
+                        if (leaves.Count == before && !hasTabControl(tp)) leaves.Add(chain.ToArray());
+                        chain.RemoveAt(chain.Count - 1);
+                    }
+                }
+                else if (ch.HasChildren) collectLeafPages(ch, chain, leaves, skip);
+            }
+        }
+
+        // pairs of visible sibling controls whose bounds overlap, in 96 DPI units so both modes compare:
+        // "<parent>\t<a>\t<b>\t<overlap width>x<height>"
+        private static void collectOverlaps(System.Windows.Forms.Control parent, System.Collections.Generic.List<string> outList)
+        {
+            float u = Enabled ? Scale : 1f;
+            var kids = new System.Collections.Generic.List<System.Windows.Forms.Control>();
+            foreach (System.Windows.Forms.Control c in parent.Controls) if (c.Visible && c.Width > 0 && c.Height > 0) kids.Add(c);
+            for (int i = 0; i < kids.Count; i++)
+                for (int j = i + 1; j < kids.Count; j++)
+                {
+                    System.Drawing.Rectangle r = System.Drawing.Rectangle.Intersect(kids[i].Bounds, kids[j].Bounds);
+                    if (r.Width > 1 && r.Height > 1)
+                    {
+                        // a control wholly inside a bigger one (a label on a panel ...) is a design choice, not a clash
+                        System.Drawing.Rectangle a = kids[i].Bounds, b = kids[j].Bounds;
+                        if (r == a || r == b) continue;
+                        outList.Add(parent.Name + "\t" + kids[i].Name + "\t" + kids[j].Name + "\t" +
+                            Math.Round(r.Width / u) + "x" + Math.Round(r.Height / u) + "\t" + kids[i].Bounds + " " + kids[j].Bounds +
+                            " font " + kids[i].Font.SizeInPoints + " auto " + kids[i].AutoSize);
+                    }
+                }
+            foreach (var c in kids) if (c.HasChildren && !(c is System.Windows.Forms.TabControl)) collectOverlaps(c, outList);
+        }
+
+        private static void dumpTree(System.Windows.Forms.Control c, string indent)
+        {
+            string extra = c is System.Windows.Forms.ContainerControl cc
+                ? " mode " + cc.AutoScaleMode + " dims " + cc.AutoScaleDimensions + " cur " + cc.CurrentAutoScaleDimensions : "";
+            Log("dump " + indent + c.Name + " " + c.GetType().Name + " " + c.Bounds + " client " + c.ClientSize + " anchor " + c.Anchor +
+                " font " + c.Font.SizeInPoints + " visible " + c.Visible + extra);
+            foreach (System.Windows.Forms.Control ch in c.Controls) dumpTree(ch, indent + "  ");
+        }
+
+        private static bool hasTabControl(System.Windows.Forms.Control c)
+        {
+            foreach (System.Windows.Forms.Control ch in c.Controls)
+                if (ch is System.Windows.Forms.TabControl || (ch.HasChildren && hasTabControl(ch))) return true;
+            return false;
         }
 
         // diagnostics while porting: THETIS_HIDPI_LOG=<file>

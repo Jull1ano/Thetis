@@ -6357,7 +6357,7 @@ namespace Thetis
                 panelAlex1HPFControl.Visible = false;
                 tpAlexFilterControl.Text = "LPF";
                 panelAlexRXXVRTControl.Visible = false;
-                labelAlexFilterActive.Location = new Point(298, 0);
+                labelAlexFilterActive.Location = new Point(HighDpi.Px(298), HighDpi.Px(0));
                 grp10WattMeterTrim.BringToFront();
                 chkEnableXVTRHF.Visible = false;
             }
@@ -6404,7 +6404,7 @@ namespace Thetis
                 chkDisableHPFonTX.Text = "BPF ByPass on TX";
                 chkDisableHPFonPSb.Text = "BPF ByPass on PS";
                 chkDisableHPFonPSb.Visible = true;
-                labelAlexFilterActive.Location = new Point(275, 0);
+                labelAlexFilterActive.Location = new Point(HighDpi.Px(275), HighDpi.Px(0));
                 ud6mRx2LNAGainOffset.Visible = true;
                 lblRx26mLNA.Visible = true;
                 chkEnableXVTRHF.Visible = true;
@@ -6424,7 +6424,7 @@ namespace Thetis
                 chkDisableHPFonTX.Text = "HPF ByPass on TX";
                 chkDisableHPFonPSb.Visible = false;
                 panelAlexRXXVRTControl.Visible = true;
-                labelAlexFilterActive.Location = new Point(275, 0);
+                labelAlexFilterActive.Location = new Point(HighDpi.Px(275), HighDpi.Px(0));
                 ud6mRx2LNAGainOffset.Visible = false;
                 lblRx26mLNA.Visible = false;
                 grp100WattMeterTrim.BringToFront();
@@ -6459,16 +6459,16 @@ namespace Thetis
                 panelAlex1HPFControl.Visible = true;
 
                 chkDisable6mLNAonRX.Parent = panelAlex1HPFControl;
-                chkDisable6mLNAonRX.Location = new Point(16, 208);
+                chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                 chkDisable6mLNAonTX.Parent = panelAlex1HPFControl;
-                chkDisable6mLNAonTX.Location = new Point(63, 208);
+                chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
 
                 chkAlexHPFBypass.Parent = panelAlex1HPFControl;
-                chkAlexHPFBypass.Location = new Point(140, 185);
+                chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                 chkDisableHPFonTX.Parent = panelAlex1HPFControl;
-                chkDisableHPFonTX.Location = new Point(140, 213);
+                chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                 chkDisableHPFonPSb.Parent = panelAlex1HPFControl;
-                chkDisableHPFonPSb.Location = new Point(140, 241);
+                chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
             }
 
             if (HardwareSpecific.Model == HPSDRModel.HERMES) tpPennyCtrl.Text = "Hermes Ctrl";
@@ -20043,15 +20043,15 @@ namespace Thetis
                     panelAlex1HPFControl.Visible = false;
                     panelBPFControl.Visible = true;
                     chkDisable6mLNAonRX.Parent = panelBPFControl;
-                    chkDisable6mLNAonRX.Location = new Point(16, 208);
+                    chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                     chkDisable6mLNAonTX.Parent = panelBPFControl;
-                    chkDisable6mLNAonTX.Location = new Point(63, 208);
+                    chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
                     chkAlexHPFBypass.Parent = panelBPFControl;
-                    chkAlexHPFBypass.Location = new Point(140, 185);
+                    chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                     chkDisableHPFonTX.Parent = panelBPFControl;
-                    chkDisableHPFonTX.Location = new Point(140, 213);
+                    chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                     chkDisableHPFonPSb.Parent = panelBPFControl;
-                    chkDisableHPFonPSb.Location = new Point(140, 241);
+                    chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
                     chkAutoATTRx1.Enabled = false;
                     chkAutoATTRx2.Enabled = false;
                     setupAttRXControls(1);
@@ -20321,15 +20321,15 @@ namespace Thetis
                     panelAlex1HPFControl.Visible = false;
                     panelBPFControl.Visible = true;
                     chkDisable6mLNAonRX.Parent = panelBPFControl;
-                    chkDisable6mLNAonRX.Location = new Point(16, 208);
+                    chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                     chkDisable6mLNAonTX.Parent = panelBPFControl;
-                    chkDisable6mLNAonTX.Location = new Point(63, 208);
+                    chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
                     chkAlexHPFBypass.Parent = panelBPFControl;
-                    chkAlexHPFBypass.Location = new Point(140, 185);
+                    chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                     chkDisableHPFonTX.Parent = panelBPFControl;
-                    chkDisableHPFonTX.Location = new Point(140, 213);
+                    chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                     chkDisableHPFonPSb.Parent = panelBPFControl;
-                    chkDisableHPFonPSb.Location = new Point(140, 241);
+                    chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
                     radDDC0ADC2.Enabled = true;
                     radDDC1ADC2.Enabled = true;
                     radDDC2ADC2.Enabled = true;
@@ -20373,15 +20373,15 @@ namespace Thetis
                     panelAlex1HPFControl.Visible = false;
                     panelBPFControl.Visible = true;
                     chkDisable6mLNAonRX.Parent = panelBPFControl;
-                    chkDisable6mLNAonRX.Location = new Point(16, 208);
+                    chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                     chkDisable6mLNAonTX.Parent = panelBPFControl;
-                    chkDisable6mLNAonTX.Location = new Point(63, 208);
+                    chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
                     chkAlexHPFBypass.Parent = panelBPFControl;
-                    chkAlexHPFBypass.Location = new Point(140, 185);
+                    chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                     chkDisableHPFonTX.Parent = panelBPFControl;
-                    chkDisableHPFonTX.Location = new Point(140, 213);
+                    chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                     chkDisableHPFonPSb.Parent = panelBPFControl;
-                    chkDisableHPFonPSb.Location = new Point(140, 241);
+                    chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
                     radDDC0ADC2.Enabled = true;
                     radDDC1ADC2.Enabled = true;
                     radDDC2ADC2.Enabled = true;
@@ -20426,15 +20426,15 @@ namespace Thetis
                     panelAlex1HPFControl.Visible = false;
                     panelBPFControl.Visible = true;
                     chkDisable6mLNAonRX.Parent = panelBPFControl;
-                    chkDisable6mLNAonRX.Location = new Point(16, 208);
+                    chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                     chkDisable6mLNAonTX.Parent = panelBPFControl;
-                    chkDisable6mLNAonTX.Location = new Point(63, 208);
+                    chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
                     chkAlexHPFBypass.Parent = panelBPFControl;
-                    chkAlexHPFBypass.Location = new Point(140, 185);
+                    chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                     chkDisableHPFonTX.Parent = panelBPFControl;
-                    chkDisableHPFonTX.Location = new Point(140, 213);
+                    chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                     chkDisableHPFonPSb.Parent = panelBPFControl;
-                    chkDisableHPFonPSb.Location = new Point(140, 241);
+                    chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
                     radDDC0ADC2.Enabled = true;
                     radDDC1ADC2.Enabled = true;
                     radDDC2ADC2.Enabled = true;
@@ -20477,15 +20477,15 @@ namespace Thetis
                     panelAlex1HPFControl.Visible = false;
                     panelBPFControl.Visible = true;
                     chkDisable6mLNAonRX.Parent = panelBPFControl;
-                    chkDisable6mLNAonRX.Location = new Point(16, 208);
+                    chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                     chkDisable6mLNAonTX.Parent = panelBPFControl;
-                    chkDisable6mLNAonTX.Location = new Point(63, 208);
+                    chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
                     chkAlexHPFBypass.Parent = panelBPFControl;
-                    chkAlexHPFBypass.Location = new Point(140, 185);
+                    chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                     chkDisableHPFonTX.Parent = panelBPFControl;
-                    chkDisableHPFonTX.Location = new Point(140, 213);
+                    chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                     chkDisableHPFonPSb.Parent = panelBPFControl;
-                    chkDisableHPFonPSb.Location = new Point(140, 241);
+                    chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
                     radDDC0ADC2.Enabled = true;
                     radDDC1ADC2.Enabled = true;
                     radDDC2ADC2.Enabled = true;
@@ -20528,15 +20528,15 @@ namespace Thetis
                     panelAlex1HPFControl.Visible = false;
                     panelBPFControl.Visible = true;
                     chkDisable6mLNAonRX.Parent = panelBPFControl;
-                    chkDisable6mLNAonRX.Location = new Point(16, 208);
+                    chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                     chkDisable6mLNAonTX.Parent = panelBPFControl;
-                    chkDisable6mLNAonTX.Location = new Point(63, 208);
+                    chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
                     chkAlexHPFBypass.Parent = panelBPFControl;
-                    chkAlexHPFBypass.Location = new Point(140, 185);
+                    chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                     chkDisableHPFonTX.Parent = panelBPFControl;
-                    chkDisableHPFonTX.Location = new Point(140, 213);
+                    chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                     chkDisableHPFonPSb.Parent = panelBPFControl;
-                    chkDisableHPFonPSb.Location = new Point(140, 241);
+                    chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
                     radDDC0ADC2.Enabled = true;
                     radDDC1ADC2.Enabled = true;
                     radDDC2ADC2.Enabled = true;
@@ -20579,15 +20579,15 @@ namespace Thetis
                     panelAlex1HPFControl.Visible = false;
                     panelBPFControl.Visible = true;
                     chkDisable6mLNAonRX.Parent = panelBPFControl;
-                    chkDisable6mLNAonRX.Location = new Point(16, 208);
+                    chkDisable6mLNAonRX.Location = new Point(HighDpi.Px(16), HighDpi.Px(208));
                     chkDisable6mLNAonTX.Parent = panelBPFControl;
-                    chkDisable6mLNAonTX.Location = new Point(63, 208);
+                    chkDisable6mLNAonTX.Location = new Point(HighDpi.Px(63), HighDpi.Px(208));
                     chkAlexHPFBypass.Parent = panelBPFControl;
-                    chkAlexHPFBypass.Location = new Point(140, 185);
+                    chkAlexHPFBypass.Location = new Point(HighDpi.Px(140), HighDpi.Px(185));
                     chkDisableHPFonTX.Parent = panelBPFControl;
-                    chkDisableHPFonTX.Location = new Point(140, 213);
+                    chkDisableHPFonTX.Location = new Point(HighDpi.Px(140), HighDpi.Px(213));
                     chkDisableHPFonPSb.Parent = panelBPFControl;
-                    chkDisableHPFonPSb.Location = new Point(140, 241);
+                    chkDisableHPFonPSb.Location = new Point(HighDpi.Px(140), HighDpi.Px(241));
                     radDDC0ADC2.Enabled = true;
                     radDDC1ADC2.Enabled = true;
                     radDDC2ADC2.Enabled = true;
@@ -21110,11 +21110,11 @@ namespace Thetis
             picWarningRegionExtended.Visible = bShow;
             if (bShow)
             {
-                grpFRSRegion.Size = new Size(160, 136);
+                grpFRSRegion.Size = new Size(HighDpi.Px(160), HighDpi.Px(136));
             }
             else
             {
-                grpFRSRegion.Size = new Size(160, 74);
+                grpFRSRegion.Size = new Size(HighDpi.Px(160), HighDpi.Px(74));
             }
         }
 
@@ -27602,7 +27602,7 @@ namespace Thetis
             {
                 txtboxTXProfileChangedReport.Text = "Modifications" + Environment.NewLine + Environment.NewLine + sReport;
                 txtboxTXProfileChangedReport.Width = getTextBoxWidthForReport();
-                txtboxTXProfileChangedReport.Location = new Point(this.ClientSize.Width - txtboxTXProfileChangedReport.Size.Width, 34);
+                txtboxTXProfileChangedReport.Location = new Point(this.ClientSize.Width - txtboxTXProfileChangedReport.Size.Width, HighDpi.Px(34)); // Jull1ano fork: DPI-scaled
                 txtboxTXProfileChangedReport.Visible = true;
             }
             else
@@ -34325,7 +34325,7 @@ namespace Thetis
             chkShowRX2NoiseFloor.Checked = true;
             console.IncludeWindowBorders = true;
             console.SetResolution("1080p");
-            console.Location = new Point(0, 0);
+            console.Location = new Point(HighDpi.Px(0), HighDpi.Px(0));
             console.RX2Enabled = true;
             console.PowerOn = true;
             VACEnable = false;
@@ -36298,14 +36298,14 @@ namespace Thetis
 
             if (chkAdvancedNetworkingSettings.Checked)
             {
-                ucRadioList_Radios.Location = new Point(ucRadioList_Radios.Location.X, 183);
-                ucRadioList_Radios.Size = new Size(ucRadioList_Radios.Size.Width, 205);
+                ucRadioList_Radios.Location = new Point(ucRadioList_Radios.Location.X, HighDpi.Px(183)); // Jull1ano fork: DPI-scaled
+                ucRadioList_Radios.Size = new Size(ucRadioList_Radios.Size.Width, HighDpi.Px(205));
                 pnlAdvancedNetworkSettings.Visible = true;
             }
             else
             {
-                ucRadioList_Radios.Location = new Point(ucRadioList_Radios.Location.X, 119);
-                ucRadioList_Radios.Size = new Size(ucRadioList_Radios.Size.Width, 269);
+                ucRadioList_Radios.Location = new Point(ucRadioList_Radios.Location.X, HighDpi.Px(119));
+                ucRadioList_Radios.Size = new Size(ucRadioList_Radios.Size.Width, HighDpi.Px(269));
                 pnlAdvancedNetworkSettings.Visible = false;
             }
         }
@@ -37581,11 +37581,11 @@ namespace Thetis
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MinimizeBox = false;
             this.MaximizeBox = false;
-            this.ClientSize = new Size(420, 360);
+            this.ClientSize = new Size(HighDpi.Px(420), HighDpi.Px(360)); // Jull1ano fork: DPI-scaled
 
             this._list_box = new CheckedListBox();
-            this._list_box.Location = new Point(12, 12);
-            this._list_box.Size = new Size(396, 276);
+            this._list_box.Location = new Point(HighDpi.Px(12), HighDpi.Px(12));
+            this._list_box.Size = new Size(HighDpi.Px(396), HighDpi.Px(276));
             this._list_box.CheckOnClick = true;
 
             for (int i = 0; i < this._source_forms.Count; i++)
@@ -37596,15 +37596,15 @@ namespace Thetis
 
             this._ok_button = new Button();
             this._ok_button.Text = "OK";
-            this._ok_button.Size = new Size(90, 28);
-            this._ok_button.Location = new Point(this.ClientSize.Width - 198, this.ClientSize.Height - 44);
+            this._ok_button.Size = new Size(HighDpi.Px(90), HighDpi.Px(28));
+            this._ok_button.Location = new Point(this.ClientSize.Width - HighDpi.Px(198), this.ClientSize.Height - HighDpi.Px(44));
             this._ok_button.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             this._ok_button.Click += this.on_ok_clicked;
 
             this._cancel_button = new Button();
             this._cancel_button.Text = "Cancel";
-            this._cancel_button.Size = new Size(90, 28);
-            this._cancel_button.Location = new Point(this.ClientSize.Width - 96, this.ClientSize.Height - 44);
+            this._cancel_button.Size = new Size(HighDpi.Px(90), HighDpi.Px(28));
+            this._cancel_button.Location = new Point(this.ClientSize.Width - HighDpi.Px(96), this.ClientSize.Height - HighDpi.Px(44));
             this._cancel_button.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             this._cancel_button.Click += this.on_cancel_clicked;
 

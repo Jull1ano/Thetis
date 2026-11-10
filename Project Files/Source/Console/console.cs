@@ -44806,6 +44806,13 @@ namespace Thetis
                     }
                     HighDpi.Log("Setup: Size " + SetupForm.Size + " Client " + SetupForm.ClientSize);
                 }
+                else if (parts[0] == "setupsweep")
+                {
+                    // setupsweep: every Setup tab page in turn, one PrintWindow picture each, into THETIS_HIDPI_SWEEPDIR
+                    setupToolStripMenuItem1_Click(this, EventArgs.Empty);
+                    HighDpi.SweepTabs(SetupForm, Environment.GetEnvironmentVariable("THETIS_HIDPI_SWEEPDIR"),
+                        new string[] { "tpTests", "tpDiscord", "tpSkinServers" });
+                }
                 else if (parts[0] == "menu")
                 {
                     // menu:<item name>[:<item name>...] clicks those menu items (Setup > Database Manager ...)

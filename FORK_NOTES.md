@@ -90,6 +90,14 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
 - PureSignal (fixed client sizes), Path Illustrator (diagram and label positions drawn in 96 DPI units),
   Wideband (frequency scale strip height), Band Stack, colour palette: scaled.
 - Save (memory quick save) is centred like Restore (upstream had TopCenter for Save only).
+- Setup sweep (all 70 pages, original vs 4K, plus a list of overlapping sibling controls in both modes:
+  148 overlaps only in 4K before, 20 after, none over 2 units): auto-sized check boxes, radio buttons and
+  labels were laid out as if their text were twice as large and covered their neighbours ("RX1 Sub" ->
+  ":1 Sub"); they now get the size their text needs. Setup's own placements in 96 DPI pixels (45, per
+  radio model: Alex HPF/LPF, the Hardware radio list ...) scaled. Colour buttons (swatch and arrow), the
+  gradient editor (markers, labels, mouse) and its preset picker, info icons and list columns scaled.
+  `THETIS_HIDPI_OPEN=setupsweep` + `THETIS_HIDPI_SWEEPDIR=<dir>` captures every page and writes the overlap
+  list; `THETIS_HIDPI_DUMP=<control>` logs a control's bounds tree.
 - Window positions and sizes are saved in 96 DPI units, so one settings database works in both modes.
 - Off: command line `-nohidpi` or `THETIS_HIDPI=0`. At 100 % scaling nothing changes.
 - Text size: Setup > Appearance > General > High DPI (fork): Default, +1, +2 (one point each on the

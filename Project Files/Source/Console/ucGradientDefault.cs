@@ -90,6 +90,18 @@ namespace Thetis
             populateGradientList();
         }
 
+        // Jull1ano fork: at high DPI this font-scaled control lays its contents out before Setup gives it its
+        // size, and they stay squeezed (a 3 px list, a thin "Set"). Laid out here as the original shows it:
+        // the list on the left, a 6 unit gap, a 64 unit Set button, both the full height.
+        protected override void OnLayout(LayoutEventArgs e)
+        {
+            base.OnLayout(e);
+            if (!HighDpi.Enabled || btnSet == null || comboGradient == null) return;
+            int bw = HighDpi.Px(64), gap = HighDpi.Px(6);
+            btnSet.SetBounds(ClientSize.Width - bw, 0, bw, ClientSize.Height);
+            comboGradient.SetBounds(0, 0, Math.Max(0, ClientSize.Width - bw - gap), ClientSize.Height);
+        }
+
         private void populateGradientList()
         {
             comboGradient.Items.Clear();

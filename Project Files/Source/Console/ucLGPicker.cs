@@ -172,8 +172,11 @@ namespace Thetis
             }
         }
 
+        // Jull1ano fork: the picker is drawn and hit-tested in 96 DPI units (one scale transform, mouse / scale)
+        private static readonly float dpiK = HighDpi.Enabled ? HighDpi.Scale : 1f;
+
         private int actualWidth {
-            get { return this.Width - m_nPadding * 2; }
+            get { return (int)Math.Round(this.Width / dpiK) - m_nPadding * 2; }
             set { }
         }
 
@@ -185,7 +188,7 @@ namespace Thetis
 
             g.DrawString(s, drawFont, br, new Point(x - (textSize.Width / 2), 24));
         }
-        private Font drawFont = new Font("Microsft Sans Serif", 8);
+        private Font drawFont = new Font("Microsft Sans Serif", 8f / dpiK); // the transform enlarges it again
         private void drawScales(Graphics g)
         {
             int zeroPoint = LOW;
@@ -213,6 +216,7 @@ namespace Thetis
         private void LGPicker_Paint(object sender, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
+            if (dpiK != 1f) g.ScaleTransform(dpiK, dpiK); // Jull1ano fork
             g.PixelOffsetMode = PixelOffsetMode.Half;
 
             Point pEnd = new Point(m_nPadding + actualWidth, 12);
@@ -295,8 +299,8 @@ namespace Thetis
         }
         private void LGPicker_MouseMove(object sender, MouseEventArgs e)
         {
-            int X = e.X;
-            int Y = e.Y;
+            int X = (int)(e.X / dpiK); // Jull1ano fork: 96 DPI units
+            int Y = (int)(e.Y / dpiK);
 
             //if (Y < (this.Height/2) - 6 || Y > (this.Height/2) + 6) return;
 
@@ -386,8 +390,8 @@ namespace Thetis
         }
         private void LGPicker_MouseDown(object sender, MouseEventArgs e)
         {
-            int X = e.X;
-            int Y = e.Y;
+            int X = (int)(e.X / dpiK); // Jull1ano fork: 96 DPI units
+            int Y = (int)(e.Y / dpiK);
 
             int index = findColourIndexGrip(X, Y);
             if (index != m_nSelectedGripper)
@@ -446,8 +450,8 @@ namespace Thetis
 
         private void LGPicker_MouseUp(object sender, MouseEventArgs e)
         {
-            int X = e.X;
-            int Y = e.Y;
+            int X = (int)(e.X / dpiK); // Jull1ano fork: 96 DPI units
+            int Y = (int)(e.Y / dpiK);
 
             if (m_bChangedDueToDrag)
             {
