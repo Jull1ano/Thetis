@@ -49,6 +49,19 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   200 % so it covers the same time.
 - Window positions and sizes are saved in 96 DPI units, so one settings database works in both modes.
 - Off: command line `-nohidpi` or `THETIS_HIDPI=0`. At 100 % scaling nothing changes.
+- Text size: Setup > Appearance > General > High DPI (fork): Default, +1, +2 (one point each on the
+  8.25 pt base font, used at the next start; saved as `hidpi_text_size.txt` in the settings folder).
+  Every form gets it when it opens. Text in a fixed-size button or label takes the largest size that
+  still fits on as many lines as before; an auto-sized check box or label stops before it would cover
+  a neighbour; group box titles stay on one line; edit boxes, combos and lists grow one step at most.
+  Font-scaled user controls inside the console and Setup (the info bar ...) keep their size; a dialog
+  that scales by font (Finder ...) grows as a whole. The VFO digits, the meter text and the info bar's
+  Feedback / Pure Signal labels keep their own sizes.
+- Dialogs fixed for 200 %: CWX (an old AutoScaleBaseSize form, and its hand-drawn key area), Finder
+  rows, owner-drawn list rows (Setup > Appearance > Meters/Gadgets).
+- `THETIS_HIDPI_LOG=<file>` logs the DPI work; with `THETIS_HIDPI_LOGFIT=1` also every text fit.
+  `THETIS_HIDPI_OPEN=setup:<tab>:<tab>` / `cwx` / `finder:<text>` opens that window after start
+  (used for screen captures).
 
 ## Test settings (no rebuild needed)
 
@@ -83,6 +96,8 @@ Output: `Project Files\bin\x64\Release\Thetis.exe`.
   pan moves the RX2 view too, as the slider always did).
 - The retune latency is a fixed estimate until measured on the radio.
 - No Setup UI for these options yet.
-- High DPI: checked on the main window, Setup (Hardware, Display, Appearance) at 200 %; other dialogs,
-  meter containers, RX2 and collapsed layouts not checked yet. System DPI aware: on a second monitor with
+- High DPI: checked on the main window, Setup (Hardware, Display, DSP AGC/ALC, Appearance General and
+  Meters/Gadgets), CWX and Finder at 200 % with text size Default, +1 and +2; other dialogs, meter
+  containers, RX2 and collapsed layouts not checked yet. Setup's Discover button still covers the start
+  of the radio list header. System DPI aware: on a second monitor with
   a different scaling Windows stretches the window as before.

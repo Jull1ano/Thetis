@@ -8422,17 +8422,17 @@ namespace Thetis
 
                 fontFactory = new SharpDX.DirectWrite.Factory();
 
-                fontDX2d_callout = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (m_fntCallOutFont.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font9 = new SharpDX.DirectWrite.TextFormat(fontFactory, font9.FontFamily.Name, (font9.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font9b = new SharpDX.DirectWrite.TextFormat(fontFactory, font9b.FontFamily.Name, SharpDX.DirectWrite.FontWeight.Bold, SharpDX.DirectWrite.FontStyle.Normal, (font9b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font9c = new SharpDX.DirectWrite.TextFormat(fontFactory, font95.FontFamily.Name, (font95.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_panafont = new SharpDX.DirectWrite.TextFormat(fontFactory, pana_font.FontFamily.Name, (pana_font.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font10 = new SharpDX.DirectWrite.TextFormat(fontFactory, font10.FontFamily.Name, (font10.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font12 = new SharpDX.DirectWrite.TextFormat(fontFactory, font12.FontFamily.Name, (font12.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font14 = new SharpDX.DirectWrite.TextFormat(fontFactory, font14b.FontFamily.Name, (font14b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font32 = new SharpDX.DirectWrite.TextFormat(fontFactory, font32b.FontFamily.Name, (font32b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_font1 = new SharpDX.DirectWrite.TextFormat(fontFactory, font1r.FontFamily.Name, (font1r.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
-                fontDX2d_fps_profile = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (64f / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.Scale); // Jull1ano fork: DPI-scaled
+                fontDX2d_callout = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (m_fntCallOutFont.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font9 = new SharpDX.DirectWrite.TextFormat(fontFactory, font9.FontFamily.Name, (font9.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font9b = new SharpDX.DirectWrite.TextFormat(fontFactory, font9b.FontFamily.Name, SharpDX.DirectWrite.FontWeight.Bold, SharpDX.DirectWrite.FontStyle.Normal, (font9b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font9c = new SharpDX.DirectWrite.TextFormat(fontFactory, font95.FontFamily.Name, (font95.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_panafont = new SharpDX.DirectWrite.TextFormat(fontFactory, pana_font.FontFamily.Name, (pana_font.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font10 = new SharpDX.DirectWrite.TextFormat(fontFactory, font10.FontFamily.Name, (font10.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font12 = new SharpDX.DirectWrite.TextFormat(fontFactory, font12.FontFamily.Name, (font12.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font14 = new SharpDX.DirectWrite.TextFormat(fontFactory, font14b.FontFamily.Name, (font14b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font32 = new SharpDX.DirectWrite.TextFormat(fontFactory, font32b.FontFamily.Name, (font32b.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_font1 = new SharpDX.DirectWrite.TextFormat(fontFactory, font1r.FontFamily.Name, (font1r.Size / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
+                fontDX2d_fps_profile = new SharpDX.DirectWrite.TextFormat(fontFactory, m_fntCallOutFont.FontFamily.Name, (64f / 72) * _d2dRenderTarget.DotsPerInch.Width * HighDpi.FontScale); // Jull1ano fork: DPI and text size
             }
         }
         static void clearBackgroundDX2D(int rx, int W, int H, bool bottom)

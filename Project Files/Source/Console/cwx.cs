@@ -758,6 +758,9 @@ namespace Thetis
             // Required for Windows Form Designer support
             //
             InitializeComponent();
+            HighDpi.ScaleLegacyForm(this); // Jull1ano fork: this form uses the .NET 1.x AutoScaleBaseSize, which does not scale here
+            kylx = HighDpi.Px(kylx); kyty = HighDpi.Px(kyty);        // Jull1ano fork: the key area is drawn by hand
+            kyxsz = HighDpi.Px(kyxsz); kyysz = HighDpi.Px(kyysz);   // in pixels (show_keys)
 
             console = c;
 
@@ -2026,7 +2029,7 @@ namespace Thetis
             lock (m_objLock)
             {
                 y = kyty + 2;
-                dx = 11; dy = 19;
+                dx = HighDpi.Px(11); dy = HighDpi.Px(19); // Jull1ano fork: DPI-scaled
 
                 if (this.Disposing || this.IsDisposed) return;
                 if (formGraphics == null) formGraphics = this.CreateGraphics(); //MW0LGE

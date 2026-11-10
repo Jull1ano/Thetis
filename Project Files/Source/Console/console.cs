@@ -697,6 +697,7 @@ namespace Thetis
             app_data_path += "Debug\\";
 #endif
             AppDataPath = app_data_path;
+            HighDpi.LoadTextStep(app_data_path); // Jull1ano fork: Setup > Appearance > High DPI text size
             //AppDataPath has been set at this point
 
             if (_check_error_log)
@@ -748,6 +749,8 @@ namespace Thetis
 
             InitializeComponent();								// Windows Forms Generated Code
             Common.DoubleBufferAll(this, true);
+            HighDpi.PrepareForm(this);  // Jull1ano fork: text size, list rows (HighDpi.cs)
+            HighDpi.StartFormWatcher(); // and the same for every other form when it opens
 
             InitialiseAndromedaMenus();
 
@@ -44783,17 +44786,32 @@ namespace Thetis
         private void Console_Shown(object sender, EventArgs e)
         {
             // Jull1ano fork: test hook for high-DPI captures (THETIS_HIDPI_OPEN=setup opens Setup at start)
+            // THETIS_HIDPI_OPEN: "setup:tpA:tpB" opens Setup on those tab pages, "cwx" the CW memories window,
+            // "finder:text" Finder with that search text
             string hidpiOpen = Environment.GetEnvironmentVariable("THETIS_HIDPI_OPEN");
-            if (hidpiOpen != null && hidpiOpen.StartsWith("setup")) BeginInvoke(new MethodInvoker(() =>
+            if (!string.IsNullOrEmpty(hidpiOpen)) BeginInvoke(new MethodInvoker(() =>
             {
-                setupToolStripMenuItem1_Click(this, EventArgs.Empty);
-                string[] tabs = hidpiOpen.Split(':'); // setup:tpDisplay:tpDisplayGeneral selects those tab pages
-                for (int t = 1; t < tabs.Length; t++)
+                string[] parts = hidpiOpen.Split(':');
+                if (parts[0] == "setup")
                 {
-                    Control[] found = SetupForm.Controls.Find(tabs[t], true);
-                    if (found.Length > 0 && found[0] is TabPage tp && tp.Parent is TabControl tc) tc.SelectedTab = tp;
+                    setupToolStripMenuItem1_Click(this, EventArgs.Empty);
+                    for (int t = 1; t < parts.Length; t++)
+                    {
+                        Control[] found = SetupForm.Controls.Find(parts[t], true);
+                        if (found.Length > 0 && found[0] is TabPage tp && tp.Parent is TabControl tc) tc.SelectedTab = tp;
+                    }
+                    HighDpi.Log("Setup: Size " + SetupForm.Size + " Client " + SetupForm.ClientSize);
                 }
-                HighDpi.Log("Setup: Size " + SetupForm.Size + " Client " + SetupForm.ClientSize);
+                else if (parts[0] == "cwx")
+                {
+                    CWXForm.Show();
+                }
+                else if (parts[0] == "finder")
+                {
+                    finderMenuItem_Click(this, EventArgs.Empty);
+                    Control[] found = _frmFinder.Controls.Find("txtSearch", true);
+                    if (found.Length > 0 && parts.Length > 1) found[0].Text = parts[1];
+                }
             }));
 
             //attempt to fix ampview on top issue
@@ -44811,30 +44829,30 @@ namespace Thetis
             // NOTE: Important if you are ading more items to the status bar
             // MW0LGE_21e could not get the designer to keep widths of these
             // so force them here
-            toolStripDropDownButton_ScreenSize.Width = HighDpi.Px(110);
-            toolStripDropDownButton_CPU.Width = HighDpi.Px(68);
-            toolStripStatusLabel_Volts.Width = HighDpi.Px(60);
-            toolStripStatusLabel_Amps.Width = HighDpi.Px(50);
-            toolStripStatusLabel_SeqWarning.Width = HighDpi.Px(18);
-            toolStripStatusLabel_TXInhibit.Width = HighDpi.Px(18);
-            toolStripStatusLabelRXAnt.Width = HighDpi.Px(90);
-            toolStripStatusLabelTXAnt.Width = HighDpi.Px(90);
-            toolStripStatusLabelAndromedaMulti.Width = HighDpi.Px(140);
+            toolStripDropDownButton_ScreenSize.Width = HighDpi.PxText(110);
+            toolStripDropDownButton_CPU.Width = HighDpi.PxText(68);
+            toolStripStatusLabel_Volts.Width = HighDpi.PxText(60);
+            toolStripStatusLabel_Amps.Width = HighDpi.PxText(50);
+            toolStripStatusLabel_SeqWarning.Width = HighDpi.PxText(18);
+            toolStripStatusLabel_TXInhibit.Width = HighDpi.PxText(18);
+            toolStripStatusLabelRXAnt.Width = HighDpi.PxText(90);
+            toolStripStatusLabelTXAnt.Width = HighDpi.PxText(90);
+            toolStripStatusLabelAndromedaMulti.Width = HighDpi.PxText(140);
 
-            toolStripStatusLabel_N1MM.Width = HighDpi.Px(22);
-            toolStripStatusLabel_TCI.Width = HighDpi.Px(22);
-            toolStripStatusLabel_CatTCPip.Width = HighDpi.Px(22);
-            toolStripStatusLabel_CatSerial.Width = HighDpi.Px(22);
-            toolStripStatusLabel_CMstatus.Width = HighDpi.Px(22);
-            toolStripStatus_PAspacer.Width = HighDpi.Px(8);
-            toolStripStatusLabel_PAstatus.Width = HighDpi.Px(32);
-            toolStripStatusLabel_play_record.Width = HighDpi.Px(16);
-            toolStripStatus_RecordPlay_spacer.Width = HighDpi.Px(8);
+            toolStripStatusLabel_N1MM.Width = HighDpi.PxText(22);
+            toolStripStatusLabel_TCI.Width = HighDpi.PxText(22);
+            toolStripStatusLabel_CatTCPip.Width = HighDpi.PxText(22);
+            toolStripStatusLabel_CatSerial.Width = HighDpi.PxText(22);
+            toolStripStatusLabel_CMstatus.Width = HighDpi.PxText(22);
+            toolStripStatus_PAspacer.Width = HighDpi.PxText(8);
+            toolStripStatusLabel_PAstatus.Width = HighDpi.PxText(32);
+            toolStripStatusLabel_play_record.Width = HighDpi.PxText(16);
+            toolStripStatus_RecordPlay_spacer.Width = HighDpi.PxText(8);
 
-            toolStripStatusLabel_timer.Width = HighDpi.Px(80);
-            toolStripStatusLabel_UTCTime.Width = HighDpi.Px(92);
-            toolStripStatusLabel_Date.Width = HighDpi.Px(104);
-            toolStripStatusLabel_LocalTime.Width = HighDpi.Px(92);
+            toolStripStatusLabel_timer.Width = HighDpi.PxText(80);
+            toolStripStatusLabel_UTCTime.Width = HighDpi.PxText(92);
+            toolStripStatusLabel_Date.Width = HighDpi.PxText(104);
+            toolStripStatusLabel_LocalTime.Width = HighDpi.PxText(92);
         }
 
         public bool TwoTone

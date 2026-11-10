@@ -549,12 +549,13 @@ namespace Thetis
             ListBox listBox = (ListBox)sender;
             SearchData sd = listBox.Items[e.Index] as SearchData;
 
-            int height = 20;
+            int line = HighDpi.Enabled ? HighDpi.PxText(20) : 20; // Jull1ano fork: row height follows DPI and text size
+            int height = line;
 
             if (sd != null && _fullDetails)
             {
-                if (!string.IsNullOrEmpty(sd.Text)) height += 20;
-                if (!string.IsNullOrEmpty(sd.ToolTip)) height += 20;
+                if (!string.IsNullOrEmpty(sd.Text)) height += line;
+                if (!string.IsNullOrEmpty(sd.ToolTip)) height += line;
             }
 
             e.ItemHeight = height;

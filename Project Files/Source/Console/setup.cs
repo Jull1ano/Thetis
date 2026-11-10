@@ -102,6 +102,38 @@ namespace Thetis
 
         #region Constructor and Destructor
 
+        // Jull1ano fork: Appearance > General > "High DPI (fork)" - text size Default / +1 / +2, used at the next start
+        private void addHighDpiOptions()
+        {
+            Control anchor = groupBoxTS70; // Waterfall Time Labels
+            if (anchor == null || anchor.Parent == null) return;
+            GroupBox grp = new GroupBox();
+            grp.Text = "High DPI (fork)";
+            grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
+            grp.Size = new Size(anchor.Width, HighDpi.Px(52));
+            Label lbl = new Label();
+            lbl.Text = "Text size:";
+            lbl.AutoSize = true;
+            lbl.Location = new Point(HighDpi.Px(10), HighDpi.Px(25));
+            ComboBox cmb = new ComboBox();
+            cmb.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmb.Items.AddRange(new object[] { "Default", "+1", "+2" });
+            cmb.Location = new Point(HighDpi.Px(80), HighDpi.Px(21));
+            cmb.Width = HighDpi.Px(80);
+            cmb.SelectedIndex = HighDpi.TextStep;
+            Label note = new Label();
+            note.Text = "(after a restart)";
+            note.AutoSize = true;
+            note.ForeColor = SystemColors.GrayText;
+            note.Location = new Point(HighDpi.Px(170), HighDpi.Px(25));
+            cmb.SelectedIndexChanged += (s, e) => { if (console != null) HighDpi.SaveTextStep(console.AppDataPath, cmb.SelectedIndex); };
+            toolTip1.SetToolTip(cmb, "Makes all text larger in steps of one point (Default is the size Thetis was designed with). Text that would not fit its button stays smaller.");
+            grp.Controls.Add(lbl);
+            grp.Controls.Add(cmb);
+            grp.Controls.Add(note);
+            anchor.Parent.Controls.Add(grp);
+        }
+
         public Setup(Console c)
         {
             LogTool.AddLogEntry("      Setup init components...", "INITCOMPSETUP");
@@ -136,6 +168,12 @@ namespace Thetis
                     MaximumSize = need;
                     Size = need;
                 }
+            }
+
+            if (HighDpi.Enabled)
+            {
+                addHighDpiOptions();
+                HighDpi.PrepareForm(this);
             }
 
             console = c;
