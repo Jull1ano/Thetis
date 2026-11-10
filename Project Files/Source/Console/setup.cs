@@ -102,6 +102,31 @@ namespace Thetis
 
         #region Constructor and Destructor
 
+        // Jull1ano fork: Appearance > General > "Tuning (fork)", under Cursor/Peak Readout
+        private void addForkTuningOptions()
+        {
+            Control anchor = grpDisplayPeakCursor;
+            if (anchor == null || anchor.Parent == null) return;
+            GroupBox grp = new GroupBox();
+            grp.Name = "grpForkTuning";
+            grp.Text = "Tuning (fork)";
+            grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
+            grp.Size = new Size(anchor.Width, HighDpi.Px(46));
+            CheckBox chk = new CheckBox();
+            chk.Name = "chkForkBandAware";
+            chk.Text = "Band-aware tuning";
+            chk.AutoSize = false;
+            chk.Size = new Size(grp.Width - HighDpi.Px(16), HighDpi.Px(20));
+            chk.Location = new Point(HighDpi.Px(8), HighDpi.Px(20));
+            chk.Checked = console == null || console.BandAwareTuning;
+            chk.CheckedChanged += (s, e) => { if (console != null) console.BandAwareTuning = chk.Checked; };
+            toolTip1.SetToolTip(chk, "Tuning by hand into another band selects the mode you last used there (first time: AM on\r\n" +
+                "LW/MW and the SW broadcast bands, LSB on 160/80/40 m, USB on the other ham bands) and the tune step\r\n" +
+                "you last set there for that mode (first time: 9 kHz on MW AM, 5 kHz on SW broadcast AM). As AltSDR.");
+            grp.Controls.Add(chk);
+            anchor.Parent.Controls.Add(grp);
+        }
+
         // Jull1ano fork: Appearance > General > "High DPI (fork)" - text size Default / +1 / +2, used at the next start
         private void addHighDpiOptions()
         {
@@ -224,11 +249,9 @@ namespace Thetis
                 }
             }
 
-            if (HighDpi.Enabled)
-            {
-                addHighDpiOptions();
-                HighDpi.PrepareForm(this);
-            }
+            if (HighDpi.Enabled) addHighDpiOptions();
+            addForkTuningOptions(); // Jull1ano fork: band-aware tuning
+            if (HighDpi.Enabled) HighDpi.PrepareForm(this);
 
             console = c;
             this.Owner = c;

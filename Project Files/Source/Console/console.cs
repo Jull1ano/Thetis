@@ -698,6 +698,7 @@ namespace Thetis
 #endif
             AppDataPath = app_data_path;
             HighDpi.LoadTextStep(app_data_path); // Jull1ano fork: Setup > Appearance > High DPI text size
+            forkLoadBandMemory(app_data_path);    // Jull1ano fork: band-aware tuning (Setup > Appearance > Tuning)
             Display.SmoothTrace = HighDpi.LoadSmoothTrace(app_data_path); // Jull1ano fork: Setup > Appearance > RX Display > Smooth
             Display.FftSmooth = HighDpi.LoadForkFloat(app_data_path, HighDpi.FFT_SMOOTH_FILE, 0f, 0f, 16f); // and FFT Smooth
             //AppDataPath has been set at this point
@@ -753,6 +754,8 @@ namespace Thetis
             Common.DoubleBufferAll(this, true);
             btnMemoryQuickSave.TextAlign = ContentAlignment.MiddleCenter; // Jull1ano fork: same baseline as Restore (was TopCenter)
             HighDpi.PrepareForm(this);  // Jull1ano fork: text size, list rows (HighDpi.cs)
+            HighDpi.EnsureReadable(txtVFOABand); // Jull1ano fork: band text at least 4.5:1 on its background
+            HighDpi.EnsureReadable(txtVFOBBand);
             HighDpi.StartFormWatcher(); // and the same for every other form when it opens
 
             InitialiseAndromedaMenus();
@@ -5991,6 +5994,7 @@ namespace Thetis
             //
 
             m_bSetBandRunning = false;
+            forkApplyStepForMode(RX1DSPMode); // Jull1ano fork: the step set for this band and mode
 
             //MW0LGE_21d
             if (oldBand != RX1Band ||
@@ -11304,6 +11308,7 @@ namespace Thetis
                 int old_index = tune_step_index;
 
                 tune_step_index = value;
+                forkRememberStep(); // Jull1ano fork: band-aware tuning, the step per band and mode
 
                 // store the step index against mode. This is recovered on mode change event MW0LGE_21j
                 if (m_nLastRXThatHadModeChange == 1)
@@ -11341,7 +11346,9 @@ namespace Thetis
 
             m_nLastRXThatHadModeChange = rx;
 
-            TuneStepIndex = m_nTuneStepsByMode[(int)mode];
+            _forkInModeStep = true; // Jull1ano fork: Thetis' own step per mode is not a choice to remember
+            try { TuneStepIndex = m_nTuneStepsByMode[(int)mode]; }
+            finally { _forkInModeStep = false; }
         }
         private bool m_bTuneStepPerModeRX1 = false;
         public bool TuneStepPerModeRX1
@@ -26364,6 +26371,7 @@ namespace Thetis
         public static bool ALTM = false; // ke9ns add
         private void Console_KeyDown(object sender, System.Windows.Forms.KeyEventArgs e)
         {
+            forkMarkUserTune(); // Jull1ano fork: band-aware tuning
             if (Common.ShiftKeyDown) Display.DisplayShiftKeyDown = true;
 
             if (e.Alt == true) // ke9ns add
@@ -31128,6 +31136,7 @@ namespace Thetis
 
         private void Console_MouseWheel(object sender, System.Windows.Forms.MouseEventArgs e)
         {
+            forkMarkUserTune(); // Jull1ano fork: band-aware tuning
             if (this.ActiveControl is PrettyTrackBar)
             {
                 btnHidden.Focus();
@@ -32078,6 +32087,7 @@ namespace Thetis
 
         private void txtVFOAFreq_KeyPress(object sender, System.Windows.Forms.KeyPressEventArgs e)
         {
+            forkMarkUserTune(); // Jull1ano fork: band-aware tuning
             string separator = System.Globalization.CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
             int KeyCode = (int)e.KeyChar;
             if ((KeyCode < 48 || KeyCode > 57) &&			// numeric keys
@@ -44791,6 +44801,7 @@ namespace Thetis
             // Jull1ano fork: test hook for high-DPI captures (THETIS_HIDPI_OPEN=setup opens Setup at start)
             // THETIS_HIDPI_OPEN: "setup:tpA:tpB[:button]" opens Setup on those tab pages (and clicks that button), "cwx" the CW memories window,
             // "finder:text" Finder with that search text
+            BeginInvoke(new MethodInvoker(() => _forkReady = true)); // Jull1ano fork: band memory records from here on
             string hidpiOpen = Environment.GetEnvironmentVariable("THETIS_HIDPI_OPEN");
             if (!string.IsNullOrEmpty(hidpiOpen)) BeginInvoke(new MethodInvoker(() =>
             {
@@ -44822,6 +44833,26 @@ namespace Thetis
                         if (items.Length > 0) items[0].PerformClick();
                         else HighDpi.Log("menu item not found: " + parts[t]);
                     }
+                }
+                else if (parts[0] == "usertune")
+                {
+                    // usertune:<MHz>:<MHz>...: each frequency as if tuned by hand, 2 s apart, the result logged
+                    int k = 1;
+                    System.Windows.Forms.Timer tt = new System.Windows.Forms.Timer();
+                    tt.Interval = 2000;
+                    tt.Tick += (s2, e2) =>
+                    {
+                        HighDpi.Log("usertune at " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture) + " band " + rx1_band + " mode " + RX1DSPMode + " step " + tune_step_list[tune_step_index].Name);
+                        if (k >= parts.Length) { tt.Stop(); return; }
+                        double f;
+                        if (double.TryParse(parts[k], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                        {
+                            forkMarkUserTune();
+                            VFOAFreq = f;
+                        }
+                        k++;
+                    };
+                    tt.Start();
                 }
                 else if (parts[0] == "bandstack")
                 {
@@ -45477,9 +45508,176 @@ namespace Thetis
                 this.Text = BasicTitleBar;
             }
         }
+        // ---------------------------------------------------------------- Jull1ano fork: band-aware tuning
+        // As AltSDR: tuning by hand (spectrum click / drag, wheel, keys, typing a frequency) into another band
+        // selects the mode last used in that band - the first time AM on LW/MW, the SW broadcast bands and WWV,
+        // LSB on 160/80/40 m, USB on the other ham bands (general coverage keeps the mode) - and the tune step
+        // last set in that band for that mode - the first time 9 kHz on MW AM (10 kHz in the US region), 5 kHz
+        // on SW broadcast AM. Band buttons, memories, spots and CAT keep doing what they did. Never in TX.
+        // Saved in fork_band_memory.txt in the settings folder.
+        private bool _forkUserTune = false;
+        private DSPMode _forkModeAtUserTune = DSPMode.FIRST;
+        private bool _forkBandAware = true;
+        private bool _forkApplyingBand = false;
+        private bool _forkInModeStep = false;
+        private bool _forkReady = false;
+        private string _forkMemoryFile = null;
+        private readonly Dictionary<Band, DSPMode> _forkBandMode = new Dictionary<Band, DSPMode>();
+        private readonly Dictionary<string, string> _forkBandStep = new Dictionary<string, string>();
+
+        public bool BandAwareTuning
+        {
+            get { return _forkBandAware; }
+            set { _forkBandAware = value; forkSaveBandMemory(); }
+        }
+
+        // the current UI message is a hand tuning action
+        private void forkMarkUserTune()
+        {
+            if (_forkUserTune) return;
+            _forkUserTune = true;
+            _forkModeAtUserTune = RX1DSPMode;
+            try { BeginInvoke(new MethodInvoker(() => _forkUserTune = false)); }
+            catch { _forkUserTune = false; }
+        }
+
+        private static bool forkIsBroadcast(Band b)
+        {
+            return b == Band.BLMF || b == Band.WWV || (b >= Band.B120M && b <= Band.B11M);
+        }
+
+        private static bool forkRememberable(Band b)
+        {
+            return b > Band.GEN && b < Band.LAST && !(b >= Band.VHF0 && b <= Band.VHF13);
+        }
+
+        private static DSPMode forkDefaultMode(Band b)
+        {
+            if (forkIsBroadcast(b)) return DSPMode.AM;
+            switch (b)
+            {
+                case Band.B160M: case Band.B80M: case Band.B40M: return DSPMode.LSB;
+                case Band.B60M: case Band.B30M: case Band.B20M: case Band.B17M: case Band.B15M: case Band.B12M: case Band.B10M: case Band.B6M: return DSPMode.USB;
+                default: return DSPMode.FIRST; // keep the mode
+            }
+        }
+
+        private string forkDefaultStep(Band b, DSPMode m)
+        {
+            if (m != DSPMode.AM && m != DSPMode.SAM) return null;
+            if (b == Band.BLMF) return current_region == FRSRegion.US ? "10kHz" : "9kHz";
+            if (b >= Band.B120M && b <= Band.B11M) return "5kHz";
+            return null;
+        }
+
+        private static string forkKey(Band b, DSPMode m) { return b.ToString() + "|" + m.ToString(); }
+
+        private void forkOnBandStackChange(Band oldBand, Band newBand, DSPMode oldMode, DSPMode newMode)
+        {
+            if (!_forkReady) return;
+            if (oldBand == newBand)
+            {
+                // a mode change inside a band: that band's mode from now on
+                if (oldMode != newMode && forkRememberable(newBand) && isDSPModeValid(newMode))
+                {
+                    _forkBandMode[newBand] = newMode;
+                    forkSaveBandMemory();
+                }
+                return;
+            }
+            if (forkRememberable(oldBand) && isDSPModeValid(oldMode))
+            {
+                _forkBandMode[oldBand] = oldMode;
+                forkSaveBandMemory();
+            }
+            if (!_forkBandAware || !_forkUserTune || MOX) return;
+            if (RX1DSPMode != _forkModeAtUserTune) return; // the action chose its own mode
+            DSPMode want;
+            if (!_forkBandMode.TryGetValue(newBand, out want)) want = forkDefaultMode(newBand);
+            Band target = newBand;
+            BeginInvoke(new MethodInvoker(() => forkApplyBand(target, want)));
+        }
+
+        private void forkApplyBand(Band b, DSPMode want)
+        {
+            if (rx1_band != b || MOX) return;
+            _forkApplyingBand = true;
+            try
+            {
+                if (isDSPModeValid(want) && RX1DSPMode != want) RX1DSPMode = want;
+                forkApplyStepForMode(RX1DSPMode);
+                HighDpi.Log("band-aware: " + b + " -> " + RX1DSPMode + ", step " + tune_step_list[tune_step_index].Name);
+            }
+            finally { _forkApplyingBand = false; }
+        }
+
+        private void forkApplyStepForMode(DSPMode mode)
+        {
+            if (!_forkReady || !_forkBandAware || !forkRememberable(rx1_band) || !isDSPModeValid(mode)) return;
+            string name;
+            if (!_forkBandStep.TryGetValue(forkKey(rx1_band, mode), out name)) name = forkDefaultStep(rx1_band, mode);
+            if (string.IsNullOrEmpty(name)) return;
+            int idx = TuneStepLookup(name);
+            if (idx < 0 || idx == tune_step_index) return;
+            bool was = _forkApplyingBand;
+            _forkApplyingBand = true;
+            try { TuneStepIndex = idx; }
+            finally { _forkApplyingBand = was; }
+        }
+
+        private void forkRememberStep()
+        {
+            if (!_forkReady || _forkApplyingBand || _forkInModeStep || m_bSetBandRunning) return;
+            if (tune_step_list == null || tune_step_index < 0 || tune_step_index >= tune_step_list.Count) return;
+            if (!forkRememberable(rx1_band) || !isDSPModeValid(RX1DSPMode)) return;
+            string name = tune_step_list[tune_step_index].Name;
+            string key = forkKey(rx1_band, RX1DSPMode);
+            string old;
+            if (_forkBandStep.TryGetValue(key, out old) && old == name) return;
+            _forkBandStep[key] = name;
+            forkSaveBandMemory();
+        }
+
+        private void forkLoadBandMemory(string dataPath)
+        {
+            _forkMemoryFile = System.IO.Path.Combine(dataPath ?? "", "fork_band_memory.txt");
+            try
+            {
+                if (!System.IO.File.Exists(_forkMemoryFile)) return;
+                foreach (string line in System.IO.File.ReadAllLines(_forkMemoryFile))
+                {
+                    string[] p = line.Split('\t');
+                    if (p.Length == 3 && p[0] == "option" && p[1] == "band_aware") _forkBandAware = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
+                    else if (p.Length == 4 && p[0] == "step") _forkBandStep[p[1] + "|" + p[2]] = p[3];
+                }
+            }
+            catch { }
+        }
+
+        private void forkSaveBandMemory()
+        {
+            if (string.IsNullOrEmpty(_forkMemoryFile)) return;
+            try
+            {
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                sb.Append("option\tband_aware\t").Append(_forkBandAware ? "1" : "0").Append("\r\n");
+                foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
+                    sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
+                foreach (KeyValuePair<string, string> kv in _forkBandStep)
+                {
+                    string[] k = kv.Key.Split('|');
+                    if (k.Length == 2) sb.Append("step\t").Append(k[0]).Append('\t').Append(k[1]).Append('\t').Append(kv.Value).Append("\r\n");
+                }
+                System.IO.File.WriteAllText(_forkMemoryFile, sb.ToString());
+            }
+            catch { }
+        }
+
         private void handleBSFChange(Band oldBand, Band newBand, DSPMode oldMode, DSPMode newMode, Filter oldFilter, Filter newFilter, double oldFreq, double newFreq, double oldCentreF, double newCentreF, bool oldCTUN, bool newCTUN, int oldZoomSlider, int newZoomSlider)
         {
             if (m_bSetBandRunning) return;
+            forkOnBandStackChange(oldBand, newBand, oldMode, newMode); // Jull1ano fork: band-aware tuning
 
             BandStackFilter bsf = BandStackManager.GetFilter(oldBand);
 
@@ -45892,6 +46090,7 @@ namespace Thetis
 
             //recover the stepindex.
             updateStepIndexForMode(rx, newMode);
+            if (rx == 1 && !m_bSetBandRunning) forkApplyStepForMode(newMode); // Jull1ano fork: the step set for this band and mode
 
             //vfosync
             handleVfoSyncMode(rx, newMode);
@@ -49026,6 +49225,7 @@ namespace Thetis
 
         private void pnlDisplay_MouseDown(object sender, MouseEventArgs e)
         {
+            forkMarkUserTune(); // Jull1ano fork: band-aware tuning
             if (Display.PausedDisplay) return;
 
             if (m_frmNotchPopup.Visible) return;
@@ -49876,6 +50076,7 @@ namespace Thetis
 
         unsafe private void pnlDisplay_MouseMove(object sender, MouseEventArgs e)
         {
+            if (e.Button != MouseButtons.None) forkMarkUserTune(); // Jull1ano fork: band-aware tuning (dragging)
             if (Display.PausedDisplay) return;
 
             if (panDragMove(e)) return; // Jull1ano fork: click-or-pan / pan in progress (SmoothPan.cs)
@@ -51121,6 +51322,7 @@ namespace Thetis
 
         private void pnlDisplay_MouseUp(object sender, MouseEventArgs e)
         {
+            forkMarkUserTune(); // Jull1ano fork: band-aware tuning
             if (Display.PausedDisplay) return;
 
             if (e.Button == MouseButtons.Left)

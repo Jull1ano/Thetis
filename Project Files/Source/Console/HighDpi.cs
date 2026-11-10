@@ -247,11 +247,24 @@ namespace Thetis
             }
         }
 
+        private static float _boost = TEXT_BASE_BOOST;
+
         private static void setTextStep(int n)
         {
             TextStep = Math.Max(0, Math.Min(2, n));
-            TextScale = (8.25f + BaseBoost + TextStep) / 8.25f;
+            _boost = BaseBoost;
+            TextScale = ScaledFontSize(8.25f) / 8.25f;
         }
+
+        // the size a font of pt points gets here: Default / +1 / +2 scale every font alike; the base boost is for
+        // the small UI text only - full at 8.25 pt, tapering to none at 11 pt: Windows' stretch of the original
+        // makes small text look heavier, a 12 pt list (Finder) the original shows about as it is
+        public static float StepScale { get { return (8.25f + TextStep) / 8.25f; } }
+        public static float BoostFor(float pt) { return _boost * Math.Max(0f, Math.Min(1f, (11f - pt) / (11f - 8.25f))); }
+        public static float ScaledFontSize(float pt) { return pt * StepScale + BoostFor(pt); }
+
+        // pixel sizes that hold text of a given font size (list rows ...)
+        public static int PxFont(int v, float pt) { return (int)Math.Round(v * Scale * ScaledFontSize(pt) / pt); }
 
         // controls whose fonts the program sets itself and that must keep their size (VFO digits, meter text)
         private static readonly System.Collections.Generic.HashSet<string> _keepFont = new System.Collections.Generic.HashSet<string>
@@ -280,6 +293,7 @@ namespace Thetis
                 FixGrids(form, form);
                 ScaleButtonImages(form);
                 FixAutoSizeBounds(form);
+                ApplyEditPadding(form);
             }
             catch (Exception ex) { Log("PrepareForm " + form.Name + ": " + ex); }
         }
@@ -495,6 +509,235 @@ namespace Thetis
             }
         }
 
+        // ---------------------------------------------------------------- inner padding of edit fields
+        // Numbers in spin boxes sat right against the arrows, combo texts against the left border. Edit fields
+        // get a margin of 3 units on each side where the text has the room (the widest value a spin box can
+        // show), drop-down lists draw their text with the same left padding. Never less than Windows gave.
+
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [StructLayout(LayoutKind.Sequential)]
+        private struct COMBOBOXINFO
+        {
+            public int cbSize;
+            public int rcItemL, rcItemT, rcItemR, rcItemB;
+            public int rcButtonL, rcButtonT, rcButtonR, rcButtonB;
+            public int stateButton;
+            public IntPtr hwndCombo, hwndItem, hwndList;
+        }
+        [DllImport("user32.dll")] private static extern bool GetComboBoxInfo(IntPtr hwnd, ref COMBOBOXINFO pcbi);
+
+        private const int EM_SETMARGINS = 0xD3, EM_GETMARGINS = 0xD4, EC_LEFTMARGIN = 1, EC_RIGHTMARGIN = 2;
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object> _padded =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object>();
+
+        public static int EditPad { get { return Px(3); } }
+
+        public static void ApplyEditPadding(System.Windows.Forms.Control root)
+        {
+            if (!Enabled || root == null) return;
+            foreach (System.Windows.Forms.Control c in root.Controls)
+            {
+                try
+                {
+                    if (_keepFont.Contains(c.Name)) { }
+                    else if (c is System.Windows.Forms.UpDownBase ud)
+                    {
+                        foreach (System.Windows.Forms.Control ch in ud.Controls)
+                            if (ch is System.Windows.Forms.TextBox tb) registerPad(tb, ud);
+                        continue; // its own children are done
+                    }
+                    else if (c is System.Windows.Forms.TextBox tb && !tb.Multiline) registerPad(tb, null);
+                    else if (c is System.Windows.Forms.ComboBox cb)
+                    {
+                        if (cb.DropDownStyle == System.Windows.Forms.ComboBoxStyle.DropDownList) registerComboListPad(cb);
+                        else if (cb.DropDownStyle == System.Windows.Forms.ComboBoxStyle.DropDown) registerPad(cb, null);
+                        continue;
+                    }
+                }
+                catch (Exception ex) { Log("ApplyEditPadding " + c.Name + ": " + ex.Message); }
+                if (c.HasChildren) ApplyEditPadding(c);
+            }
+        }
+
+        private static void registerPad(System.Windows.Forms.Control edit, System.Windows.Forms.UpDownBase owner)
+        {
+            if (_padded.TryGetValue(edit, out object _)) return;
+            _padded.Add(edit, owner);
+            EventHandler again = (s, e) => padEdit(edit);
+            edit.HandleCreated += again;
+            edit.FontChanged += again;
+            edit.SizeChanged += again;
+            if (owner == null) edit.TextChanged += again;
+            if (edit.IsHandleCreated) padEdit(edit);
+        }
+
+        // the widest text the field shows: a spin box's largest / smallest value, else its current text
+        private static string widestText(System.Windows.Forms.Control edit)
+        {
+            string t = edit.Text ?? "";
+            if (_padded.TryGetValue(edit, out object o) && o is System.Windows.Forms.NumericUpDown nud)
+            {
+                string fmt = (nud.ThousandsSeparator ? "N" : "F") + nud.DecimalPlaces;
+                foreach (decimal v in new decimal[] { nud.Maximum, nud.Minimum })
+                {
+                    string sv = nud.Hexadecimal ? ((long)v).ToString("X") : v.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture);
+                    if (sv.Length > t.Length) t = sv;
+                }
+            }
+            return t;
+        }
+
+        private static void padEdit(System.Windows.Forms.Control edit)
+        {
+            if (!edit.IsHandleCreated) return;
+            try
+            {
+                IntPtr h = edit.Handle;
+                if (edit is System.Windows.Forms.ComboBox cbx)
+                {
+                    COMBOBOXINFO ci = new COMBOBOXINFO(); ci.cbSize = Marshal.SizeOf(typeof(COMBOBOXINFO));
+                    if (!GetComboBoxInfo(cbx.Handle, ref ci) || ci.hwndItem == IntPtr.Zero) return;
+                    h = ci.hwndItem;
+                }
+                int textW = System.Windows.Forms.TextRenderer.MeasureText(widestText(edit) + "0", edit.Font, System.Drawing.Size.Empty,
+                    System.Windows.Forms.TextFormatFlags.NoPadding | System.Windows.Forms.TextFormatFlags.SingleLine).Width;
+                int room = (edit is System.Windows.Forms.ComboBox ? edit.ClientSize.Width - System.Windows.Forms.SystemInformation.VerticalScrollBarWidth : edit.ClientSize.Width) - textW;
+                int m = Math.Max(0, Math.Min(EditPad, room / 2));
+                long cur = SendMessage(h, EM_GETMARGINS, IntPtr.Zero, IntPtr.Zero).ToInt64();
+                int l = (int)(cur & 0xFFFF), r = (int)((cur >> 16) & 0xFFFF);
+                int nl = Math.Max(l, m), nr = Math.Max(r, m);
+                if (nl != l || nr != r)
+                    SendMessage(h, EM_SETMARGINS, (IntPtr)(EC_LEFTMARGIN | EC_RIGHTMARGIN), (IntPtr)((nl & 0xFFFF) | (nr << 16)));
+            }
+            catch (Exception ex) { Log("padEdit " + edit.Name + ": " + ex.Message); }
+        }
+
+        // a drop-down list has no edit field: its text is drawn here, with the padding
+        private static void registerComboListPad(System.Windows.Forms.ComboBox cb)
+        {
+            if (cb.DrawMode != System.Windows.Forms.DrawMode.Normal || _padded.TryGetValue(cb, out object _)) return;
+            _padded.Add(cb, null);
+            if (cb.IsHandleCreated) toOwnerDraw(cb);
+            else
+            {
+                EventHandler once = null;
+                once = (s, e) => { cb.HandleCreated -= once; cb.BeginInvoke(new Action(() => toOwnerDraw(cb))); };
+                cb.HandleCreated += once;
+            }
+        }
+
+        private static void toOwnerDraw(System.Windows.Forms.ComboBox cb)
+        {
+            try
+            {
+                if (cb.DrawMode != System.Windows.Forms.DrawMode.Normal) return;
+                int before = cb.Height, itemH = cb.ItemHeight;
+                cb.DrawItem += drawPaddedComboItem;
+                cb.DrawMode = System.Windows.Forms.DrawMode.OwnerDrawFixed;
+                cb.ItemHeight = itemH;
+                if (cb.Height != before) cb.ItemHeight = Math.Max(1, itemH + (before - cb.Height)); // the same height as before
+            }
+            catch (Exception ex) { Log("toOwnerDraw " + cb.Name + ": " + ex.Message); }
+        }
+
+        private static void drawPaddedComboItem(object sender, System.Windows.Forms.DrawItemEventArgs e)
+        {
+            System.Windows.Forms.ComboBox cb = sender as System.Windows.Forms.ComboBox;
+            if (cb == null) return;
+            e.DrawBackground();
+            if (e.Index >= 0 && e.Index < cb.Items.Count)
+            {
+                string t = cb.GetItemText(cb.Items[e.Index]);
+                bool sel = (e.State & System.Windows.Forms.DrawItemState.Selected) != 0;
+                System.Drawing.Color fore = !cb.Enabled ? System.Drawing.SystemColors.GrayText : sel ? System.Drawing.SystemColors.HighlightText : cb.ForeColor;
+                int textW = System.Windows.Forms.TextRenderer.MeasureText(t, cb.Font, System.Drawing.Size.Empty,
+                    System.Windows.Forms.TextFormatFlags.NoPadding | System.Windows.Forms.TextFormatFlags.SingleLine).Width;
+                int pad = Math.Max(Px(1), Math.Min(EditPad, e.Bounds.Width - textW - Px(1)));
+                System.Drawing.Rectangle r = new System.Drawing.Rectangle(e.Bounds.X + pad, e.Bounds.Y, Math.Max(1, e.Bounds.Width - pad), e.Bounds.Height);
+                System.Windows.Forms.TextRenderer.DrawText(e.Graphics, t, cb.Font, r, fore,
+                    System.Windows.Forms.TextFormatFlags.VerticalCenter | System.Windows.Forms.TextFormatFlags.Left |
+                    System.Windows.Forms.TextFormatFlags.SingleLine | System.Windows.Forms.TextFormatFlags.NoPrefix |
+                    System.Windows.Forms.TextFormatFlags.EndEllipsis | System.Windows.Forms.TextFormatFlags.NoPadding);
+            }
+            e.DrawFocusRectangle();
+        }
+
+        // ---------------------------------------------------------------- readable text on coloured fields
+        // The VFO band text ("60M General RX") is green on the out-of-band grey: 4.0:1 for the active VFO, about
+        // 1.1:1 for the dimmed one (the same in the original). A field registered here keeps at least 4.5:1
+        // (WCAG AA): its background is darkened to half (the hue stays, so out-of-band still shows), then the
+        // text is lightened only as far as needed.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object> _readable =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object>();
+        private static bool _fixingContrast = false;
+        public const double MIN_CONTRAST = 4.5;
+
+        public static void EnsureReadable(System.Windows.Forms.Control c)
+        {
+            if (c == null || _readable.TryGetValue(c, out object _)) return;
+            _readable.Add(c, null);
+            c.ForeColorChanged += (s, e) => fixContrast(c);
+            c.BackColorChanged += (s, e) => fixContrast(c);
+            fixContrast(c);
+        }
+
+        private static double lin(int v) { double x = v / 255.0; return x <= 0.04045 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4); }
+        public static double Luminance(System.Drawing.Color c) { return 0.2126 * lin(c.R) + 0.7152 * lin(c.G) + 0.0722 * lin(c.B); }
+        public static double Contrast(System.Drawing.Color a, System.Drawing.Color b)
+        {
+            double la = Luminance(a), lb = Luminance(b);
+            return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+        }
+        private static System.Drawing.Color scaleColor(System.Drawing.Color c, double k)
+        {
+            return System.Drawing.Color.FromArgb(c.A, (int)Math.Max(0, Math.Min(255, Math.Round(c.R * k))),
+                (int)Math.Max(0, Math.Min(255, Math.Round(c.G * k))), (int)Math.Max(0, Math.Min(255, Math.Round(c.B * k))));
+        }
+        private static System.Drawing.Color mixColor(System.Drawing.Color a, System.Drawing.Color b, double t)
+        {
+            return System.Drawing.Color.FromArgb(a.A, (int)Math.Round(a.R + (b.R - a.R) * t), (int)Math.Round(a.G + (b.G - a.G) * t), (int)Math.Round(a.B + (b.B - a.B) * t));
+        }
+
+        // the text colour moved toward light (or dark) just far enough for MIN_CONTRAST on back
+        private static System.Drawing.Color readableFore(System.Drawing.Color fore, System.Drawing.Color back)
+        {
+            bool lighter = Luminance(fore) >= Luminance(back);
+            System.Drawing.Color target = System.Drawing.Color.White;
+            if (lighter)
+            {
+                int max = Math.Max(fore.R, Math.Max(fore.G, fore.B));
+                // first brighten in its own hue, then toward white
+                System.Drawing.Color bright = max > 0 ? scaleColor(fore, 255.0 / max) : System.Drawing.Color.White;
+                if (Contrast(bright, back) >= MIN_CONTRAST) { target = bright; }
+                else { fore = bright; target = System.Drawing.Color.White; }
+            }
+            else target = System.Drawing.Color.Black;
+            double lo = 0, hi = 1;
+            for (int i = 0; i < 14; i++)
+            {
+                double mid = (lo + hi) / 2;
+                if (Contrast(mixColor(fore, target, mid), back) >= MIN_CONTRAST) hi = mid; else lo = mid;
+            }
+            return mixColor(fore, target, hi);
+        }
+
+        private static void fixContrast(System.Windows.Forms.Control c)
+        {
+            if (_fixingContrast) return;
+            System.Drawing.Color f = c.ForeColor, b = c.BackColor;
+            if (f.A < 255 || b.A < 255 || Contrast(f, b) >= MIN_CONTRAST - 0.01) return;
+            _fixingContrast = true;
+            try
+            {
+                if (Luminance(f) >= Luminance(b) && Luminance(b) > 0.02) b = scaleColor(b, 0.5); // a darker surface first
+                if (Contrast(f, b) < MIN_CONTRAST) f = readableFore(f, b);
+                if (b != c.BackColor) c.BackColor = b;
+                if (f != c.ForeColor) c.ForeColor = f;
+            }
+            catch (Exception ex) { Log("fixContrast " + c.Name + ": " + ex.Message); }
+            finally { _fixingContrast = false; }
+        }
+
         // button icons (Database Manager ...): WinForms draws a button's Image at its own pixel size, so a 96 DPI
         // icon came out half size in its 200 % button. Redrawn once at the DPI scale when it still fits the button.
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Drawing.Image, object> _scaledImages =
@@ -646,11 +889,11 @@ namespace Thetis
             recordBounds(root);
             try
             {
-                setFont(root, sized(root.Font, root.Font.Size * TextScale));
+                setFont(root, sized(root.Font, ScaledFontSize(root.Font.Size)));
                 foreach (var kv in own)
                 {
                     if (_keepFont.Contains(kv.Key.Name)) continue;
-                    setFont(kv.Key, sized(kv.Value, kv.Value.Size * TextScale));
+                    setFont(kv.Key, sized(kv.Value, ScaledFontSize(kv.Value.Size)));
                 }
                 fitText(root);
             }
@@ -699,7 +942,7 @@ namespace Thetis
                 else if (c is System.Windows.Forms.TextBoxBase || c is System.Windows.Forms.ComboBox || c is System.Windows.Forms.UpDownBase ||
                          c is System.Windows.Forms.ListBox || c is System.Windows.Forms.ListView)
                 {
-                    float baseSize = c.Font.Size / TextScale;
+                    float baseSize = origSize(c);
                     float cap = baseSize * (8.25f + 1f) / 8.25f;
                     if (c.Font.Size > cap + 0.01f) setFont(c, sized(c.Font, cap));
                 }
@@ -712,7 +955,7 @@ namespace Thetis
                     if (!string.IsNullOrEmpty(c.Text) && c.Width > 0 && c.Height > 0)
                     {
                         float size = c.Font.Size;
-                        float min = size / TextScale;
+                        float min = Math.Min(size, origSize(c));
                         while (size - 0.25f >= min - 0.001f && !textFits(c, size, min)) size -= 0.25f;
                         // the text must not run under a neighbour that overlaps the control (a button over the
                         // end of a check box, a check box over the start of a right-aligned label)
@@ -843,7 +1086,7 @@ namespace Thetis
         {
             if (string.IsNullOrEmpty(gb.Text)) return;
             int w = gb.Width - Px(8) - Px(4);
-            float size = gb.Font.Size, min = size / TextScale;
+            float size = gb.Font.Size, min = Math.Min(size, origSize(gb));
             float fit = size;
             while (fit - 0.25f >= min - 0.001f)
             {

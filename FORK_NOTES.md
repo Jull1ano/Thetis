@@ -83,6 +83,14 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
 - Saved window sizes are restored and saved in the window's own scale (`HighDpi.FormScale`), and never
   larger than the screen.
 - A fixed-size label whose text changes later ("AGC Gain: 120") is fitted again on every change.
+- The base text boost (+0.75 pt) is for the small UI text only: full at 8.25 pt, none from 11 pt (the
+  Finder's 12 pt list is the original's size again). Finder opens at least 400 x 520 units.
+- Edit fields get an inner margin of 3 units where the text has room (spin boxes: their widest value);
+  drop-down lists draw their text with the same left padding. Equalizer: the window fits its contents,
+  the same margin below as on the left.
+- VFO band text ("60M General RX") keeps at least 4.5:1 contrast: the out-of-band grey is darkened to
+  half, the dimmed VFO B text lightened just enough (green on grey was 4.0:1 and 1.1:1, also in the
+  original).
 - Grids (Memory ...): fixed column widths, row heights and header heights are scaled once when the window
   opens (WinForms leaves them at 96 DPI here).
 - Meter containers: position and size are stored in 96 DPI units (they were used as pixels: half size); a
@@ -116,6 +124,16 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   `THETIS_HIDPI_OPEN=setup:<tab>:<tab>[:<button>]` / `cwx` / `finder:<text>` / `bandstack` /
   `menu:<menu item name>` opens that window after start, a button name clicks it (a colour button opens its
   palette); used for captures (build-tools: capture-thetis.ps1 -AlsoTitle "<other>" grabs the window).
+
+## Band-aware tuning (Setup > Appearance > General > Tuning (fork), on by default)
+
+As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band
+selects the mode last used in that band, the first time AM on LW/MW, the SW broadcast bands and WWV, LSB on
+160/80/40 m, USB on the other ham bands (general coverage keeps the mode); and the tune step last set in that
+band for that mode, the first time 9 kHz on MW AM (10 kHz in the US region) and 5 kHz on SW broadcast AM.
+Band buttons, band stacks, memories, spots and CAT keep their own mode; never during TX. Saved in
+`fork_band_memory.txt` in the settings folder. Test hook: `THETIS_HIDPI_OPEN=usertune:7.1:7.3:0.999` tunes
+those frequencies as if by hand and logs band, mode and step.
 
 ## Test settings (no rebuild needed)
 

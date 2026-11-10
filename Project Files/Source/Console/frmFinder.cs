@@ -536,6 +536,13 @@ namespace Thetis
         public new void Show()
         {
             Common.RestoreForm(this, this.Name, true);
+            if (HighDpi.Enabled) // Jull1ano fork: a bit larger than the original, its rows are long
+            {
+                int fw = HighDpi.PxForm(this, 400), fh = HighDpi.PxForm(this, 520, true);
+                if (Width < fw) Width = fw;
+                if (Height < fh) Height = fh;
+                HighDpi.FitOnScreen(this);
+            }
             if (string.IsNullOrEmpty(txtSearch.Text)) txtSearch.Text = "Search";
             base.Show();
             txtSearch.Focus();
@@ -549,7 +556,7 @@ namespace Thetis
             ListBox listBox = (ListBox)sender;
             SearchData sd = listBox.Items[e.Index] as SearchData;
 
-            int line = HighDpi.Enabled ? HighDpi.PxText(20) : 20; // Jull1ano fork: row height follows DPI and text size
+            int line = HighDpi.Enabled ? (int)Math.Round(HighDpi.Px(20) * lstResults.Font.SizeInPoints / 12f) : 20; // Jull1ano fork: rows follow DPI and the list font (12 pt at design)
             int height = line;
 
             if (sd != null && _fullDetails)

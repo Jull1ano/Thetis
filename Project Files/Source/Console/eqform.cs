@@ -199,6 +199,7 @@ namespace Thetis
             _legacyEQ_base_panel_location = pnlLegacyEQ.Location;
             _legacyEQ_base_form_size = this.MinimumSize;
             this.Size = _legacyEQ_base_form_size;
+            if (HighDpi.Enabled) fitLegacyEQToContent(); // Jull1ano fork
 
             Common.RestoreForm(this, "EQForm", false);
             Common.ForceFormOnScreen(this); //MW0LGE [2.9.0.7]                                                       
@@ -2877,6 +2878,29 @@ namespace Thetis
             public double TX_maxHz = 4000;
         }
         private ParaEQState _state;
+
+        // Jull1ano fork: at high DPI the window came out shorter than its contents (the Transmit group ran off the
+        // bottom): the window is sized from the legacy panel's contents, the margin below and on the right the same
+        // as on the left
+        private void fitLegacyEQToContent()
+        {
+            int right = 0, bottom = 0, left = int.MaxValue;
+            foreach (Control ch in pnlLegacyEQ.Controls)
+            {
+                right = Math.Max(right, ch.Right);
+                bottom = Math.Max(bottom, ch.Bottom);
+                left = Math.Min(left, ch.Left);
+            }
+            if (left == int.MaxValue) return;
+            int margin = pnlLegacyEQ.Left + left;
+            int dw = Math.Max(0, pnlLegacyEQ.Left + right + margin - ClientSize.Width);
+            int dh = Math.Max(0, pnlLegacyEQ.Top + bottom + margin - ClientSize.Height);
+            if (dw == 0 && dh == 0) return;
+            Size sz = new Size(Width + dw, Height + dh);
+            MinimumSize = sz;
+            _legacyEQ_base_form_size = sz;
+            Size = sz;
+        }
 
         private void chkLegacyEQ_CheckedChanged(object sender, EventArgs e)
         {
