@@ -111,7 +111,18 @@ namespace Thetis
             grp.Name = "grpForkTuning";
             grp.Text = "Tuning (fork)";
             grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
-            grp.Size = new Size(anchor.Width, HighDpi.Px(46));
+            grp.Size = new Size(anchor.Width, HighDpi.Px(68));
+            CheckBox chkCtun = new CheckBox();
+            chkCtun.Name = "chkForkKeepCtun";
+            chkCtun.Text = "Keep CTUN on";
+            chkCtun.AutoSize = false;
+            chkCtun.Size = new Size(grp.Width - HighDpi.Px(16), HighDpi.Px(20));
+            chkCtun.Location = new Point(HighDpi.Px(8), HighDpi.Px(42));
+            chkCtun.Checked = console == null || console.KeepCtunOn;
+            chkCtun.CheckedChanged += (s, e) => { if (console != null) console.KeepCtunOn = chkCtun.Checked; };
+            toolTip1.SetToolTip(chkCtun, "Band buttons and band stack entries no longer turn CTUN off (drag to pan the spectrum needs CTUN).\r\n" +
+                "The CTUN button still turns it off until the next band change.");
+            grp.Controls.Add(chkCtun);
             CheckBox chk = new CheckBox();
             chk.Name = "chkForkBandAware";
             chk.Text = "Band-aware tuning";

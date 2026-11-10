@@ -529,8 +529,15 @@ namespace Thetis
         private const int EM_SETMARGINS = 0xD3, EM_GETMARGINS = 0xD4, EC_LEFTMARGIN = 1, EC_RIGHTMARGIN = 2;
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object> _padded =
             new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object>();
+        // spin boxes widened once for their padding
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object> _grown =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object>();
+        // the margins Windows gave each field (never less than these)
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, int[]> _baseMargins =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, int[]>();
 
-        public static int EditPad { get { return Px(3); } }
+        public static int EditPad { get { return Px(3); } }        // left (and drop-down lists)
+        public static int EditPadRight { get { return Px(4); } }   // right: numbers sit there
 
         public static void ApplyEditPadding(System.Windows.Forms.Control root)
         {
@@ -567,24 +574,14 @@ namespace Thetis
             edit.HandleCreated += again;
             edit.FontChanged += again;
             edit.SizeChanged += again;
-            if (owner == null) edit.TextChanged += again;
+            edit.TextChanged += again; // the room follows the text shown now
             if (edit.IsHandleCreated) padEdit(edit);
         }
 
-        // the widest text the field shows: a spin box's largest / smallest value, else its current text
+        // the text the field shows now (re-checked on every change; a spin box's widest value left no room at all)
         private static string widestText(System.Windows.Forms.Control edit)
         {
-            string t = edit.Text ?? "";
-            if (_padded.TryGetValue(edit, out object o) && o is System.Windows.Forms.NumericUpDown nud)
-            {
-                string fmt = (nud.ThousandsSeparator ? "N" : "F") + nud.DecimalPlaces;
-                foreach (decimal v in new decimal[] { nud.Maximum, nud.Minimum })
-                {
-                    string sv = nud.Hexadecimal ? ((long)v).ToString("X") : v.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture);
-                    if (sv.Length > t.Length) t = sv;
-                }
-            }
-            return t;
+            return edit.Text ?? "";
         }
 
         private static void padEdit(System.Windows.Forms.Control edit)
@@ -599,15 +596,54 @@ namespace Thetis
                     if (!GetComboBoxInfo(cbx.Handle, ref ci) || ci.hwndItem == IntPtr.Zero) return;
                     h = ci.hwndItem;
                 }
-                int textW = System.Windows.Forms.TextRenderer.MeasureText(widestText(edit) + "0", edit.Font, System.Drawing.Size.Empty,
+                int textW = System.Windows.Forms.TextRenderer.MeasureText(widestText(edit), edit.Font, System.Drawing.Size.Empty,
                     System.Windows.Forms.TextFormatFlags.NoPadding | System.Windows.Forms.TextFormatFlags.SingleLine).Width;
                 int room = (edit is System.Windows.Forms.ComboBox ? edit.ClientSize.Width - System.Windows.Forms.SystemInformation.VerticalScrollBarWidth : edit.ClientSize.Width) - textW;
-                int m = Math.Max(0, Math.Min(EditPad, room / 2));
+                room -= Px(1); // the caret
                 long cur = SendMessage(h, EM_GETMARGINS, IntPtr.Zero, IntPtr.Zero).ToInt64();
                 int l = (int)(cur & 0xFFFF), r = (int)((cur >> 16) & 0xFFFF);
-                int nl = Math.Max(l, m), nr = Math.Max(r, m);
+                if (!_baseMargins.TryGetValue(edit, out int[] baseM)) { baseM = new int[] { l, r }; _baseMargins.Add(edit, baseM); }
+                // the padding goes on the side the text sits on; the other side keeps what Windows gave, or less when
+                // the room is short (Windows ignores margins that do not fit together: "2800" got none)
+                bool rightAligned = edit is System.Windows.Forms.TextBox tbx && tbx.TextAlign == System.Windows.Forms.HorizontalAlignment.Right;
+                // a spin box too narrow for its number plus the padding ("2800" in the TX filter High box) grows
+                // to the left by up to 4 units, once, where nothing else sits
+                if (rightAligned && room < EditPadRight && _padded.TryGetValue(edit, out object ow) &&
+                    ow is System.Windows.Forms.UpDownBase udb && udb.Parent != null && !_grown.TryGetValue(udb, out object _))
+                {
+                    _grown.Add(udb, null);
+                    int grow = Math.Min(Px(4), EditPadRight - Math.Max(0, room));
+                    System.Drawing.Rectangle nb = new System.Drawing.Rectangle(udb.Left - grow, udb.Top, udb.Width + grow, udb.Height);
+                    bool free = nb.Left >= 0;
+                    foreach (System.Windows.Forms.Control sib in udb.Parent.Controls)
+                        if (free && sib != udb && sib.Bounds.IntersectsWith(nb)) free = false;
+                    if (free)
+                    {
+                        udb.Bounds = nb; // SizeChanged pads it again with the new room
+                        return;
+                    }
+                }
+                int nl, nr;
+                if (room <= 0) { nl = baseM[0]; nr = baseM[1]; }
+                else if (rightAligned)
+                {
+                    nr = Math.Min(Math.Max(EditPadRight, baseM[1]), room);
+                    nl = Math.Max(0, Math.Min(baseM[0], room - nr));
+                }
+                else
+                {
+                    nl = Math.Min(Math.Max(EditPad, baseM[0]), room);
+                    nr = Math.Max(0, Math.Min(Math.Max(baseM[1], edit is System.Windows.Forms.TextBox ? EditPad : 0), room - nl));
+                }
                 if (nl != l || nr != r)
                     SendMessage(h, EM_SETMARGINS, (IntPtr)(EC_LEFTMARGIN | EC_RIGHTMARGIN), (IntPtr)((nl & 0xFFFF) | (nr << 16)));
+                if (_logFit)
+                {
+                    long after = SendMessage(h, EM_GETMARGINS, IntPtr.Zero, IntPtr.Zero).ToInt64();
+                    Log("pad " + (edit.Parent != null ? edit.Parent.Name + "/" : "") + edit.Name + " '" + edit.Text + "' client " + edit.ClientSize.Width +
+                        " text " + textW + " room " + room + " base " + baseM[0] + "," + baseM[1] + " want " + nl + "," + nr +
+                        " now " + (after & 0xFFFF) + "," + ((after >> 16) & 0xFFFF) + (rightAligned ? " right" : ""));
+                }
             }
             catch (Exception ex) { Log("padEdit " + edit.Name + ": " + ex.Message); }
         }

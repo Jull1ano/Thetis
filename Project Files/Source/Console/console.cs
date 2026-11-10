@@ -1035,7 +1035,7 @@ namespace Thetis
                 BandStackEntry bse = bsf.Current();
                 if (bse != null)
                 {
-                    ClickTuneDisplay = bse.CTUNEnabled;
+                    ClickTuneDisplay = bse.CTUNEnabled || _forkKeepCtun; // Jull1ano fork: CTUN stays on (drag to pan needs it)
                     chkFWCATU.Checked = ClickTuneDisplay;
                     CentreFrequency = bse.CentreFrequency;
                     if (bse.ZoomSlider != ptbDisplayZoom.Value)
@@ -5936,7 +5936,7 @@ namespace Thetis
                 VFOAFreq = CentreFrequency;
             }
 
-            ClickTuneDisplay = CTUN;
+            ClickTuneDisplay = CTUN || _forkKeepCtun; // Jull1ano fork: a band stack entry saved without CTUN no longer turns it off
             chkFWCATU.Checked = ClickTuneDisplay;
             VFOAFreq = freq;                                       // Restore actual receive frequency after CTUN status restored - G3OQD         
 
@@ -44834,6 +44834,29 @@ namespace Thetis
                         else HighDpi.Log("menu item not found: " + parts[t]);
                     }
                 }
+                else if (parts[0] == "click")
+                {
+                    // click:<control>:<control>...: each control's Click, 2 s apart (band buttons ...), the state logged
+                    int k = 1;
+                    System.Windows.Forms.Timer tc = new System.Windows.Forms.Timer();
+                    tc.Interval = 2000;
+                    tc.Tick += (s3, e3) =>
+                    {
+                        HighDpi.Log("click state: CTUN " + ClickTuneDisplay + " band " + rx1_band + " mode " + RX1DSPMode + " VFO " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture));
+                        if (k >= parts.Length) { tc.Stop(); return; }
+                        Control[] hit = Controls.Find(parts[k], true);
+                        if (hit.Length > 0)
+                        {
+                            HighDpi.Log("click " + parts[k]);
+                            if (hit[0] is CheckBox chk && chk.Appearance == Appearance.Button) chk.Checked = !chk.Checked;
+                            else typeof(Control).GetMethod("OnClick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                                    .Invoke(hit[0], new object[] { EventArgs.Empty });
+                        }
+                        else HighDpi.Log("click: no control " + parts[k]);
+                        k++;
+                    };
+                    tc.Start();
+                }
                 else if (parts[0] == "usertune")
                 {
                     // usertune:<MHz>:<MHz>...: each frequency as if tuned by hand, 2 s apart, the result logged
@@ -45518,6 +45541,7 @@ namespace Thetis
         private bool _forkUserTune = false;
         private DSPMode _forkModeAtUserTune = DSPMode.FIRST;
         private bool _forkBandAware = true;
+        private bool _forkKeepCtun = true; // band changes keep CTUN on (Setup > Appearance > General > Tuning)
         private bool _forkApplyingBand = false;
         private bool _forkInModeStep = false;
         private bool _forkReady = false;
@@ -45529,6 +45553,17 @@ namespace Thetis
         {
             get { return _forkBandAware; }
             set { _forkBandAware = value; forkSaveBandMemory(); }
+        }
+
+        public bool KeepCtunOn
+        {
+            get { return _forkKeepCtun; }
+            set
+            {
+                _forkKeepCtun = value;
+                forkSaveBandMemory();
+                if (value && !chkFWCATU.Checked) chkFWCATU.Checked = true;
+            }
         }
 
         // the current UI message is a hand tuning action
@@ -45648,6 +45683,7 @@ namespace Thetis
                 {
                     string[] p = line.Split('\t');
                     if (p.Length == 3 && p[0] == "option" && p[1] == "band_aware") _forkBandAware = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "option" && p[1] == "keep_ctun") _forkKeepCtun = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
                     else if (p.Length == 4 && p[0] == "step") _forkBandStep[p[1] + "|" + p[2]] = p[3];
                 }
@@ -45662,6 +45698,7 @@ namespace Thetis
             {
                 System.Text.StringBuilder sb = new System.Text.StringBuilder();
                 sb.Append("option\tband_aware\t").Append(_forkBandAware ? "1" : "0").Append("\r\n");
+                sb.Append("option\tkeep_ctun\t").Append(_forkKeepCtun ? "1" : "0").Append("\r\n");
                 foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
                     sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
                 foreach (KeyValuePair<string, string> kv in _forkBandStep)

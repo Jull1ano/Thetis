@@ -13,7 +13,7 @@ Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
 - Inside the passband: drags the VFO (as before). Shift + passband: moves the filter (as before).
 - The view first moves inside the DDC span (display only: no radio change, no audio change). When its
   edge leaves the span, the DDC is re-centred on the view, at most every 25 ms, exact final value on release.
-- Inertia after release.
+- No inertia: the view stops where the mouse lets go.
 
 **Ctrl + mouse wheel zoom** around the cursor: the frequency under the cursor stays put; one notch
 changes the span by 2^(1/3) (about 26 %). Display only, never retunes.
@@ -85,7 +85,9 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
 - A fixed-size label whose text changes later ("AGC Gain: 120") is fitted again on every change.
 - The base text boost (+0.75 pt) is for the small UI text only: full at 8.25 pt, none from 11 pt (the
   Finder's 12 pt list is the original's size again). Finder opens at least 400 x 520 units.
-- Edit fields get an inner margin of 3 units where the text has room (spin boxes: their widest value);
+- Edit fields get an inner margin on the side their text sits (4 units right for numbers, 3 left otherwise)
+  where the text shown has room, re-checked on every change; a spin box too narrow for its number plus the
+  margin ("2800" in TX filter High) grows up to 4 units to the left, where nothing else sits;
   drop-down lists draw their text with the same left padding. Equalizer: the window fits its contents,
   the same margin below as on the left.
 - VFO band text ("60M General RX") keeps at least 4.5:1 contrast: the out-of-band grey is darkened to
@@ -134,6 +136,9 @@ band for that mode, the first time 9 kHz on MW AM (10 kHz in the US region) and 
 Band buttons, band stacks, memories, spots and CAT keep their own mode; never during TX. Saved in
 `fork_band_memory.txt` in the settings folder. Test hook: `THETIS_HIDPI_OPEN=usertune:7.1:7.3:0.999` tunes
 those frequencies as if by hand and logs band, mode and step.
+
+Keep CTUN on (same Setup group, on by default): band buttons and band stack entries saved without CTUN no
+longer turn it off (drag to pan needs CTUN); the CTUN button still turns it off until the next band change.
 
 ## Test settings (no rebuild needed)
 

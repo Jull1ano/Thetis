@@ -9,7 +9,7 @@ Drag-anywhere pan and Ctrl + mouse wheel zoom for the RX1 spectrum / waterfall, 
 - The view moves inside the DDC span first, display only: no radio change, no audio change. When the
   view's edge leaves the span, the DDC is re-centred on the view (paced, latest wins, the exact final
   value goes out when the pan ends). The VFO is carried along when it would leave the DDC span.
-- Inertia after release.
+- No inertia: the view stops where the mouse lets go.
 - Ctrl + wheel zooms around the cursor: the frequency under the cursor stays put. Display only.
 
 The display side of this lives in WDSP's analyzer (smooth pan / retune): the averaged trace is kept in
@@ -247,12 +247,9 @@ namespace Thetis
             if (!_rx1_pan_drag) return;
             _rx1_pan_drag = false;
 
-            double idle = _pan_sw.Elapsed.TotalMilliseconds - _pan_last_move_ms;
-            if (idle > 60.0) _pan_velocity = 0.0;                   // the mouse had stopped before release
-            if (Math.Abs(_pan_velocity) > PAN_INERTIA_MIN_PX)
-                _pan_inertia = true;                                // the timer carries on
-            else
-                finishPan();
+            // the view stops where the mouse let go: no inertia (the user's choice, 2026-11-10)
+            _pan_velocity = 0.0;
+            finishPan();
         }
 
         private bool panActive
