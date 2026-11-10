@@ -160,7 +160,7 @@ namespace Thetis
                 NumericUpDown udSmooth = new NumericUpDown();
                 udSmooth.Name = "udHighDpiFftSmooth";
                 udSmooth.DecimalPlaces = 1;
-                udSmooth.Increment = 0.5m;
+                udSmooth.Increment = 0.1m;
                 udSmooth.Minimum = 0;
                 udSmooth.Maximum = 16;
                 udSmooth.Value = (decimal)Display.FftSmooth;
@@ -178,7 +178,7 @@ namespace Thetis
                 lblSmoothUnit.Location = new Point(udSmooth.Right + HighDpi.Px(8), lblSmooth.Top);
                 string tip = "Smooths the drawn spectrum across frequency, as AetherSDR's FFT Smooth: each point becomes the mean of\r\n" +
                     "its neighbours within this many screen points on each side (in linear power, so the noise floor stays where it is).\r\n" +
-                    "0 = off, 0.5 = the gentlest (each point with its next neighbour on each side at 200 %).\r\n" +
+                    "0 = off; it grows smoothly in 0.1 steps (0.5 = each point with its next neighbour on each side at 200 %).\r\n" +
                     "Display only: the noise floor estimate and the waterfall are not changed.";
                 toolTip1.SetToolTip(udSmooth, tip);
                 toolTip1.SetToolTip(lblSmooth, tip);

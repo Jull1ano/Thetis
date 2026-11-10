@@ -264,7 +264,7 @@ namespace Thetis
 
         // Jull1ano fork: FFT Smooth, as AetherSDR (FftTraceSmoothing.h): each point of the drawn spectrum becomes
         // the mean of its +-N neighbours in linear power, then back to dB, so the noise does not drag the trace
-        // down the way a dB mean would. N is in logical pixels (0 = off, 0.5 steps up to 16). Display only: the
+        // down the way a dB mean would. N is in logical pixels (0 = off, 0.1 steps up to 16). Display only: the
         // noise floor estimate still reads the raw data.
         private static float _fftSmoothPx = 0f;
         public static float FftSmooth
@@ -275,10 +275,23 @@ namespace Thetis
         private static float[] _fftSmoothBuf;
         private static double[] _fftSmoothLin;
 
-        private static float[] fftSmoothData(float[] src, int n, int halfWidth)
+        // h = half-width in data points, any value >= 0, the effect grows steadily with it:
+        //  - a triangular window (weights 1 - |k| / L, L = max(h, 1) + 1) in linear power: no ripple comes through,
+        //    so a wider window is always smoother (a flat window is not: 1.0 came out rougher than 0.8);
+        //  - below h = 1 that result is blended with the raw trace in dB (h = blend share): averaging in linear
+        //    power fills the deep noise dips even with a tiny neighbour weight, a sudden change near 0.
+        // On exponential noise the roughness (mean |step| between points) goes 5.9, 5.0, 4.1, 3.2, 2.5, 1.9 dB
+        // for h = 0, 0.2 ... 1.0 and keeps falling (1.0 dB at h = 2).
+        private static double[] _fftSmoothWeights = new double[0];
+        private static float[] fftSmoothData(float[] src, int n, float h)
         {
-            if (src == null || n < 2 || halfWidth <= 0) return src;
+            if (src == null || n < 2 || !(h > 0.001f)) return src;
             n = Math.Min(n, src.Length);
+            double blend = Math.Min(1.0, h);
+            double L = Math.Max(h, 1.0) + 1.0;
+            int K = (int)Math.Ceiling(L) - 1;
+            if (_fftSmoothWeights.Length != 2 * K + 1) _fftSmoothWeights = new double[2 * K + 1];
+            for (int k = -K; k <= K; k++) _fftSmoothWeights[k + K] = 1.0 - Math.Abs(k) / L;
             if (_fftSmoothBuf == null || _fftSmoothBuf.Length < src.Length) _fftSmoothBuf = new float[src.Length];
             if (_fftSmoothLin == null || _fftSmoothLin.Length < n) _fftSmoothLin = new double[n];
             const double ln10over10 = 0.23025850929940457;
@@ -291,10 +304,17 @@ namespace Thetis
             // noise beside a strong carrier
             for (int i = 0; i < n; i++)
             {
-                int lo = Math.Max(0, i - halfWidth), hi = Math.Min(n - 1, i + halfWidth);
-                double sum = 0.0;
-                for (int j = lo; j <= hi; j++) sum += _fftSmoothLin[j];
-                _fftSmoothBuf[i] = (float)(10.0 * Math.Log10(Math.Max(sum / (hi - lo + 1), 1e-30)));
+                int lo = Math.Max(0, i - K), hi = Math.Min(n - 1, i + K);
+                double sum = 0.0, weight = 0.0;
+                for (int j = lo; j <= hi; j++)
+                {
+                    double w = _fftSmoothWeights[j - i + K];
+                    sum += w * _fftSmoothLin[j];
+                    weight += w;
+                }
+                double sm = 10.0 * Math.Log10(Math.Max(sum / weight, 1e-30));
+                float raw = src[i];
+                _fftSmoothBuf[i] = (float.IsNaN(raw) || float.IsInfinity(raw)) ? (float)sm : (float)((1.0 - blend) * raw + blend * sm);
             }
             for (int i = n; i < src.Length; i++) _fftSmoothBuf[i] = src[i];
             return _fftSmoothBuf;
@@ -5333,8 +5353,8 @@ namespace Thetis
                 // when no new frame came: smoothing it in place would add up frame after frame)
                 if (_fftSmoothPx > 0)
                 {
-                    int halfPts = (int)Math.Round(_fftSmoothPx * HighDpi.Scale / Math.Max(1, m_nDecimation), MidpointRounding.AwayFromZero);
-                    if (halfPts > 0) data = fftSmoothData(data, nDecimatedWidth, halfPts);
+                    float halfPts = _fftSmoothPx * HighDpi.Scale / Math.Max(1, m_nDecimation);
+                    data = fftSmoothData(data, nDecimatedWidth, halfPts);
                 }
 
                 float averageSum = 0;

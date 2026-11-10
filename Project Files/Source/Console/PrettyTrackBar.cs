@@ -181,8 +181,23 @@ namespace Thetis
                 _head_image = value;
                 if (_head_image != null)
                 {
-                    _head_rect.Width = _head_image.Width;
-                    _head_rect.Height = _head_image.Height;
+                    // Jull1ano fork: the skin's handle image is in 96 DPI pixels: at high DPI it is drawn scaled, and
+                    // half as wide again across the track so it is easier to grab (9 x 20 -> 27 x 40 at 200 %)
+                    if (HighDpi.Enabled)
+                    {
+                        bool tall = _head_image.Height >= _head_image.Width; // a horizontal slider's handle
+                        float sx = HighDpi.Scale * (tall ? 1.5f : 1f);
+                        float sy = HighDpi.Scale * (tall ? 1f : 1.5f);
+                        _head_rect.Width = (int)Math.Round(_head_image.Width * sx);
+                        _head_rect.Height = (int)Math.Round(_head_image.Height * sy);
+                        if (Height > 0 && _head_rect.Height > Height) _head_rect.Height = Height;
+                        if (Width > 0 && _head_rect.Width > Width) _head_rect.Width = Width;
+                    }
+                    else
+                    {
+                        _head_rect.Width = _head_image.Width;
+                        _head_rect.Height = _head_image.Height;
+                    }
                 }
                 else
                 {
@@ -591,6 +606,23 @@ namespace Thetis
             get { return m_bGreenThumb; }
             set { m_bGreenThumb = value; this.Invalidate(); }
         }
+        // Jull1ano fork: the whole image into the handle rectangle (scaled at high DPI, crisp: nearest pixel)
+        private void drawHead(Graphics g, ImageAttributes imageAttributes)
+        {
+            if (_head_image.Width != _head_rect.Width || _head_image.Height != _head_rect.Height)
+            {
+                System.Drawing.Drawing2D.InterpolationMode im = g.InterpolationMode;
+                System.Drawing.Drawing2D.PixelOffsetMode pm = g.PixelOffsetMode;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                g.DrawImage(_head_image, _head_rect, 0, 0, _head_image.Width, _head_image.Height, GraphicsUnit.Pixel, imageAttributes);
+                g.InterpolationMode = im;
+                g.PixelOffsetMode = pm;
+            }
+            else
+                g.DrawImage(_head_image, _head_rect, 0, 0, _head_rect.Width, _head_rect.Height, GraphicsUnit.Pixel, imageAttributes);
+        }
+
         protected override void OnPaint(PaintEventArgs pe)
         {
             Graphics g = pe.Graphics;
@@ -643,11 +675,7 @@ namespace Thetis
                 // draw head
                 if (_head_image != null)
                     //g.DrawImage(head_image, head_rect.X, head_rect.Y, head_image.Width, head_image.Height);
-                    g.DrawImage(_head_image,
-                        new Rectangle(_head_rect.X, _head_rect.Y, _head_rect.Width, _head_rect.Height),
-                        0, 0, _head_rect.Width, _head_rect.Height,
-                        GraphicsUnit.Pixel,
-                        imageAttributes);
+                    drawHead(g, imageAttributes);
 
                 imageAttributes.Dispose();
                 imageAttributes = null;
@@ -690,11 +718,7 @@ namespace Thetis
 
                 // draw head
                 if (_head_image != null)
-                    g.DrawImage(_head_image,
-                        new Rectangle(_head_rect.X, _head_rect.Y, _head_rect.Width, _head_rect.Height),
-                        0, 0, _head_rect.Width, _head_rect.Height,
-                        GraphicsUnit.Pixel,
-                        imageAttributes);
+                    drawHead(g, imageAttributes);
 
                 imageAttributes.Dispose();
                 imageAttributes = null;

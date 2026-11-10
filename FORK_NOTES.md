@@ -55,11 +55,17 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   (width in device pixels). `THETIS_SMOOTH_TRACE=0/1` overrides the saved choice. No measurable CPU
   cost (about 66 % of one core either way at 4K, 60 fps). Measured on screenshots, the line is as wide
   as AltSDR's at 1; Thetis' trace looks bolder only because its noise zig-zags taller.
-- FFT Smooth (Setup > Appearance > RX Display, in the row above Active Peak; 0 = off, 0.5 steps up to 16),
-  as AetherSDR's: each drawn point becomes the mean of its neighbours within that many screen points on
-  each side, in linear power, then back to dB (so the noise floor stays where it is). 0.5 = each point
-  with its next neighbour on each side at 200 %. Display only (trace, fill, peak markers): the noise floor
-  estimate and the waterfall are unchanged. Saved as `hidpi_fft_smooth.txt`.
+- FFT Smooth (Setup > Appearance > RX Display, in the row above Active Peak; 0 = off, 0.1 steps up to 16),
+  after AetherSDR's: each drawn point becomes a mean of its neighbours within that many screen points on
+  each side, in linear power, then back to dB (so the noise floor stays where it is). Unlike AetherSDR's
+  flat window it uses a triangular one (a wider flat window is not always smoother: 1.0 came out rougher
+  than 0.8), and up to 0.5 it blends the raw trace with the 0.5 result in dB, since linear averaging fills
+  the deep noise dips at once. So the effect grows steadily from 0: on test noise the roughness goes 6.0,
+  5.0, 4.1, 3.2, 2.4, 1.9 dB for 0 ... 0.5 at 200 % and keeps falling. Display only (trace, fill, peak
+  markers): the noise floor estimate and the waterfall are unchanged. Saved as `hidpi_fft_smooth.txt`.
+- Slider handles (Pan, Zoom, AF, AGC Gain, Drive ...): the skin's handle images are 96 DPI pixels; drawn
+  scaled and half as wide again across the track for an easier grab (9 x 20 -> 27 x 40 at 200 %, nearest
+  pixel, so crisp).
 - Window positions and sizes are saved in 96 DPI units, so one settings database works in both modes.
 - Off: command line `-nohidpi` or `THETIS_HIDPI=0`. At 100 % scaling nothing changes.
 - Text size: Setup > Appearance > General > High DPI (fork): Default, +1, +2 (one point each on the
