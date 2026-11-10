@@ -407,8 +407,8 @@ namespace Thetis
 
             control_data.Add($"Top/{HighDpi.Unpx(form.Top)}"); // Jull1ano fork: window geometry stored in 96 DPI units
             control_data.Add($"Left/{HighDpi.Unpx(form.Left)}");
-            control_data.Add($"Width/{HighDpi.Unpx(form.Width)}");
-            control_data.Add($"Height/{HighDpi.Unpx(form.Height)}");
+            control_data.Add($"Width/{HighDpi.UnpxForm(form, form.Width)}");
+            control_data.Add($"Height/{HighDpi.UnpxForm(form, form.Height, true)}");
 
             DB.SaveVars(tablename, control_data);
         }
@@ -441,7 +441,10 @@ namespace Thetis
 
                 if (name == "Top" || name == "Left" || name == "Width" || name == "Height")
                 {
-                    int parsed_value = HighDpi.Px(int.Parse(val)); // Jull1ano fork: stored in 96 DPI units
+                    // Jull1ano fork: stored in 96 DPI units; the size in the form's own scale, so it fits its layout
+                    int parsed_value = name == "Width" ? HighDpi.PxForm(form, int.Parse(val))
+                        : name == "Height" ? HighDpi.PxForm(form, int.Parse(val), true)
+                        : HighDpi.Px(int.Parse(val));
                     switch (name)
                     {
                         case "Top":
@@ -459,6 +462,7 @@ namespace Thetis
                             if (restore_size) form.Height = parsed_value;
                             break;
                     }
+                    if (restore_size && (name == "Width" || name == "Height")) HighDpi.FitOnScreen(form); // Jull1ano fork
                     continue;
                 }
 

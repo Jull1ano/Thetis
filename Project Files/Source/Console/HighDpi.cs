@@ -68,6 +68,7 @@ namespace Thetis
             if (dpi <= 96) return;  // 100 %: DPI awareness changes nothing, keep every code path as upstream
             Enabled = true;
             Scale = dpi / 96.0f;
+            setTextStep(0); // the base text size (TEXT_BASE_BOOST) applies from the start
 
             // WinForms builds Control.DefaultFont from the system GUI font, which a DPI-aware process gets
             // already scaled (15.75 pt at 200 % when GDI+ started first, 7.875 pt otherwise). The forms were
@@ -228,10 +229,28 @@ namespace Thetis
 
         public const string FFT_SMOOTH_FILE = "hidpi_fft_smooth.txt";
 
+        // The original Thetis at 200 % is drawn at 96 DPI and stretched by Windows: the stretch blurs the text,
+        // which then looks heavier and about 2 px taller than the same font drawn sharp at 192 DPI (measured on
+        // the console labels: 18 vs 16 px high, 16-20 % more ink). The default text size here is therefore this
+        // much larger (points on the 8.25 pt base), so Default looks like the original; +1 / +2 add to it.
+        // THETIS_TEXT_BOOST=<points> overrides it (for comparisons).
+        public const float TEXT_BASE_BOOST = 0.75f;
+        public static float BaseBoost
+        {
+            get
+            {
+                string env = Environment.GetEnvironmentVariable("THETIS_TEXT_BOOST");
+                if (!string.IsNullOrEmpty(env) && float.TryParse(env, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float b) && b >= 0f && b <= 4f)
+                    return b;
+                return TEXT_BASE_BOOST;
+            }
+        }
+
         private static void setTextStep(int n)
         {
             TextStep = Math.Max(0, Math.Min(2, n));
-            TextScale = (8.25f + TextStep) / 8.25f;
+            TextScale = (8.25f + BaseBoost + TextStep) / 8.25f;
         }
 
         // controls whose fonts the program sets itself and that must keep their size (VFO digits, meter text)
@@ -254,10 +273,58 @@ namespace Thetis
             _prepared.Add(form, null);
             try
             {
+                normalizeFontScaledForm(form);
                 applyTextScale(form);
                 FixOwnerDrawLists(form);
+                FixGrids(form, form);
+                ScaleButtonImages(form);
             }
             catch (Exception ex) { Log("PrepareForm " + form.Name + ": " + ex); }
+        }
+
+        // A font-scaled form (AutoScaleMode.Font, most dialogs) lays out at its font's height ratio: about 2.17
+        // at 200 % instead of 2, so it came out 8 % bigger than the original Thetis shows it, with the text
+        // relatively smaller in it. Its layout is brought to exactly the DPI scale here (bounds only, fonts stay),
+        // the same as the original's 96 DPI layout stretched by Windows; sizes saved later use this scale.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.ContainerControl, float[]> _layoutScale =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.ContainerControl, float[]>();
+
+        private static void normalizeFontScaledForm(System.Windows.Forms.Form form)
+        {
+            if (form.AutoScaleMode != System.Windows.Forms.AutoScaleMode.Font) return;
+            if (_layoutScale.TryGetValue(form, out float[] _)) return;
+            float fx = FormScale(form), fy = FormScale(form, true);
+            _layoutScale.Add(form, new float[] { Scale, Scale });
+            if (Math.Abs(fx - Scale) < 0.02f && Math.Abs(fy - Scale) < 0.02f) return;
+            form.SuspendLayout();
+            try
+            {
+                Log("normalize " + form.Name + " " + fx.ToString("0.000") + " x " + fy.ToString("0.000") + " -> " + Scale);
+                form.Scale(new System.Drawing.SizeF(Scale / fx, Scale / fy));
+            }
+            finally { form.ResumeLayout(true); }
+        }
+
+        private delegate IntPtr CbtProc(int code, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] private static extern IntPtr SetWindowsHookEx(int idHook, CbtProc lpfn, IntPtr hMod, uint dwThreadId);
+        [DllImport("user32.dll")] private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+        private static CbtProc _cbtProc; // kept alive for the hook
+        private static IntPtr _cbtHook = IntPtr.Zero;
+
+        // HCBT_ACTIVATE comes while a window is being shown, before its first paint: a form prepared there
+        // never shows at its unprepared size
+        private static IntPtr cbtHook(int code, IntPtr wParam, IntPtr lParam)
+        {
+            if (code == 5) // HCBT_ACTIVATE
+            {
+                try
+                {
+                    if (System.Windows.Forms.Control.FromHandle(wParam) is System.Windows.Forms.Form f) PrepareForm(f);
+                }
+                catch { }
+            }
+            return CallNextHookEx(_cbtHook, code, wParam, lParam);
         }
 
         private static bool _watching = false;
@@ -265,6 +332,12 @@ namespace Thetis
         {
             if (!Enabled || _watching) return;
             _watching = true;
+            try
+            {
+                _cbtProc = cbtHook;
+                _cbtHook = SetWindowsHookEx(5 /* WH_CBT */, _cbtProc, IntPtr.Zero, GetCurrentThreadId());
+            }
+            catch (Exception ex) { Log("CBT hook: " + ex.Message); }
             System.Windows.Forms.Application.Idle += (s, e) =>
             {
                 try
@@ -289,6 +362,112 @@ namespace Thetis
                         lb.ItemHeight = Math.Min(255, want);
                 }
                 if (c.HasChildren) FixOwnerDrawLists(c);
+            }
+        }
+
+        // the scale WinForms gave a form: a font-scaled one is about 2.17 at 200 % (its font's height ratio), a
+        // DPI-scaled one exactly 2; code that sets fixed sizes must use the form's own factor, or it cuts the form
+        public static float FormScale(System.Windows.Forms.ContainerControl c, bool vertical = false)
+        {
+            if (!Enabled || c == null) return 1f;
+            if (_layoutScale.TryGetValue(c, out float[] rec)) return vertical ? rec[1] : rec[0];
+            System.Drawing.SizeF cur = c.CurrentAutoScaleDimensions;
+            if (c.AutoScaleMode == System.Windows.Forms.AutoScaleMode.Font && cur.Width > 0 && cur.Height > 0)
+                return vertical ? cur.Height / 13f : cur.Width / 6f; // designer base: 6 x 13 (8.25 pt MS Sans Serif)
+            return Scale;
+        }
+
+        public static int PxForm(System.Windows.Forms.ContainerControl c, int v, bool vertical = false)
+        {
+            return (int)Math.Round(v * FormScale(c, vertical));
+        }
+
+        public static int UnpxForm(System.Windows.Forms.ContainerControl c, int v, bool vertical = false)
+        {
+            return (int)Math.Round(v / FormScale(c, vertical));
+        }
+
+        // a restored window never larger than the working area of the screen it opens on
+        public static void FitOnScreen(System.Windows.Forms.Form f)
+        {
+            if (!Enabled || f == null) return;
+            try
+            {
+                System.Drawing.Rectangle wa = System.Windows.Forms.Screen.FromRectangle(f.Bounds).WorkingArea;
+                if (f.Width > wa.Width) f.Width = wa.Width;
+                if (f.Height > wa.Height) f.Height = wa.Height;
+            }
+            catch { }
+        }
+
+        // button icons (Database Manager ...): WinForms draws a button's Image at its own pixel size, so a 96 DPI
+        // icon came out half size in its 200 % button. Redrawn once at the DPI scale when it still fits the button.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Drawing.Image, object> _scaledImages =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Drawing.Image, object>();
+
+        public static void ScaleButtonImages(System.Windows.Forms.Control root)
+        {
+            if (!Enabled || root == null) return;
+            foreach (System.Windows.Forms.Control c in root.Controls)
+            {
+                if (c is System.Windows.Forms.ButtonBase b && b.Image != null && !_scaledImages.TryGetValue(b.Image, out object _))
+                {
+                    try
+                    {
+                        System.Drawing.Image img = b.Image;
+                        int w = Px(img.Width), h = Px(img.Height);
+                        if (w <= b.Width && h <= b.Height)
+                        {
+                            System.Drawing.Bitmap bmp = new System.Drawing.Bitmap(w, h);
+                            using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(bmp))
+                            {
+                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                                g.DrawImage(img, new System.Drawing.Rectangle(0, 0, w, h));
+                            }
+                            _scaledImages.Add(bmp, null);
+                            b.Image = bmp;
+                        }
+                    }
+                    catch (Exception ex) { Log("ScaleButtonImages " + c.Name + ": " + ex.Message); }
+                }
+                if (c.HasChildren) ScaleButtonImages(c);
+            }
+        }
+
+        // grids: WinForms scales neither their column widths nor their row heights here (System DPI aware), so
+        // the text is 2x in 1x cells. Fixed-size columns and rows get the form's scale, once.
+        public static void FixGrids(System.Windows.Forms.Form form, System.Windows.Forms.Control root)
+        {
+            if (!Enabled || root == null) return;
+            foreach (System.Windows.Forms.Control c in root.Controls)
+            {
+                if (c is System.Windows.Forms.DataGridView g)
+                {
+                    try
+                    {
+                        float sx = FormScale(form), sy = FormScale(form, true);
+                        if (g.AutoSizeColumnsMode == System.Windows.Forms.DataGridViewAutoSizeColumnsMode.None)
+                            foreach (System.Windows.Forms.DataGridViewColumn col in g.Columns)
+                                if (col.AutoSizeMode == System.Windows.Forms.DataGridViewAutoSizeColumnMode.NotSet ||
+                                    col.AutoSizeMode == System.Windows.Forms.DataGridViewAutoSizeColumnMode.None)
+                                    col.Width = (int)Math.Round(col.Width * sx);
+                        if (g.RowHeadersWidthSizeMode == System.Windows.Forms.DataGridViewRowHeadersWidthSizeMode.EnableResizing ||
+                            g.RowHeadersWidthSizeMode == System.Windows.Forms.DataGridViewRowHeadersWidthSizeMode.DisableResizing)
+                            g.RowHeadersWidth = (int)Math.Round(g.RowHeadersWidth * sx);
+                        if (g.AutoSizeRowsMode == System.Windows.Forms.DataGridViewAutoSizeRowsMode.None)
+                        {
+                            int h = Math.Max((int)Math.Round(g.RowTemplate.Height * sy), g.Font.Height + Px(6));
+                            g.RowTemplate.Height = h;
+                            foreach (System.Windows.Forms.DataGridViewRow r in g.Rows) r.Height = h;
+                        }
+                        if (g.ColumnHeadersHeightSizeMode != System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize)
+                            g.ColumnHeadersHeight = Math.Max(g.ColumnHeadersHeight, g.ColumnHeadersDefaultCellStyle.Font != null
+                                ? g.ColumnHeadersDefaultCellStyle.Font.Height + Px(8) : g.Font.Height + Px(8));
+                    }
+                    catch (Exception ex) { Log("FixGrids " + g.Name + ": " + ex.Message); }
+                }
+                if (c.HasChildren) FixGrids(form, c);
             }
         }
 
@@ -339,20 +518,18 @@ namespace Thetis
             // A container that scales by font (AutoScaleMode.Font: the info bar and the other uc* controls)
             // would grow with its larger text and no longer fit where the console or Setup places it. Those
             // keep their size; their text is fitted like the rest. Only the pending DPI scale is carried over.
-            // A dialog that scales by font itself grows as a whole, which keeps its layout.
             var frozen = new System.Collections.Generic.List<System.Windows.Forms.ContainerControl>();
             var savedDims = new System.Collections.Generic.List<System.Drawing.SizeF>();
             var fontDims = new System.Collections.Generic.List<System.Drawing.SizeF>();
-            bool rootByFont = root is System.Windows.Forms.ContainerControl rcc && rcc.AutoScaleMode == System.Windows.Forms.AutoScaleMode.Font;
-            if (!rootByFont)
-                foreach (var c in containers)
-                    if (c != root && c is System.Windows.Forms.ContainerControl cc && cc.AutoScaleMode == System.Windows.Forms.AutoScaleMode.Font)
-                    {
-                        frozen.Add(cc);
-                        savedDims.Add(cc.AutoScaleDimensions);
-                        fontDims.Add(cc.CurrentAutoScaleDimensions);
-                        cc.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
-                    }
+            // (the root too: a dialog that grew with its text kept the text relatively small in it)
+            foreach (var c in containers)
+                if (c is System.Windows.Forms.ContainerControl cc && cc.AutoScaleMode == System.Windows.Forms.AutoScaleMode.Font)
+                {
+                    frozen.Add(cc);
+                    savedDims.Add(cc.AutoScaleDimensions);
+                    fontDims.Add(cc.CurrentAutoScaleDimensions);
+                    cc.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
+                }
             _origBounds = new System.Collections.Generic.Dictionary<System.Windows.Forms.Control, System.Drawing.Rectangle>();
             _origSize = new System.Collections.Generic.Dictionary<System.Windows.Forms.Control, float>();
             recordBounds(root);
@@ -434,7 +611,9 @@ namespace Thetis
                             while (size - 0.25f >= min - 0.001f && overlapArea(c, textRect(c, size)) > before) size -= 0.25f;
                         }
                         if (_logFit) logFit(c, size, min);
+                        float target = c.Font.Size;
                         if (Math.Abs(size - c.Font.Size) > 0.001f) setFont(c, sized(c.Font, size));
+                        registerRefit(c, min, target);
                     }
                 }
                 else if (c is System.Windows.Forms.GroupBox gb)
@@ -566,6 +745,35 @@ namespace Thetis
             foreach (System.Windows.Forms.Control ch in gb.Controls)
                 if (ReferenceEquals(ch.Font, gb.Font)) setFont(ch, sized(gb.Font, gb.Font.Size));
             setFont(gb, sized(gb.Font, fit));
+        }
+
+        // A fixed-size label whose text the program changes later ("AGC Gain: 12" -> "AGC Gain: 120") is fitted
+        // again on every change: the largest size up to the scaled one that fits, never below the original.
+        private class FitInfo { public float Base; public float Target; }
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, FitInfo> _fit =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, FitInfo>();
+
+        private static void registerRefit(System.Windows.Forms.Control c, float baseSize, float target)
+        {
+            if (target <= baseSize + 0.001f || _fit.TryGetValue(c, out FitInfo _)) return;
+            _fit.Add(c, new FitInfo { Base = baseSize, Target = target });
+            c.TextChanged += refitOnText;
+        }
+
+        private static void refitOnText(object sender, EventArgs e)
+        {
+            System.Windows.Forms.Control c = sender as System.Windows.Forms.Control;
+            if (c == null || !_fit.TryGetValue(c, out FitInfo fi)) return;
+            if (string.IsNullOrEmpty(c.Text) || c.Width <= 0 || c.Height <= 0) return;
+            try
+            {
+                float cur = c.Font.Size;
+                if (Math.Abs(cur - fi.Target) < 0.001f && textFits(c, cur, fi.Base)) return; // the usual case: one measure
+                float size = fi.Target;
+                while (size - 0.25f >= fi.Base - 0.001f && !textFits(c, size, fi.Base)) size -= 0.25f;
+                if (Math.Abs(size - cur) > 0.001f) setFont(c, sized(c.Font, size));
+            }
+            catch (Exception ex) { Log("refit " + c.Name + ": " + ex.Message); }
         }
 
         private static readonly bool _logFit = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("THETIS_HIDPI_LOGFIT"));

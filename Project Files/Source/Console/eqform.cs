@@ -187,6 +187,7 @@ namespace Thetis
         {
             _initalising = true;
             InitializeComponent();
+            HighDpi.ScaleLegacyForm(this); // Jull1ano fork: WinForms does not scale this form (no AutoScaleMode)
             console = c;
 
             _paraeq_show_rx = true;

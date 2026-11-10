@@ -113,6 +113,7 @@ namespace Thetis
         public Splash()
 		{
             InitializeComponent();
+            HighDpi.ScaleLegacyForm(this); // Jull1ano fork: WinForms does not scale this form (no AutoScaleMode)
 			Common.DoubleBufferAll(this, true);
 			this.Opacity = .00;
 			timer1.Interval = TIMER_INTERVAL;

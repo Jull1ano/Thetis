@@ -68,6 +68,7 @@ namespace Thetis
 			// Required for Windows Form Designer support
 			//
 			InitializeComponent();
+			HighDpi.ScaleLegacyForm(this); // Jull1ano fork: WinForms does not scale this form (no AutoScaleMode)
 		}
 
 		/// <summary>

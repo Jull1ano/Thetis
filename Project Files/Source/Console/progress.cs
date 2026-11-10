@@ -65,6 +65,7 @@ namespace Thetis
 		public Progress(string s)
 		{
 			InitializeComponent();
+			HighDpi.ScaleLegacyForm(this); // Jull1ano fork: WinForms does not scale this form (no AutoScaleMode)
             Common.DoubleBufferAll(this, true);
             this.Text = s;
 			percent_done = 0.0f;

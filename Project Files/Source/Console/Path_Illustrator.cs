@@ -1087,53 +1087,54 @@ namespace Thetis
 
             InitializeComponent();
             g = canvas.CreateGraphics();    // create a graphics object called canvas
+            if (HighDpi.Enabled) { float piScale = HighDpi.FormScale(this); g.ScaleTransform(piScale, piScale); } // Jull1ano fork: the diagram is drawn in 96 DPI units
             redPen.Width = 3;               // use a bold red pen for signal path segments
             bluePen.Width = 3;
             blackPen2.Width = 2;
 
             // place labels into position
-            label_LPF.Location = new Point(LPF.X + 12, LPF.Y + 15);
-            label_LPF2.Location = new Point(LPF2.X + 12, LPF2.Y + 15);
-            label_HPF.Location = new Point(HPF.X + 12, HPF.Y + 15);
-            label_HPF2.Location = new Point(HPF2.X + 12, HPF2.Y + 15);
-            label_ADC0.Location = new Point(ADC0.X + 5, ADC0.Y + 25);
-            label_ADC0_atten.Location = new Point(ADC0.X + 1, ADC0.Y + 7);
-            label_ADC1.Location = new Point(ADC1.X + 5, ADC1.Y + 25);
-            label_ADC1_atten.Location = new Point(ADC1.X + 1, ADC1.Y + 7);
-            label_ADC2.Location = new Point(ADC2.X + 5, ADC2.Y + 25);
-            label_ADC2_atten.Location = new Point(ADC2.X + 1, ADC2.Y + 7);
-            label_AUDIO_MIXER.Location = new Point(AUDIO_MIXER.X + 110, AUDIO_MIXER.Y + 18);
-            label_RX1_LR_audio.Location = new Point(AUDIO_MIXER.X + 2, AUDIO_MIXER.Y + 2);
-            label_RX2_LR_audio.Location = new Point(AUDIO_MIXER.X + 2, AUDIO_MIXER.Y + 33);
-            label_Rx0.Location = new Point(Rx0.X + 6, Rx0.Y + 28);
-            label_DDC0.Location = new Point(Rx0.X + 8, Rx0.Y + 11);
-            label_Rx1.Location = new Point(Rx1.X + 6, Rx1.Y + 28);
-            label_DDC1.Location = new Point(Rx1.X + 8, Rx1.Y + 11);
-            label_Rx2.Location = new Point(Rx2.X + 6, Rx2.Y + 28);
-            label_DDC2.Location = new Point(Rx2.X + 8, Rx2.Y + 11);
-            label_Rx3.Location = new Point(Rx3.X + 6, Rx3.Y + 28);
-            label_DDC3.Location = new Point(Rx3.X + 8, Rx3.Y + 11);
-            label_Rx4.Location = new Point(Rx4.X + 6, Rx4.Y + 28);
-            label_DDC4.Location = new Point(Rx4.X + 8, Rx4.Y + 11);
-            label_Rx5.Location = new Point(Rx5.X + 6, Rx5.Y + 28);
-            label_DDC5.Location = new Point(Rx5.X + 8, Rx5.Y + 11);
-            label_Rx6.Location = new Point(Rx6.X + 6, Rx6.Y + 28);
-            label_DDC6.Location = new Point(Rx6.X + 8, Rx6.Y + 11);
-            label_RX1_DISPLAY.Location = new Point(RX1_DISPLAY_x + 70, RX1_DISPLAY_y + 35);
-            label_RX2_DISPLAY.Location = new Point(RX2_DISPLAY_x + 70, RX2_DISPLAY_y + 35);
-            label_DAC0.Location = new Point(DAC0.X + 9, DAC0.Y + 18);
-            label_DUC0.Location = new Point(DUC0.X + 9, DUC0.Y + 18);
-            label_PA.Location = new Point(PA.X + 15, PA.Y + 17);
-            label_AMP.Location = new Point(AMPF.X + 5, AMPF.Y + 7);
-            label_FILTER.Location = new Point(AMPF.X + 5, AMPF.Y + 22);
-            label_SDR_Hardware.Location = new Point(SDR.X + 5, SDR.Y + 5);
-            label_CODEC.Location = new Point(CODEC.X + 3, CODEC.Y + 18);
-            label_CODEC2.Location = new Point(CODEC2.X + 3, CODEC2.Y + 18);
-            label_FPGA.Location = new Point(FPGA.X + 5, FPGA.Y + 5);
+            label_LPF.Location = piPoint(LPF.X + 12, LPF.Y + 15);
+            label_LPF2.Location = piPoint(LPF2.X + 12, LPF2.Y + 15);
+            label_HPF.Location = piPoint(HPF.X + 12, HPF.Y + 15);
+            label_HPF2.Location = piPoint(HPF2.X + 12, HPF2.Y + 15);
+            label_ADC0.Location = piPoint(ADC0.X + 5, ADC0.Y + 25);
+            label_ADC0_atten.Location = piPoint(ADC0.X + 1, ADC0.Y + 7);
+            label_ADC1.Location = piPoint(ADC1.X + 5, ADC1.Y + 25);
+            label_ADC1_atten.Location = piPoint(ADC1.X + 1, ADC1.Y + 7);
+            label_ADC2.Location = piPoint(ADC2.X + 5, ADC2.Y + 25);
+            label_ADC2_atten.Location = piPoint(ADC2.X + 1, ADC2.Y + 7);
+            label_AUDIO_MIXER.Location = piPoint(AUDIO_MIXER.X + 110, AUDIO_MIXER.Y + 18);
+            label_RX1_LR_audio.Location = piPoint(AUDIO_MIXER.X + 2, AUDIO_MIXER.Y + 2);
+            label_RX2_LR_audio.Location = piPoint(AUDIO_MIXER.X + 2, AUDIO_MIXER.Y + 33);
+            label_Rx0.Location = piPoint(Rx0.X + 6, Rx0.Y + 28);
+            label_DDC0.Location = piPoint(Rx0.X + 8, Rx0.Y + 11);
+            label_Rx1.Location = piPoint(Rx1.X + 6, Rx1.Y + 28);
+            label_DDC1.Location = piPoint(Rx1.X + 8, Rx1.Y + 11);
+            label_Rx2.Location = piPoint(Rx2.X + 6, Rx2.Y + 28);
+            label_DDC2.Location = piPoint(Rx2.X + 8, Rx2.Y + 11);
+            label_Rx3.Location = piPoint(Rx3.X + 6, Rx3.Y + 28);
+            label_DDC3.Location = piPoint(Rx3.X + 8, Rx3.Y + 11);
+            label_Rx4.Location = piPoint(Rx4.X + 6, Rx4.Y + 28);
+            label_DDC4.Location = piPoint(Rx4.X + 8, Rx4.Y + 11);
+            label_Rx5.Location = piPoint(Rx5.X + 6, Rx5.Y + 28);
+            label_DDC5.Location = piPoint(Rx5.X + 8, Rx5.Y + 11);
+            label_Rx6.Location = piPoint(Rx6.X + 6, Rx6.Y + 28);
+            label_DDC6.Location = piPoint(Rx6.X + 8, Rx6.Y + 11);
+            label_RX1_DISPLAY.Location = piPoint(RX1_DISPLAY_x + 70, RX1_DISPLAY_y + 35);
+            label_RX2_DISPLAY.Location = piPoint(RX2_DISPLAY_x + 70, RX2_DISPLAY_y + 35);
+            label_DAC0.Location = piPoint(DAC0.X + 9, DAC0.Y + 18);
+            label_DUC0.Location = piPoint(DUC0.X + 9, DUC0.Y + 18);
+            label_PA.Location = piPoint(PA.X + 15, PA.Y + 17);
+            label_AMP.Location = piPoint(AMPF.X + 5, AMPF.Y + 7);
+            label_FILTER.Location = piPoint(AMPF.X + 5, AMPF.Y + 22);
+            label_SDR_Hardware.Location = piPoint(SDR.X + 5, SDR.Y + 5);
+            label_CODEC.Location = piPoint(CODEC.X + 3, CODEC.Y + 18);
+            label_CODEC2.Location = piPoint(CODEC2.X + 3, CODEC2.Y + 18);
+            label_FPGA.Location = piPoint(FPGA.X + 5, FPGA.Y + 5);
             label_FPGA.ForeColor = System.Drawing.Color.IndianRed;
-            label_PC.Location = new Point(PC.X + 5, PC.Y + 5);
-            label_DSP.Location = new Point(DSP.X + 10, DSP.Y + 1);
-            label_front_panel.Location = new Point(9, 580);
+            label_PC.Location = piPoint(PC.X + 5, PC.Y + 5);
+            label_DSP.Location = piPoint(DSP.X + 10, DSP.Y + 1);
+            label_front_panel.Location = piPoint(9, 580);
 
             do_platform_prep();
             update_diagram = true;
@@ -1142,6 +1143,7 @@ namespace Thetis
 
         private void canvas_Paint(object sender, PaintEventArgs e)
         {
+            if (HighDpi.Enabled) { float piScale = HighDpi.FormScale(this); g.ResetTransform(); g.ScaleTransform(piScale, piScale); } // Jull1ano fork
             Update_control_settings();
 
             if (bool_HPSDR & update_diagram) draw_HPSDR();
@@ -1353,98 +1355,98 @@ namespace Thetis
             // label ALEX rectangles            
             label_C2.Text = "XV RX IN";
             label_C2.Visible = true;
-            label_C2.Location = C2_label_HPSDR;
+            label_C2.Location = piPoint(C2_label_HPSDR);
 
             label_C3.Text = "RX 2 IN";
             label_C3.Visible = true;
-            label_C3.Location = C3_label_HPSDR;
+            label_C3.Location = piPoint(C3_label_HPSDR);
 
             label_C4.Text = "RX 1 IN";
             label_C4.Visible = true;
-            label_C4.Location = C4_label_HPSDR;
+            label_C4.Location = piPoint(C4_label_HPSDR);
 
             label_C5.Text = "RX 1 OUT";
             label_C5.Visible = true;
-            label_C5.Location = C5_label_HPSDR;
+            label_C5.Location = piPoint(C5_label_HPSDR);
 
             label_C7.Text = "ANT 1";
             label_C7.Visible = true;
-            label_C7.Location = C7_label_HPSDR;
+            label_C7.Location = piPoint(C7_label_HPSDR);
 
             label_C8.Text = "ANT 2";
             label_C8.Visible = true;
-            label_C8.Location = C8_label_HPSDR;
+            label_C8.Location = piPoint(C8_label_HPSDR);
 
             label_C9.Text = "ANT 3";
             label_C9.Visible = true;
-            label_C9.Location = C9_label_HPSDR;
+            label_C9.Location = piPoint(C9_label_HPSDR);
 
             label_C10.Text = "From TX*";
             label_C10.Visible = true;
-            label_C10.Location = C10_label_ALEX_TX_IN;
+            label_C10.Location = piPoint(C10_label_ALEX_TX_IN);
 
             label_DSP_HPSDR.Visible = true;
-            label_DSP_HPSDR.Location = DSP_HPSDR_label;
+            label_DSP_HPSDR.Location = piPoint(DSP_HPSDR_label);
             if (!bool_rx)
             {
                 label_ext_amp1.Visible = true;
-                label_ext_amp1.Location = ext_amp_label1;
+                label_ext_amp1.Location = piPoint(ext_amp_label1);
                 label_ext_amp2.Visible = true;
-                label_ext_amp2.Location = ext_amp_label2;
+                label_ext_amp2.Location = piPoint(ext_amp_label2);
             }
 
             label_ALEX.Visible = true;
-            label_ALEX.Location = ALEX_label;
+            label_ALEX.Location = piPoint(ALEX_label);
             if (!bool_HPF_BYPASS) label_ALEX_HPF.Visible = true;
-            label_ALEX_HPF.Location = ALEX_HPF_label;
+            label_ALEX_HPF.Location = piPoint(ALEX_HPF_label);
             label_ALEX_LPF.Visible = true;
-            label_ALEX_LPF.Location = ALEX_LPF_label;
+            label_ALEX_LPF.Location = piPoint(ALEX_LPF_label);
             label_ALEX_To_RX.Visible = true;
-            label_ALEX_To_RX.Location = ALEX_To_RX_label;
+            label_ALEX_To_RX.Location = piPoint(ALEX_To_RX_label);
 
             if (cb_DUAL_MERCURY_ALEX.Checked)
             {
                 // label ALEX 2 rectangle
                 label_C16.Text = "XV RX IN";
                 label_C16.Visible = true;
-                label_C16.Location = C16_ALEX_2_label;
+                label_C16.Location = piPoint(C16_ALEX_2_label);
 
                 label_C17.Text = "RX 2 IN";
                 label_C17.Visible = true;
-                label_C17.Location = C17_ALEX_2_label;
+                label_C17.Location = piPoint(C17_ALEX_2_label);
 
                 label_C18.Text = "RX 1 IN";
                 label_C18.Visible = true;
-                label_C18.Location = C18_ALEX_2_label;
+                label_C18.Location = piPoint(C18_ALEX_2_label);
 
                 label_C19.Text = "RX 1 OUT";
                 label_C19.Visible = true;
-                label_C19.Location = C19_ALEX_2_label;
+                label_C19.Location = piPoint(C19_ALEX_2_label);
 
                 label_C20.Text = "ANT 1";
                 label_C20.Visible = true;
-                label_C20.Location = C20_ALEX_2_label;
+                label_C20.Location = piPoint(C20_ALEX_2_label);
 
                 label_C24.Text = "ANT 2";
                 label_C24.Visible = true;
-                label_C24.Location = C24_ALEX_2_label;
+                label_C24.Location = piPoint(C24_ALEX_2_label);
 
                 label_C25.Text = "ANT 3";
                 label_C25.Visible = true;
-                label_C25.Location = C25_ALEX_2_label;
+                label_C25.Location = piPoint(C25_ALEX_2_label);
 
                 label_C26.Text = "From Tx";
                 label_C26.Visible = true;
-                label_C26.Location = C26_ALEX_2_label;
+                label_C26.Location = piPoint(C26_ALEX_2_label);
 
                 label_ALEX_2.Visible = true;
-                label_ALEX_2.Location = ALEX_2_label;
+                label_ALEX_2.Location = piPoint(ALEX_2_label);
                 if (!bool_HPF_BYPASS) label_ALEX_2_HPF.Visible = true;
-                label_ALEX_2_HPF.Location = ALEX_2_HPF_label;
+                label_ALEX_2_HPF.Location = piPoint(ALEX_2_HPF_label);
                 label_ALEX_2_LPF.Visible = true;
-                label_ALEX_2_LPF.Location = ALEX_2_LPF_label;
+                label_ALEX_2_LPF.Location = piPoint(ALEX_2_LPF_label);
                 label_ALEX_2_To_RX.Visible = true;
-                label_ALEX_2_To_RX.Location = ALEX_2_To_RX_label;
+                label_ALEX_2_To_RX.Location = piPoint(ALEX_2_To_RX_label);
 
                 cb_DUAL_MERCURY_ALEX.Text = "DUAL MERCURY/ALEX *";
                 label_DUAL_MERCURY.Visible = true;
@@ -1452,111 +1454,111 @@ namespace Thetis
 
             // label Mercury rectangles
             label_MERCURY.Visible = true;
-            label_MERCURY.Location = MERCURY_label;
+            label_MERCURY.Location = piPoint(MERCURY_label);
             label_MERCURY_FPGA.Visible = true;
             label_MERCURY_FPGA.Visible = true;
             label_MERCURY_FPGA.ForeColor = System.Drawing.Color.IndianRed;
-            label_MERCURY_FPGA.Location = MERCURY_FPGA_label;
+            label_MERCURY_FPGA.Location = piPoint(MERCURY_FPGA_label);
             label_MERCURY_ADC.Visible = true;
-            label_MERCURY_ADC.Location = MERCURY_ADC_label;
+            label_MERCURY_ADC.Location = piPoint(MERCURY_ADC_label);
             label_MERCURY_DDC0.Visible = true;
-            label_MERCURY_DDC0.Location = MERCURY_DDC0_label;
+            label_MERCURY_DDC0.Location = piPoint(MERCURY_DDC0_label);
             label_MERCURY_Rx0.Visible = true;
-            label_MERCURY_Rx0.Location = MERCURY_DDC0_Rx0_label;
+            label_MERCURY_Rx0.Location = piPoint(MERCURY_DDC0_Rx0_label);
             label_MERCURY_DDC1.Visible = true;
-            label_MERCURY_DDC1.Location = MERCURY_DDC1_label;
+            label_MERCURY_DDC1.Location = piPoint(MERCURY_DDC1_label);
             label_MERCURY_Rx1.Visible = true;
-            label_MERCURY_Rx1.Location = MERCURY_DDC1_Rx1_label;
+            label_MERCURY_Rx1.Location = piPoint(MERCURY_DDC1_Rx1_label);
             label_MERCURY_DDC2.Visible = true;
-            label_MERCURY_DDC2.Location = MERCURY_DDC2_label;
+            label_MERCURY_DDC2.Location = piPoint(MERCURY_DDC2_label);
             label_MERCURY_Rx2.Visible = true;
-            label_MERCURY_Rx2.Location = MERCURY_DDC2_Rx2_label;
+            label_MERCURY_Rx2.Location = piPoint(MERCURY_DDC2_Rx2_label);
             label_MERCURY_CODEC.Visible = true;
-            label_MERCURY_CODEC.Location = MERCURY_CODEC_label;
+            label_MERCURY_CODEC.Location = piPoint(MERCURY_CODEC_label);
             label_MERCURY_PHONES.Visible = true;
-            label_MERCURY_PHONES.Location = MERCURY_PHONES_label;
+            label_MERCURY_PHONES.Location = piPoint(MERCURY_PHONES_label);
             label_MERCURY_P_OUT.Visible = true;
-            label_MERCURY_P_OUT.Location = MERCURY_P_OUT_label;
+            label_MERCURY_P_OUT.Location = piPoint(MERCURY_P_OUT_label);
             label_MERCURY_LINE.Visible = true;
-            label_MERCURY_LINE.Location = MERCURY_LINE_label;
+            label_MERCURY_LINE.Location = piPoint(MERCURY_LINE_label);
             label_MERCURY_OUT.Visible = true;
-            label_MERCURY_OUT.Location = MERCURY_OUT_label;
+            label_MERCURY_OUT.Location = piPoint(MERCURY_OUT_label);
             label_MERCURY_ANT.Visible = true;
-            label_MERCURY_ANT.Location = MERCURY_ANT_label;
+            label_MERCURY_ANT.Location = piPoint(MERCURY_ANT_label);
 
             if (cb_DUAL_MERCURY_ALEX.Checked)
             {
                 // label MERCURY 2 rectangles
                 label_MERCURY_2.Visible = true;
-                label_MERCURY_2.Location = MERCURY_2_label;
+                label_MERCURY_2.Location = piPoint(MERCURY_2_label);
                 label_MERCURY_2_FPGA.Visible = true;
                 label_MERCURY_2_FPGA.ForeColor = System.Drawing.Color.IndianRed;
-                label_MERCURY_2_FPGA.Location = MERCURY_2_FPGA_label;
+                label_MERCURY_2_FPGA.Location = piPoint(MERCURY_2_FPGA_label);
                 label_MERCURY_2_ADC.Visible = true;
-                label_MERCURY_2_ADC.Location = MERCURY_2_ADC_label;
+                label_MERCURY_2_ADC.Location = piPoint(MERCURY_2_ADC_label);
                 label_MERCURY_2_DDC0.Visible = true;
-                label_MERCURY_2_DDC0.Location = MERCURY_2_DDC0_label;
+                label_MERCURY_2_DDC0.Location = piPoint(MERCURY_2_DDC0_label);
                 label_MERCURY_2_Rx0.Visible = true;
-                label_MERCURY_2_Rx0.Location = MERCURY_2_DDC0_Rx0_label;
+                label_MERCURY_2_Rx0.Location = piPoint(MERCURY_2_DDC0_Rx0_label);
                 label_MERCURY_2_DDC1.Visible = true;
-                label_MERCURY_2_DDC1.Location = MERCURY_2_DDC1_label;
+                label_MERCURY_2_DDC1.Location = piPoint(MERCURY_2_DDC1_label);
                 label_MERCURY_2_Rx1.Visible = true;
-                label_MERCURY_2_Rx1.Location = MERCURY_2_DDC1_Rx1_label;
+                label_MERCURY_2_Rx1.Location = piPoint(MERCURY_2_DDC1_Rx1_label);
                 label_MERCURY_2_DDC2.Visible = true;
-                label_MERCURY_2_DDC2.Location = MERCURY_2_DDC2_label;
+                label_MERCURY_2_DDC2.Location = piPoint(MERCURY_2_DDC2_label);
                 label_MERCURY_2_Rx2.Visible = true;
-                label_MERCURY_2_Rx2.Location = MERCURY_2_DDC2_Rx2_label;
+                label_MERCURY_2_Rx2.Location = piPoint(MERCURY_2_DDC2_Rx2_label);
                 label_MERCURY_2_CODEC.Visible = true;
-                label_MERCURY_2_CODEC.Location = MERCURY_2_CODEC_label;
+                label_MERCURY_2_CODEC.Location = piPoint(MERCURY_2_CODEC_label);
                 label_MERCURY_2_PHONES.Visible = true;
-                label_MERCURY_2_PHONES.Location = MERCURY_2_PHONES_label;
+                label_MERCURY_2_PHONES.Location = piPoint(MERCURY_2_PHONES_label);
                 label_MERCURY_2_P_OUT.Visible = true;
-                label_MERCURY_2_P_OUT.Location = MERCURY_2_P_OUT_label;
+                label_MERCURY_2_P_OUT.Location = piPoint(MERCURY_2_P_OUT_label);
                 label_MERCURY_2_LINE.Visible = true;
-                label_MERCURY_2_LINE.Location = MERCURY_2_LINE_label;
+                label_MERCURY_2_LINE.Location = piPoint(MERCURY_2_LINE_label);
                 label_MERCURY_2_OUT.Visible = true;
-                label_MERCURY_2_OUT.Location = MERCURY_2_OUT_label;
+                label_MERCURY_2_OUT.Location = piPoint(MERCURY_2_OUT_label);
                 label_MERCURY_2_ANT.Visible = true;
-                label_MERCURY_2_ANT.Location = MERCURY_2_ANT_label;
+                label_MERCURY_2_ANT.Location = piPoint(MERCURY_2_ANT_label);
             }
 
 
             //label METIS rectangle
             label_METIS.Visible = true;
-            label_METIS.Location = METIS_label;
+            label_METIS.Location = piPoint(METIS_label);
             label_METIS_FPGA.Visible = true;
             label_METIS_FPGA.ForeColor = System.Drawing.Color.IndianRed;
-            label_METIS_FPGA.Location = METIS_FPGA_label;
+            label_METIS_FPGA.Location = piPoint(METIS_FPGA_label);
 
 
             // label PENELOPE rectangles
             label_PENELOPE.Visible = true;
-            label_PENELOPE.Location = PENELOPE_label;
+            label_PENELOPE.Location = piPoint(PENELOPE_label);
             label_PENELOPE_FPGA.Visible = true;
             label_PENELOPE_FPGA.ForeColor = System.Drawing.Color.IndianRed;
-            label_PENELOPE_FPGA.Location = PENELOPE_FPGA_label;
+            label_PENELOPE_FPGA.Location = piPoint(PENELOPE_FPGA_label);
             label_PENELOPE_DAC.Visible = true;
-            label_PENELOPE_DAC.Location = PENELOPE_DAC_label;
+            label_PENELOPE_DAC.Location = piPoint(PENELOPE_DAC_label);
             label_PENELOPE_DUC.Visible = true;
-            label_PENELOPE_DUC.Location = PENELOPE_DUC_label;
+            label_PENELOPE_DUC.Location = piPoint(PENELOPE_DUC_label);
             label_PENELOPE_AMPF.Visible = true;
-            label_PENELOPE_AMPF.Location = PENELOPE_AMPF_label;
+            label_PENELOPE_AMPF.Location = piPoint(PENELOPE_AMPF_label);
             label_PENELOPE_FILTER.Visible = true;
-            label_PENELOPE_FILTER.Location = PENELOPE_FILTER_label;
+            label_PENELOPE_FILTER.Location = piPoint(PENELOPE_FILTER_label);
             label_PENELOPE_PA.Visible = true;
-            label_PENELOPE_PA.Location = PENELOPE_PA_label;
+            label_PENELOPE_PA.Location = piPoint(PENELOPE_PA_label);
             label_PENELOPE_CODEC.Visible = true;
-            label_PENELOPE_CODEC.Location = PENELOPE_CODEC_label;
+            label_PENELOPE_CODEC.Location = piPoint(PENELOPE_CODEC_label);
             label_PENELOPE_ANT.Visible = true;
-            label_PENELOPE_ANT.Location = PENELOPE_ANT_label;
+            label_PENELOPE_ANT.Location = piPoint(PENELOPE_ANT_label);
             label_PENELOPE_LINE.Visible = true;
-            label_PENELOPE_LINE.Location = PENELOPE_LINE_label;
+            label_PENELOPE_LINE.Location = piPoint(PENELOPE_LINE_label);
             label_PENELOPE_IN.Visible = true;
-            label_PENELOPE_IN.Location = PENELOPE_IN_label;
+            label_PENELOPE_IN.Location = piPoint(PENELOPE_IN_label);
             label_PENELOPE_MIC.Visible = true;
-            label_PENELOPE_MIC.Location = PENELOPE_MIC_label;
+            label_PENELOPE_MIC.Location = piPoint(PENELOPE_MIC_label);
             label_PENELOPE_XVTR.Visible = true;
-            label_PENELOPE_XVTR.Location = PENELOPE_XVTR_label;
+            label_PENELOPE_XVTR.Location = piPoint(PENELOPE_XVTR_label);
 
 
             // draw HPSDR rectangles
@@ -1937,61 +1939,61 @@ namespace Thetis
             // label ALEX rectangles            
             label_C2.Text = "XV RX IN";
             label_C2.Visible = true;
-            label_C2.Location = C2_label_HPSDR;
+            label_C2.Location = piPoint(C2_label_HPSDR);
 
             label_C3.Text = "RX 2 IN";
             label_C3.Visible = true;
-            label_C3.Location = C3_label_HPSDR;
+            label_C3.Location = piPoint(C3_label_HPSDR);
 
             label_C4.Text = "RX 1 IN";
             label_C4.Visible = true;
-            label_C4.Location = C4_label_HPSDR;
+            label_C4.Location = piPoint(C4_label_HPSDR);
 
             label_C5.Text = "RX 1 OUT";
             label_C5.Visible = true;
-            label_C5.Location = C5_label_HPSDR;
+            label_C5.Location = piPoint(C5_label_HPSDR);
 
             label_C7.Text = "ANT 1";
             label_C7.Visible = true;
-            label_C7.Location = C7_label_HPSDR;
+            label_C7.Location = piPoint(C7_label_HPSDR);
 
             label_C8.Text = "ANT 2";
             label_C8.Visible = true;
-            label_C8.Location = C8_label_HPSDR;
+            label_C8.Location = piPoint(C8_label_HPSDR);
 
             label_C9.Text = "ANT 3";
             label_C9.Visible = true;
-            label_C9.Location = C9_label_HPSDR;
+            label_C9.Location = piPoint(C9_label_HPSDR);
 
             label_C10.Text = "From TX*";
             label_C10.Visible = true;
-            label_C10.Location = C10_label_ALEX_TX_IN;
+            label_C10.Location = piPoint(C10_label_ALEX_TX_IN);
 
             label_DSP_HPSDR.Visible = true;
-            label_DSP_HPSDR.Location = DSP_HPSDR_label;
+            label_DSP_HPSDR.Location = piPoint(DSP_HPSDR_label);
 
             label_ALEX.Visible = true;
-            label_ALEX.Location = ALEX_label;
+            label_ALEX.Location = piPoint(ALEX_label);
             label_HERMES.Visible = true;
-            label_HERMES.Location = HERMES_label;
+            label_HERMES.Location = piPoint(HERMES_label);
             label_HERMES_RX_IN.Visible = true;
-            label_HERMES_RX_IN.Location = HERMES_RX_IN_label;
+            label_HERMES_RX_IN.Location = piPoint(HERMES_RX_IN_label);
             label_HERMES_J5.Visible = true;
-            label_HERMES_J5.Location = HERMES_J5_label;
+            label_HERMES_J5.Location = piPoint(HERMES_J5_label);
             label_HERMES_TX_OUT.Visible = true;
-            label_HERMES_TX_OUT.Location = HERMES_TX_OUT_label;
+            label_HERMES_TX_OUT.Location = piPoint(HERMES_TX_OUT_label);
             label_HERMES_J3.Visible = true;
-            label_HERMES_J3.Location = HERMES_J3_label;
+            label_HERMES_J3.Location = piPoint(HERMES_J3_label);
             label_HERMES_XVTR_TX.Visible = true;
-            label_HERMES_XVTR_TX.Location = HERMES_XVTR_TX_label;
+            label_HERMES_XVTR_TX.Location = piPoint(HERMES_XVTR_TX_label);
             label_HERMES_J1.Visible = true;
-            label_HERMES_J1.Location = HERMES_J1_label;
+            label_HERMES_J1.Location = piPoint(HERMES_J1_label);
             if (!bool_HPF_BYPASS) label_ALEX_HPF.Visible = true;
-            label_ALEX_HPF.Location = ALEX_HPF_label;
+            label_ALEX_HPF.Location = piPoint(ALEX_HPF_label);
             label_ALEX_LPF.Visible = true;
-            label_ALEX_LPF.Location = ALEX_LPF_label;
+            label_ALEX_LPF.Location = piPoint(ALEX_LPF_label);
             label_ALEX_To_RX.Visible = true;
-            label_ALEX_To_RX.Location = ALEX_To_RX_label;
+            label_ALEX_To_RX.Location = piPoint(ALEX_To_RX_label);
             label_FPGA.Visible = true;
             label_DDC0.Visible = true;
             label_DDC1.Visible = true;
@@ -2001,9 +2003,9 @@ namespace Thetis
             if (!bool_rx)
             {
                 label_ext_amp1.Visible = true;
-                label_ext_amp1.Location = ext_amp_label1;
+                label_ext_amp1.Location = piPoint(ext_amp_label1);
                 label_ext_amp2.Visible = true;
-                label_ext_amp2.Location = ext_amp_label2;
+                label_ext_amp2.Location = piPoint(ext_amp_label2);
             }
 
             if (bool_diversity) bool_diversity = false;  // diversity unavailable in ANAN-10/10E (Hermes 1 ADC limitation)
@@ -2011,18 +2013,18 @@ namespace Thetis
             label_C24.Text = "SPKR";
             C24_label.X = C24.X - 45;
             C24_label.Y = C24.Y - 6;
-            label_C24.Location = C24_label;
+            label_C24.Location = piPoint(C24_label);
 
 
             label_C26.Text = "MIC";
             C26_label.X = C26.X - 35;
             C26_label.Y = C26.Y - 6;
-            label_C26.Location = C26_label;
+            label_C26.Location = piPoint(C26_label);
 
             label_C25.Text = "HDPHONES";
             C25_label.X = C25.X - 75;
             C25_label.Y = C25.Y - 6;
-            label_C25.Location = C25_label;
+            label_C25.Location = piPoint(C25_label);
 
             // draw HERMES boundaries
             blackPen.Width = 2;
@@ -5623,62 +5625,62 @@ namespace Thetis
             hide_rear_panel_labels();
 
             //activate and re-label the relevant rear panel labels
-            label_rear_panel.Location = new Point(8, 40);
+            label_rear_panel.Location = piPoint(8, 40);
             label_C2.Text = "ANT1";
             C2_label.X = C2.X - 45;
             C2_label.Y = C2.Y - 6;
-            label_C2.Location = C2_label;
+            label_C2.Location = piPoint(C2_label);
             label_C2.Visible = true;
 
             label_C3.Text = "ANT2";
             C3_label.X = C3.X - 45;
             C3_label.Y = C3.Y - 6;
-            label_C3.Location = C3_label;
+            label_C3.Location = piPoint(C3_label);
             label_C3.Visible = true;
 
             label_C4.Text = "ANT3";
             C4_label.X = C4.X - 45;
             C4_label.Y = C4.Y - 6;
-            label_C4.Location = C4_label;
+            label_C4.Location = piPoint(C4_label);
             label_C4.Visible = true;
 
             label_C5.Text = "RX (SMA)";
             C5_label.X = C5.X - 65;
             C5_label.Y = C5.Y - 6;
-            label_C5.Location = C5_label;
+            label_C5.Location = piPoint(C5_label);
             label_C5.Visible = true;
 
             label_C6.Text = "TX (SMA)";
             C6_label.X = C6.X - 65;
             C6_label.Y = C6.Y - 6;
-            label_C6.Location = C6_label;
+            label_C6.Location = piPoint(C6_label);
             label_C6.Visible = true;
 
             label_C7.Text = "XVRT (SMA)";
             C7_label.X = C7.X - 80;
             C7_label.Y = C7.Y - 6;
-            label_C7.Location = C7_label;
+            label_C7.Location = piPoint(C7_label);
             label_C7.Visible = true;
 
             label_C24.Text = "SPKR";
             C24_label.X = C24.X - 45;
             C24_label.Y = C24.Y - 6;
-            label_C24.Location = C24_label;
+            label_C24.Location = piPoint(C24_label);
 
 
             label_C26.Text = "MIC";
             C26_label.X = C26.X - 35;
             C26_label.Y = C26.Y - 6;
-            label_C26.Location = C26_label;
+            label_C26.Location = piPoint(C26_label);
 
             label_C25.Text = "HDPHONES";
             C25_label.X = C25.X - 75;
             C25_label.Y = C25.Y - 6;
-            label_C25.Location = C25_label;
+            label_C25.Location = piPoint(C25_label);
 
             LPF_label.X = LPF.X + 10;
             LPF_label.Y = LPF.Y + 17;
-            label_LPF.Location = LPF_label;
+            label_LPF.Location = piPoint(LPF_label);
 
             label_SWR.Visible = false;
 
@@ -5690,88 +5692,88 @@ namespace Thetis
             hide_rear_panel_labels();
 
             //activate and re-label the relevant rear panel labels
-            label_rear_panel.Location = new Point(8, 40);
+            label_rear_panel.Location = piPoint(8, 40);
 
             label_C2.Text = "RX 2";
             C2_label.X = C2.X - 35;
             C2_label.Y = C2.Y - 6;
-            label_C2.Location = C2_label;
+            label_C2.Location = piPoint(C2_label);
             label_C2.Visible = true;
 
             label_C4.Text = "XVRT RX";
             C4_label.X = C4.X - 60;
             C4_label.Y = C4.Y - 5;
-            label_C4.Location = C4_label;
+            label_C4.Location = piPoint(C4_label);
             label_C4.Visible = true;
 
             label_C5.Text = "EXT1";
             C5_label.X = C5.X - 40;
             C5_label.Y = C5.Y - 5;
-            label_C5.Location = C5_label;
+            label_C5.Location = piPoint(C5_label);
             label_C5.Visible = true;
 
             label_C6.Text = "EXT2";
             C6_label.X = C6.X - 40;
             C6_label.Y = C6.Y - 5;
-            label_C6.Location = C6_label;
+            label_C6.Location = piPoint(C6_label);
             label_C6.Visible = true;
 
             label_C7.Text = "BYPASS";
             C7_label.X = C7.X - 57;
             C7_label.Y = C7.Y - 5;
-            label_C7.Location = C7_label;
+            label_C7.Location = piPoint(C7_label);
             label_C7.Visible = true;
 
             label_C9.Text = "ANT1";
             C9_label.X = C9.X - 40;
             C9_label.Y = C9.Y - 5;
-            label_C9.Location = C9_label;
+            label_C9.Location = piPoint(C9_label);
             label_C9.Visible = true;
 
             label_C10.Text = "ANT2";
             C10_label.X = C10.X - 41;
             C10_label.Y = C10.Y - 5;
-            label_C10.Location = C10_label;
+            label_C10.Location = piPoint(C10_label);
             label_C10.Visible = true;
 
             label_C11.Text = "ANT3";
             C11_label.X = C11.X - 42;
             C11_label.Y = C11.Y - 5;
-            label_C11.Location = C11_label;
+            label_C11.Location = piPoint(C11_label);
             label_C11.Visible = true;
 
             label_C13.Text = "XVRT TX";
             C13_label.X = C13.X - 60;
             C13_label.Y = C13.Y - 5;
-            label_C13.Location = C13_label;
+            label_C13.Location = piPoint(C13_label);
             label_C13.Visible = true;
 
             label_C24.Text = "SPKR";
             C24_label.X = C24.X - 45;
             C24_label.Y = C24.Y - 6;
-            label_C24.Location = C24_label;
+            label_C24.Location = piPoint(C24_label);
             label_C24.Visible = true;
 
             label_C25.Text = "HDPHONES";
             C25_label.X = C25.X - 75;
             C25_label.Y = C25.Y - 6;
-            label_C25.Location = C25_label;
+            label_C25.Location = piPoint(C25_label);
             label_C25.Visible = true;
 
 
             label_C26.Text = "MIC";
             C26_label.X = C26.X - 35;
             C26_label.Y = C26.Y - 6;
-            label_C26.Location = C26_label;
+            label_C26.Location = piPoint(C26_label);
             label_C26.Visible = true;
 
             LPF_label.X = LPF.X + 10;
             LPF_label.Y = LPF.Y + 17;
-            label_LPF.Location = LPF_label;
+            label_LPF.Location = piPoint(LPF_label);
 
             HPF_label.X = HPF.X + 10;
             HPF_label.Y = HPF.Y + 17;
-            label_HPF.Location = HPF_label;
+            label_HPF.Location = piPoint(HPF_label);
 
         }
 
@@ -6306,6 +6308,15 @@ namespace Thetis
             do_platform_prep();
             update_diagram = true;
             canvas.Invalidate();
+        }
+
+        // Jull1ano fork: label positions are 96 DPI units next to the diagram; the form scales by its font
+        private Point piPoint(Point p) { return piPoint(p.X, p.Y); }
+
+        private Point piPoint(int x, int y)
+        {
+            float f = HighDpi.FormScale(this);
+            return new Point((int)Math.Round(x * f), (int)Math.Round(y * f));
         }
 
         private void PI_Resize(object sender, EventArgs e)

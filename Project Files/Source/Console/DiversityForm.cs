@@ -161,6 +161,7 @@ namespace Thetis
             // Required for Windows Form Designer support
             //
             InitializeComponent();
+            HighDpi.ScaleLegacyForm(this); // Jull1ano fork: .NET 1.x AutoScaleBaseSize form: scaled here, not again at load
             Common.DoubleBufferAll(this, true);
 
             setNewNaming(true);

@@ -181,15 +181,12 @@ namespace Thetis
                 _head_image = value;
                 if (_head_image != null)
                 {
-                    // Jull1ano fork: the skin's handle image is in 96 DPI pixels: at high DPI it is drawn scaled, and
-                    // half as wide again across the track so it is easier to grab (9 x 20 -> 27 x 40 at 200 %)
+                    // Jull1ano fork: the skin's handle image is in 96 DPI pixels: at high DPI it is drawn scaled, the
+                    // same size as the original Thetis shows it (9 x 20 -> 18 x 40 at 200 %)
                     if (HighDpi.Enabled)
                     {
-                        bool tall = _head_image.Height >= _head_image.Width; // a horizontal slider's handle
-                        float sx = HighDpi.Scale * (tall ? 1.5f : 1f);
-                        float sy = HighDpi.Scale * (tall ? 1f : 1.5f);
-                        _head_rect.Width = (int)Math.Round(_head_image.Width * sx);
-                        _head_rect.Height = (int)Math.Round(_head_image.Height * sy);
+                        _head_rect.Width = HighDpi.Px(_head_image.Width);
+                        _head_rect.Height = HighDpi.Px(_head_image.Height);
                         if (Height > 0 && _head_rect.Height > Height) _head_rect.Height = Height;
                         if (Width > 0 && _head_rect.Width > Width) _head_rect.Width = Width;
                     }

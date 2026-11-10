@@ -894,9 +894,9 @@ namespace Thetis
         private void setAdvancedView()
         {
             if (_advancedON)
-                console.psform.ClientSize = new System.Drawing.Size(560, 60);
+                console.psform.ClientSize = new System.Drawing.Size(HighDpi.PxForm(this, 560), HighDpi.PxForm(this, 60, true)); // Jull1ano fork: DPI-scaled
             else
-                console.psform.ClientSize = new System.Drawing.Size(560, 300);
+                console.psform.ClientSize = new System.Drawing.Size(HighDpi.PxForm(this, 560), HighDpi.PxForm(this, 300, true));
 
             chkAdvancedViewHidden.Checked = _advancedON;
         }

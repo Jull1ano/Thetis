@@ -64,8 +64,32 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   5.0, 4.1, 3.2, 2.4, 1.9 dB for 0 ... 0.5 at 200 % and keeps falling. Display only (trace, fill, peak
   markers): the noise floor estimate and the waterfall are unchanged. Saved as `hidpi_fft_smooth.txt`.
 - Slider handles (Pan, Zoom, AF, AGC Gain, Drive ...): the skin's handle images are 96 DPI pixels; drawn
-  scaled and half as wide again across the track for an easier grab (9 x 20 -> 27 x 40 at 200 %, nearest
-  pixel, so crisp).
+  scaled like the original shows them (9 x 20 -> 18 x 40 at 200 %, nearest pixel, so crisp).
+- Base text size: the original at 200 % is drawn at 96 DPI and stretched by Windows; the stretch blurs the
+  text, which then looks heavier and about 2 px taller than the same font drawn sharp (measured: 18 vs
+  16 px, 16-20 % more ink). Default here is 0.75 pt larger on the 8.25 pt base (`HighDpi.TEXT_BASE_BOOST`,
+  `THETIS_TEXT_BOOST=<pt>` to compare); +1 / +2 add to it. Text in a fixed control still only grows as far as
+  it fits.
+- Windows WinForms does not scale (no AutoScaleMode: Equalizer, XVTR, Filter, CW edit, input box, progress,
+  splash; or the .NET 1.x AutoScaleBaseSize: Diversity, CAT tester, CWX) are scaled right after
+  InitializeComponent, before a saved size is restored. Diversity used to open bigger on every reopen: its
+  load-time scaling came after the restore (the original grows too, by 1.2 per reopen at 100 %).
+- Font-scaled windows (AutoScaleMode.Font, most dialogs) lay out at their font's height ratio, about 2.17
+  wide at 200 % instead of 2: 8 % bigger than the original, with the text relatively smaller in them. When
+  such a window opens its layout is brought to exactly the DPI scale (bounds only), and the text pass no
+  longer rescales a window with its text. Windows are prepared from a WH_CBT hook at activation, before
+  their first paint (the Application.Idle watcher stays as a fallback). Measured on the sweep: Memory,
+  PureSignal, About, Finder, Path Illustrator open within 6 px of the original's size.
+- Saved window sizes are restored and saved in the window's own scale (`HighDpi.FormScale`), and never
+  larger than the screen.
+- A fixed-size label whose text changes later ("AGC Gain: 120") is fitted again on every change.
+- Grids (Memory ...): fixed column widths, row heights and header heights are scaled once when the window
+  opens (WinForms leaves them at 96 DPI here).
+- Meter containers: position and size are stored in 96 DPI units (they were used as pixels: half size); a
+  new container gets the default 400 x 200 at this DPI.
+- PureSignal (fixed client sizes), Path Illustrator (diagram and label positions drawn in 96 DPI units),
+  Wideband (frequency scale strip height), Band Stack, colour palette: scaled.
+- Save (memory quick save) is centred like Restore (upstream had TopCenter for Save only).
 - Window positions and sizes are saved in 96 DPI units, so one settings database works in both modes.
 - Off: command line `-nohidpi` or `THETIS_HIDPI=0`. At 100 % scaling nothing changes.
 - Text size: Setup > Appearance > General > High DPI (fork): Default, +1, +2 (one point each on the
@@ -81,8 +105,9 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   palette (hand-drawn in pixels), Band Stack 2 (fixed 256 / 512 px widths; the form scales by its font,
   about 2.17 at 200 %, so its width now comes from its laid-out controls).
 - `THETIS_HIDPI_LOG=<file>` logs the DPI work; with `THETIS_HIDPI_LOGFIT=1` also every text fit.
-  `THETIS_HIDPI_OPEN=setup:<tab>:<tab>[:<button>]` / `cwx` / `finder:<text>` / `bandstack` opens that
-  window after start, a button name clicks it (a colour button opens its palette); used for captures.
+  `THETIS_HIDPI_OPEN=setup:<tab>:<tab>[:<button>]` / `cwx` / `finder:<text>` / `bandstack` /
+  `menu:<menu item name>` opens that window after start, a button name clicks it (a colour button opens its
+  palette); used for captures (build-tools: capture-thetis.ps1 -AlsoTitle "<other>" grabs the window).
 
 ## Test settings (no rebuild needed)
 

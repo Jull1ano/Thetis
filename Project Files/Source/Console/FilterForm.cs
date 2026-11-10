@@ -98,6 +98,7 @@ namespace Thetis
 			console = c;
 			preset = fp;
 			InitializeComponent();
+			HighDpi.ScaleLegacyForm(this); // Jull1ano fork: WinForms does not scale this form (no AutoScaleMode)
 			comboDSPMode.SelectedIndex = 0;	
 			radFilter1.Checked = true;
 			rx2 = _rx2;

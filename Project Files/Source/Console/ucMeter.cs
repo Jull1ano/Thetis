@@ -108,6 +108,7 @@ namespace Thetis
         public ucMeter()
         {
             InitializeComponent();
+            if (HighDpi.Enabled) Size = new Size(HighDpi.Px(400), HighDpi.Px(200)); // Jull1ano fork: the default 400 x 200 at this DPI
 
             Common.DoubleBufferAll(this, true);
 
@@ -1014,13 +1015,13 @@ namespace Thetis
             return
                 ID + "|" +
                 RX.ToString() + "|" +
-                DockedLocation.X.ToString() + "|" +
-                DockedLocation.Y.ToString() + "|" +
-                DockedSize.Width.ToString() + "|" +
-                DockedSize.Height.ToString() + "|" +
+                HighDpi.Unpx(DockedLocation.X).ToString() + "|" + // Jull1ano fork: stored in 96 DPI units
+                HighDpi.Unpx(DockedLocation.Y).ToString() + "|" +
+                HighDpi.Unpx(DockedSize.Width).ToString() + "|" +
+                HighDpi.Unpx(DockedSize.Height).ToString() + "|" +
                 Floating.ToString().ToLower() + "|" +
-                Delta.X.ToString() + "|" +
-                Delta.Y.ToString() + "|" +
+                HighDpi.Unpx(Delta.X).ToString() + "|" +
+                HighDpi.Unpx(Delta.Y).ToString() + "|" +
                 AxisLock.ToString() + "|" +
                 PinOnTop.ToString().ToLower() + "|" +
                 UCBorder.ToString().ToLower() + "|" +
@@ -1068,8 +1069,8 @@ namespace Thetis
                     if (bOk) bOk = int.TryParse(tmp[5], out h);
                     if (bOk)
                     {
-                        DockedLocation = new Point(x, y);
-                        DockedSize = new Size(w, h);
+                        DockedLocation = new Point(HighDpi.Px(x), HighDpi.Px(y)); // Jull1ano fork: stored in 96 DPI units
+                        DockedSize = new Size(HighDpi.Px(w), HighDpi.Px(h));
                     }
 
                     if (bOk) bOk = bool.TryParse(tmp[6], out floating);
@@ -1077,7 +1078,7 @@ namespace Thetis
 
                     if (bOk) bOk = int.TryParse(tmp[7], out x);
                     if (bOk) bOk = int.TryParse(tmp[8], out y);
-                    if (bOk) Delta = new Point(x, y);
+                    if (bOk) Delta = new Point(HighDpi.Px(x), HighDpi.Px(y));
 
                     if (bOk)
                     {

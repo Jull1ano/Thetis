@@ -3336,7 +3336,7 @@ namespace Thetis
             int height = this.Height; //target.Height;
 
             displayTop = 0;
-            int freqScaleRectHeight = 20;
+            int freqScaleRectHeight = HighDpi.Px(20); // Jull1ano fork: holds the 9 pt scale text, DPI-scaled
 
             freqScalePanRect = new Rectangle(
                     0,

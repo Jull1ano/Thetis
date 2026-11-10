@@ -751,6 +751,7 @@ namespace Thetis
 
             InitializeComponent();								// Windows Forms Generated Code
             Common.DoubleBufferAll(this, true);
+            btnMemoryQuickSave.TextAlign = ContentAlignment.MiddleCenter; // Jull1ano fork: same baseline as Restore (was TopCenter)
             HighDpi.PrepareForm(this);  // Jull1ano fork: text size, list rows (HighDpi.cs)
             HighDpi.StartFormWatcher(); // and the same for every other form when it opens
 
@@ -44804,6 +44805,16 @@ namespace Thetis
                         else if (found.Length > 0 && found[0] is Button bb) bb.PerformClick(); // e.g. a colour button: its drop-down
                     }
                     HighDpi.Log("Setup: Size " + SetupForm.Size + " Client " + SetupForm.ClientSize);
+                }
+                else if (parts[0] == "menu")
+                {
+                    // menu:<item name>[:<item name>...] clicks those menu items (Setup > Database Manager ...)
+                    for (int t = 1; t < parts.Length; t++)
+                    {
+                        ToolStripItem[] items = menuStrip1.Items.Find(parts[t], true);
+                        if (items.Length > 0) items[0].PerformClick();
+                        else HighDpi.Log("menu item not found: " + parts[t]);
+                    }
                 }
                 else if (parts[0] == "bandstack")
                 {
