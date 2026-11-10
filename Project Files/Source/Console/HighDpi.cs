@@ -48,7 +48,12 @@ namespace Thetis
             string env = Environment.GetEnvironmentVariable("THETIS_HIDPI");
             if (env == "1") want = true;
             else if (env == "0") want = false;
-            if (!want) return;
+            if (!want)
+            {
+                // pin the old (unaware, stretched) mode before WinForms reads its DpiAwareness setting (app.config)
+                try { SetProcessDpiAwarenessContext(new IntPtr(-1)); } catch { }
+                return;
+            }
 
             bool ok = false;
             try { ok = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE); } catch { }

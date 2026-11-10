@@ -935,9 +935,9 @@ namespace Thetis
         {
             //splitter
             int leftStop = (int)(this.Width * 0.7f);
-            int span = this.Width - 88 - leftStop; // see lblSplitter_MouseMove for 88
+            int span = this.Width - HighDpi.Px(88) - leftStop; // see lblSplitter_MouseMove for 88 // Jull1ano fork: DPI-scaled
             float shift = span - (span * _splitterRatio);
-            lblSplitter.Left = this.Width - 88 - (int)shift;
+            lblSplitter.Left = this.Width - HighDpi.Px(88) - (int)shift;
             //
 
             repositionControls();
@@ -1170,12 +1170,12 @@ namespace Thetis
                 if (newLeft < leftStop)
                     newLeft = leftStop;
 
-                if (newLeft > this.Width - 88 - 5)  // 88 width of base lblFB + lblPS, 5 is splitter width
-                    newLeft = this.Width - 88 - 5;
+                if (newLeft > this.Width - HighDpi.Px(88) - HighDpi.Px(5))  // 88 width of base lblFB + lblPS, 5 is splitter width // Jull1ano fork: DPI-scaled
+                    newLeft = this.Width - HighDpi.Px(88) - HighDpi.Px(5);
 
                 lblSplitter.Left = newLeft;
 
-                _splitterRatio = (newLeft - leftStop) / (float)(this.Width - 88 - leftStop);
+                _splitterRatio = (newLeft - leftStop) / (float)(this.Width - HighDpi.Px(88) - leftStop);
 
                 repositionControls();
 
@@ -1225,15 +1225,15 @@ namespace Thetis
             lblRight2.Width = _right2Width[_currentFlip];
             lblRight3.Width = _right3Width[_currentFlip];
 
-            int shift = lblRight1.Width + lblRight2.Width + lblRight3.Width + 4;
+            int shift = lblRight1.Width + lblRight2.Width + lblRight3.Width + HighDpi.Px(4);
             lblRight1.Left = lblFB.Left - shift;
             lblRight2.Left = lblRight1.Left + lblRight1.Width;
             lblRight3.Left = lblRight1.Left + lblRight1.Width + lblRight2.Width;
 
             //warning
-            lblWarning.Width = lblSplitter.Left - lblWarning.Left - 4;
+            lblWarning.Width = lblSplitter.Left - lblWarning.Left - HighDpi.Px(4);
 
-            _useSmallFonts = newSpan <= 180; // if space is too small, use small fonts
+            _useSmallFonts = newSpan <= HighDpi.Px(180); // if space is too small, use small fonts // Jull1ano fork: DPI-scaled
 
             if (_useSmallFonts)
             {
