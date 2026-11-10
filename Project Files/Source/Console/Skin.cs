@@ -1049,6 +1049,15 @@ namespace Thetis
             CheckBox_StateChanged(ctrl, EventArgs.Empty);
         }
 
+        // Jull1ano fork: a check box drawn with another one's skin images (the NR2..NR4 buttons use chkNR's)
+        public static void SkinLike(CheckBox from, CheckBox to)
+        {
+            if (from == null || to == null || from.ImageList == null) return;
+            to.ImageList = from.ImageList;
+            setupCheckBoxHandlers(to);
+            CheckBox_StateChanged(to, EventArgs.Empty);
+        }
+
         private static void setupCheckBoxHandlers(CheckBox ctrl)
         {
             EventHandler handler = new EventHandler(CheckBox_StateChanged);

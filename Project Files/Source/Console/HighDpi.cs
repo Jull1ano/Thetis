@@ -286,14 +286,17 @@ namespace Thetis
             _prepared.Add(form, null);
             try
             {
-                normalizeFontScaledForm(form);
-                normalizeNestedFontControls(form);
-                applyTextScale(form);
-                FixOwnerDrawLists(form);
-                FixGrids(form, form);
-                ScaleButtonImages(form);
-                FixAutoSizeBounds(form);
-                ApplyEditPadding(form);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var t = new System.Collections.Generic.List<string>();
+                normalizeFontScaledForm(form); t.Add("normalize " + sw.ElapsedMilliseconds);
+                normalizeNestedFontControls(form); t.Add("nested " + sw.ElapsedMilliseconds);
+                applyTextScale(form); t.Add("text " + sw.ElapsedMilliseconds);
+                FixOwnerDrawLists(form); t.Add("lists " + sw.ElapsedMilliseconds);
+                FixGrids(form, form); t.Add("grids " + sw.ElapsedMilliseconds);
+                ScaleButtonImages(form); t.Add("icons " + sw.ElapsedMilliseconds);
+                FixAutoSizeBounds(form); t.Add("autosize " + sw.ElapsedMilliseconds);
+                ApplyEditPadding(form); t.Add("padding " + sw.ElapsedMilliseconds);
+                if (sw.ElapsedMilliseconds > 40) Log("PrepareForm " + form.Name + " " + sw.ElapsedMilliseconds + " ms: " + string.Join(", ", t));
             }
             catch (Exception ex) { Log("PrepareForm " + form.Name + ": " + ex); }
         }
@@ -815,6 +818,24 @@ namespace Thetis
             }
         }
 
+        // A grid whose form sets it up before binding its rows (Memory): the row height goes on the row template, so
+        // the rows come in at it. Setting it row by row afterwards re-lays the whole grid out for every row (about
+        // 40 ms each: 3 s for the 76 memories); this grid is left alone when its form opens.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.DataGridView, object> _gridsDone =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.DataGridView, object>();
+
+        public static void PrepareGridEarly(System.Windows.Forms.DataGridView g)
+        {
+            if (!Enabled || g == null || _gridsDone.TryGetValue(g, out object _)) return;
+            _gridsDone.Add(g, null);
+            float pt = g.Font.SizeInPoints;
+            int fh = (int)Math.Ceiling(g.Font.Height * ScaledFontSize(pt) / pt);
+            int before = g.RowTemplate.Height;
+            // the template already follows the DPI here (about font height + 8); the original shows 22 units
+            g.RowTemplate.Height = Math.Max(Px(22), fh + Px(6));
+            Log("PrepareGridEarly " + g.Name + ": template " + before + " -> " + g.RowTemplate.Height + ", font height " + g.Font.Height + " -> " + fh);
+        }
+
         // grids: WinForms scales neither their column widths nor their row heights here (System DPI aware), so
         // the text is 2x in 1x cells. Fixed-size columns and rows get the form's scale, once.
         public static void FixGrids(System.Windows.Forms.Form form, System.Windows.Forms.Control root)
@@ -822,7 +843,8 @@ namespace Thetis
             if (!Enabled || root == null) return;
             foreach (System.Windows.Forms.Control c in root.Controls)
             {
-                if (c is System.Windows.Forms.DataGridView g)
+                if (c is System.Windows.Forms.DataGridView g0 && _gridsDone.TryGetValue(g0, out object _)) { }
+                else if (c is System.Windows.Forms.DataGridView g)
                 {
                     try
                     {
@@ -839,7 +861,7 @@ namespace Thetis
                         {
                             int h = Math.Max((int)Math.Round(g.RowTemplate.Height * sy), g.Font.Height + Px(6));
                             g.RowTemplate.Height = h;
-                            foreach (System.Windows.Forms.DataGridViewRow r in g.Rows) r.Height = h;
+                            foreach (System.Windows.Forms.DataGridViewRow r in g.Rows) if (r.Height < h) r.Height = h; // each change re-lays the whole grid out
                         }
                         if (g.ColumnHeadersHeightSizeMode != System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize)
                             g.ColumnHeadersHeight = Math.Max(g.ColumnHeadersHeight, g.ColumnHeadersDefaultCellStyle.Font != null

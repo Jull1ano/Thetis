@@ -262,6 +262,65 @@ namespace Thetis
         private static SharpDX.Mathematics.Interop.RawVector2[] _tracePts;
         private static StrokeStyle _traceStyle;
 
+        // Jull1ano fork: two-colour fill (Setup > Appearance > RX Display > Fill gradient (fork)): the fill under
+        // the trace runs from the top colour at the top of the panadapter to the bottom colour at its bottom, with
+        // the Data Fill alpha; optionally the trace too, with the Data Line alpha. Thetis' own multi-stop gradient
+        // (Gradients tab) wins when it is on.
+        private static bool _forkFillGradient = false;
+        private static bool _forkLineGradient = false;
+        private static Color _forkFillTop = Color.FromArgb(255, 30, 144, 255);
+        private static Color _forkFillBottom = Color.FromArgb(255, 6, 29, 51);
+        public static bool ForkFillGradient { get { return _forkFillGradient; } set { _forkFillGradient = value; } }
+        public static bool ForkLineGradient { get { return _forkLineGradient; } set { _forkLineGradient = value; } }
+        public static Color ForkFillTop { get { return _forkFillTop; } set { _forkFillTop = value; } }
+        public static Color ForkFillBottom { get { return _forkFillBottom; } set { _forkFillBottom = value; } }
+        private static readonly SharpDX.Direct2D1.LinearGradientBrush[] _forkFillBrush = new SharpDX.Direct2D1.LinearGradientBrush[2];
+        private static readonly SharpDX.Direct2D1.LinearGradientBrush[] _forkLineBrush = new SharpDX.Direct2D1.LinearGradientBrush[2];
+        private static readonly string[] _forkGradKey = new string[2];
+
+        private static void forkDisposeGradient(int i)
+        {
+            if (_forkFillBrush[i] != null) Utilities.Dispose(ref _forkFillBrush[i]);
+            if (_forkLineBrush[i] != null) Utilities.Dispose(ref _forkLineBrush[i]);
+            _forkFillBrush[i] = null;
+            _forkLineBrush[i] = null;
+            _forkGradKey[i] = null;
+        }
+
+        private static SharpDX.Direct2D1.LinearGradientBrush forkVertical(int top, int bottom, Color cTop, Color cBottom)
+        {
+            GradientStop[] stops = new GradientStop[]
+            {
+                new GradientStop() { Color = convertColour(cBottom), Position = 0f },
+                new GradientStop() { Color = convertColour(cTop), Position = 1f }
+            };
+            using (SharpDX.Direct2D1.GradientStopCollection coll = new SharpDX.Direct2D1.GradientStopCollection(_d2dRenderTarget, stops))
+            {
+                return new SharpDX.Direct2D1.LinearGradientBrush(_d2dRenderTarget, new SharpDX.Direct2D1.LinearGradientBrushProperties()
+                {
+                    StartPoint = new Vector2(0, bottom),
+                    EndPoint = new Vector2(0, top)
+                }, coll);
+            }
+        }
+
+        private static void forkGradient(int rx, int top, int bottom, ref SharpDX.Direct2D1.Brush fillBrush, ref SharpDX.Direct2D1.Brush lineBrush)
+        {
+            if (!_forkFillGradient || _d2dRenderTarget == null) return;
+            int i = rx == 2 ? 1 : 0;
+            int fa = data_fill_color.A, la = data_line_color.A;
+            string key = top + "|" + bottom + "|" + _forkFillTop.ToArgb() + "|" + _forkFillBottom.ToArgb() + "|" + fa + "|" + la;
+            if (_forkGradKey[i] != key || _forkFillBrush[i] == null)
+            {
+                forkDisposeGradient(i);
+                _forkFillBrush[i] = forkVertical(top, bottom, Color.FromArgb(fa, _forkFillTop), Color.FromArgb(fa, _forkFillBottom));
+                _forkLineBrush[i] = forkVertical(top, bottom, Color.FromArgb(la, _forkFillTop), Color.FromArgb(la, _forkFillBottom));
+                _forkGradKey[i] = key;
+            }
+            fillBrush = _forkFillBrush[i];
+            if (_forkLineGradient) lineBrush = _forkLineBrush[i];
+        }
+
         // Jull1ano fork: FFT Smooth, as AetherSDR (FftTraceSmoothing.h): each point of the drawn spectrum becomes
         // the mean of its +-N neighbours in linear power, then back to dB, so the noise does not drag the trace
         // down the way a dB mean would. N is in logical pixels (0 = off, 0.1 steps up to 16). Display only: the
@@ -5271,6 +5330,7 @@ namespace Thetis
                 }
                 fillPeaksBrush = m_bDX2_dataPeaks_fill_fpen_brush;
                 line_width = _display_line_width; // Jull1ano fork: the trace width is in device pixels (as NereusSDR): 1 px is crisp at 4K
+                if (!m_bUseLinearGradient) forkGradient(rx, nVerticalShift, nVerticalShift + H, ref fillBrush, ref lineBrush); // Jull1ano fork
             }
 
             float dbmToPixel = H / (float)yRange;
@@ -8315,6 +8375,7 @@ namespace Thetis
 
             if (m_styleDots != null) Utilities.Dispose(ref m_styleDots);
             if (_traceStyle != null) Utilities.Dispose(ref _traceStyle); // Jull1ano fork
+            forkDisposeGradient(0); forkDisposeGradient(1);
 
             if (m_bDX2_noisefloor != null) Utilities.Dispose(ref m_bDX2_noisefloor);
             if (m_bDX2_noisefloor_text != null) Utilities.Dispose(ref m_bDX2_noisefloor_text);

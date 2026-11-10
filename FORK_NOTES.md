@@ -144,6 +144,20 @@ NR2 on by default (same group, on by default): Thetis turns NR off itself in FM 
 settings, in DIGU / DIGL, and never back on. In every other mode NR2 comes on when NR is off, after each mode
 change and at start, on both receivers; the NR button still turns it off until the next mode change.
 
+NR buttons (as NereusSDR): each NR on its own button, a click switches it on, a second click off, no cycling.
+NR1 is the old NR button; NR2 / NR3 / NR4 sit in the free row above NR / ANF / the display mode list, with
+the skin's NR button images (room left at its end for another NR). Where that row has no room (a narrow
+window) it hides and NR cycles as before. NR2 on by default still applies.
+
+Fill gradient (Setup > Appearance > RX Display > Fill gradient (fork), off by default): the fill under the
+trace runs from a top to a bottom colour over the panadapter height, with the Data Fill alpha; "Data Line
+too" draws the trace with the same colours. The Gradients tab's own gradient wins when it is on. Saved in
+`fork_display.txt`.
+
+Memory window: rows get their height from the row template before the memories are bound (setting it row
+by row re-laid the grid out for each row: 3 s for 76 rows); it opens in about 0.5 s (the original 0.3 s).
+The row header is twice the original's width.
+
 Memory window: one left click on a row's header (the small field left of the row) recalls that memory, as
 Select or a double click do; every recall from the window centres the view on the VFO (as a right click on
 CTUN). Test hooks: `click:<control>:...`, `memrow:<n>`.

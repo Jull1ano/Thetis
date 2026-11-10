@@ -89,9 +89,13 @@ namespace Thetis
 
             dataGridView1.RowHeadersVisible = true;
 
+            HighDpi.PrepareGridEarly(dataGridView1); // Jull1ano fork: rows come in at the scaled height (fast)
             dataGridView1.DataSource = console.MemoryList.List; // ke9ns get list of memories from memorylist.cs is where the file is opened and saved
 
-            dataGridView1.RowHeadersWidthSizeMode =  DataGridViewRowHeadersWidthSizeMode.AutoSizeToAllHeaders;
+            // Jull1ano fork: the row header (one click there tunes) twice the width of the original, fixed:
+            // auto-sizing it to all headers also re-measured every row
+            dataGridView1.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.EnableResizing;
+            dataGridView1.RowHeadersWidth = HighDpi.Px(82);
 
             dataGridView1.ColumnHeadersHeightSizeMode =  DataGridViewColumnHeadersHeightSizeMode.AutoSize;
 

@@ -102,6 +102,76 @@ namespace Thetis
 
         #region Constructor and Destructor
 
+        // Jull1ano fork: Appearance > RX Display > "Fill gradient (fork)", under Panadapter Noise Floor
+        private void addForkFillOptions()
+        {
+            Control anchor = groupBoxTS18; // Panadapter Noise Floor
+            if (anchor == null || anchor.Parent == null) return;
+            GroupBox grp = new GroupBox();
+            grp.Name = "grpForkFillGradient";
+            grp.Text = "Fill gradient (fork)";
+            grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
+            grp.Size = new Size(anchor.Width, HighDpi.Px(76));
+            CheckBox chkFill = new CheckBox();
+            chkFill.Name = "chkForkFillGradient";
+            chkFill.Text = "Two-colour fill";
+            chkFill.AutoSize = false;
+            chkFill.Size = new Size(HighDpi.Px(150), HighDpi.Px(20));
+            chkFill.Location = new Point(HighDpi.Px(8), HighDpi.Px(20));
+            chkFill.Checked = Display.ForkFillGradient;
+            CheckBox chkLine = new CheckBox();
+            chkLine.Name = "chkForkLineGradient";
+            chkLine.Text = "Data Line too";
+            chkLine.AutoSize = false;
+            chkLine.Size = new Size(HighDpi.Px(150), HighDpi.Px(20));
+            chkLine.Location = new Point(HighDpi.Px(8), HighDpi.Px(46));
+            chkLine.Checked = Display.ForkLineGradient;
+            Label lblTop = new Label();
+            lblTop.Text = "Top:";
+            lblTop.AutoSize = false;
+            lblTop.Size = new Size(HighDpi.Px(54), HighDpi.Px(18));
+            lblTop.Location = new Point(HighDpi.Px(170), HighDpi.Px(23));
+            ColorButton cTop = new ColorButton();
+            cTop.Name = "clrbtnForkFillTop";
+            cTop.Size = new Size(HighDpi.Px(40), HighDpi.Px(23));
+            cTop.Location = new Point(HighDpi.Px(226), HighDpi.Px(18));
+            cTop.Color = Display.ForkFillTop;
+            Label lblBottom = new Label();
+            lblBottom.Text = "Bottom:";
+            lblBottom.AutoSize = false;
+            lblBottom.Size = new Size(HighDpi.Px(54), HighDpi.Px(18));
+            lblBottom.Location = new Point(HighDpi.Px(170), HighDpi.Px(49));
+            ColorButton cBottom = new ColorButton();
+            cBottom.Name = "clrbtnForkFillBottom";
+            cBottom.Size = new Size(HighDpi.Px(40), HighDpi.Px(23));
+            cBottom.Location = new Point(HighDpi.Px(226), HighDpi.Px(44));
+            cBottom.Color = Display.ForkFillBottom;
+            EventHandler apply = (s, e) =>
+            {
+                Display.ForkFillGradient = chkFill.Checked;
+                Display.ForkLineGradient = chkLine.Checked;
+                Display.ForkFillTop = Color.FromArgb(255, cTop.Color);
+                Display.ForkFillBottom = Color.FromArgb(255, cBottom.Color);
+                if (console != null) console.ForkSaveDisplayOptions();
+            };
+            chkFill.CheckedChanged += apply;
+            chkLine.CheckedChanged += apply;
+            cTop.Changed += apply;
+            cBottom.Changed += apply;
+            string tip = "The fill under the spectrum line runs from the top colour (top of the panadapter) to the bottom\r\n" +
+                "colour, with the Data Fill alpha; \"Data Line too\" draws the line with the same colours (Data Line alpha).\r\n" +
+                "The Gradients tab's own gradient wins when it is on.";
+            toolTip1.SetToolTip(chkFill, tip);
+            toolTip1.SetToolTip(chkLine, tip);
+            grp.Controls.Add(chkFill);
+            grp.Controls.Add(chkLine);
+            grp.Controls.Add(lblTop);
+            grp.Controls.Add(cTop);
+            grp.Controls.Add(lblBottom);
+            grp.Controls.Add(cBottom);
+            anchor.Parent.Controls.Add(grp);
+        }
+
         // Jull1ano fork: Appearance > General > "Receive (fork)", under Cursor/Peak Readout
         private void addForkTuningOptions()
         {
@@ -273,6 +343,7 @@ namespace Thetis
 
             if (HighDpi.Enabled) addHighDpiOptions();
             addForkTuningOptions(); // Jull1ano fork: band-aware tuning
+            addForkFillOptions();   // Jull1ano fork: two-colour fill
             if (HighDpi.Enabled) HighDpi.PrepareForm(this);
 
             console = c;
@@ -12736,6 +12807,7 @@ namespace Thetis
             {
                 Skin.Restore(comboAppSkin.Text, _skinPath, console);
                 console.UpdateAndromedaSkins();
+                console.ForkReskin(); // Jull1ano fork: the NR2..NR4 buttons take the NR button's images
             }
 
             console.CurrentSkin = comboAppSkin.Text;

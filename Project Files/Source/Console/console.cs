@@ -756,6 +756,8 @@ namespace Thetis
             HighDpi.PrepareForm(this);  // Jull1ano fork: text size, list rows (HighDpi.cs)
             HighDpi.EnsureReadable(txtVFOABand); // Jull1ano fork: band text at least 4.5:1 on its background
             HighDpi.EnsureReadable(txtVFOBBand);
+            forkCreateNrButtons();             // Jull1ano fork: NR2..NR4 buttons above NR / ANF
+            forkLoadDisplayOptions(app_data_path); // and the two-colour fill
             HighDpi.StartFormWatcher(); // and the same for every other form when it opens
 
             InitialiseAndromedaMenus();
@@ -44804,6 +44806,9 @@ namespace Thetis
             BeginInvoke(new MethodInvoker(() =>
             {
                 _forkReady = true; // Jull1ano fork: band memory records from here on
+                ForkReskin();
+                forkLayoutNrButtons();
+                forkSyncNrButtons();
                 forkDefaultNR(1, RX1DSPMode); // and NR2 by default
                 forkDefaultNR(2, RX2DSPMode);
             }));
@@ -44838,6 +44843,24 @@ namespace Thetis
                         if (items.Length > 0) items[0].PerformClick();
                         else HighDpi.Log("menu item not found: " + parts[t]);
                     }
+                }
+                else if (parts[0] == "memtime")
+                {
+                    // memtime: how long the Memory window takes to open (create + show + the first idle after), 5 s
+                    // after start so the start-up work is done
+                    System.Windows.Forms.Timer tw = new System.Windows.Forms.Timer();
+                    tw.Interval = 5000;
+                    tw.Tick += (s6, e6) =>
+                    {
+                        tw.Stop();
+                        var swm = System.Diagnostics.Stopwatch.StartNew();
+                        memoryToolStripMenuItem_Click(this, EventArgs.Empty);
+                        long shown = swm.ElapsedMilliseconds;
+                        EventHandler idle = null;
+                        idle = (s5, e5) => { Application.Idle -= idle; HighDpi.Log("memtime: click->shown " + shown + " ms, ->idle " + swm.ElapsedMilliseconds + " ms, rows " + MemoryList.List.Count); };
+                        Application.Idle += idle;
+                    };
+                    tw.Start();
                 }
                 else if (parts[0] == "memrow")
                 {
@@ -44879,8 +44902,7 @@ namespace Thetis
                         if (hit.Length > 0)
                         {
                             HighDpi.Log("click " + parts[k]);
-                            if (hit[0] is CheckBox chk && chk.Appearance == Appearance.Button) chk.Checked = !chk.Checked;
-                            else typeof(Control).GetMethod("OnClick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                            typeof(Control).GetMethod("OnClick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                                     .Invoke(hit[0], new object[] { EventArgs.Empty });
                         }
                         else HighDpi.Log("click: no control " + parts[k]);
@@ -45562,6 +45584,171 @@ namespace Thetis
                 this.Text = BasicTitleBar;
             }
         }
+        // ---------------------------------------------------------------- Jull1ano fork: NR buttons
+        // As NereusSDR: each NR on its own button, a click switches it on, a second click off, no cycling. NR1 on
+        // the old NR button, NR2 / NR3 / NR4 in the free row above NR / ANF / the display mode list (room left at
+        // its end for more). Where that row has no room (a narrow window) it hides and NR cycles as before.
+        private CheckBox[] _forkNrButtons;
+        private bool _forkNrRowShown = false;
+
+        private void forkCreateNrButtons()
+        {
+            _forkNrButtons = new CheckBox[3];
+            for (int k = 0; k < 3; k++)
+            {
+                int nr = k + 2;
+                CheckBoxTS b = new CheckBoxTS();
+                b.Name = "chkForkNR" + nr;
+                b.Text = "NR" + nr;
+                b.Appearance = chkNR.Appearance;
+                b.FlatStyle = chkNR.FlatStyle;
+                b.FlatAppearance.BorderSize = chkNR.FlatAppearance.BorderSize;
+                b.FlatAppearance.BorderColor = chkNR.FlatAppearance.BorderColor;
+                b.FlatAppearance.CheckedBackColor = chkNR.FlatAppearance.CheckedBackColor;
+                b.FlatAppearance.MouseDownBackColor = chkNR.FlatAppearance.MouseDownBackColor;
+                b.FlatAppearance.MouseOverBackColor = chkNR.FlatAppearance.MouseOverBackColor;
+                b.BackColor = chkNR.BackColor;
+                b.ForeColor = chkNR.ForeColor;
+                b.Font = chkNR.Font;
+                b.TextAlign = chkNR.TextAlign;
+                b.UseVisualStyleBackColor = chkNR.UseVisualStyleBackColor;
+                b.Size = chkNR.Size;
+                b.AutoCheck = false;
+                b.TabStop = false;
+                b.Visible = false;
+                b.Click += (s, e) => { SelectNR(1, true, _nr_selected[0] == nr ? 0 : nr); forkSyncNrButtons(); };
+                b.MouseDown += (s, e) => { if (IsRightButton(e) && !IsSetupFormNull) SetupForm.ShowSetupTab(Setup.SetupTab.NR_Tab); };
+                toolTip1.SetToolTip(b, "NR" + nr + " on / off (a right click opens the NR settings)");
+                Controls.Add(b);
+                _forkNrButtons[k] = b;
+            }
+            EventHandler relayout = (s, e) => forkLayoutNrButtons();
+            panelDSP.LocationChanged += relayout;
+            panelDSP.SizeChanged += relayout;
+            panelDSP.VisibleChanged += relayout;
+            panelDisplay2.LocationChanged += relayout;
+            panelDisplay.SizeChanged += relayout;
+            this.Resize += relayout;
+            this.Shown += relayout;
+            NRChangedHandlers += (rx, o, n) => { if (rx == 1) forkSyncNrButtons(); };
+        }
+
+        // the NR buttons drawn with the NR button's skin images (after every skin change)
+        public void ForkReskin()
+        {
+            if (_forkNrButtons == null) return;
+            foreach (CheckBox b in _forkNrButtons)
+            {
+                b.Font = chkNR.Font;
+                b.Size = chkNR.Size;
+                Skin.SkinLike(chkNR, b);
+            }
+            forkLayoutNrButtons();
+        }
+
+        private void forkLayoutNrButtons()
+        {
+            if (_forkNrButtons == null) return;
+            int h = chkNR.Height;
+            int y = panelDSP.Top + chkNR.Top - h;
+            Rectangle[] r = new Rectangle[]
+            {
+                new Rectangle(panelDSP.Left + chkNR.Left, y, chkNR.Width, h),
+                new Rectangle(panelDSP.Left + chkANF.Left, y, chkANF.Width, h),
+                new Rectangle(panelDisplay2.Left + comboDisplayMode.Left, y, chkNR.Width, h)
+            };
+            bool ok = Visible && panelDSP.Visible && chkNR.Visible && y >= 0;
+            if (ok)
+                foreach (Rectangle rc in r)
+                    if (!forkAreaFree(rc)) { ok = false; break; }
+            for (int k = 0; k < _forkNrButtons.Length; k++)
+            {
+                _forkNrButtons[k].Bounds = r[k];
+                _forkNrButtons[k].Visible = ok;
+                if (ok) _forkNrButtons[k].BringToFront();
+            }
+            if (ok != _forkNrRowShown)
+            {
+                _forkNrRowShown = ok;
+                forkSyncNrButtons();
+            }
+        }
+
+        // nothing visible of the console (or of the display panel, where the Pan / Zoom row is) covers rc
+        private bool forkAreaFree(Rectangle rc)
+        {
+            foreach (Control c in Controls)
+            {
+                if (!c.Visible || c == panelDSP || c == panelDisplay2 || Array.IndexOf(_forkNrButtons, c) >= 0) continue;
+                if (c == panelDisplay)
+                {
+                    foreach (Control d in panelDisplay.Controls)
+                        if (d.Visible && rc.IntersectsWith(new Rectangle(d.Left + panelDisplay.Left, d.Top + panelDisplay.Top, d.Width, d.Height))) return false;
+                    continue;
+                }
+                if (rc.IntersectsWith(c.Bounds)) return false;
+            }
+            return true;
+        }
+
+        private void forkSyncNrButtons()
+        {
+            if (_forkNrButtons == null) return;
+            int nr = _nr_selected[0];
+            if (_forkNrRowShown)
+            {
+                chkNR.Text = "NR1";
+                if (chkNR.Checked != (nr == 1)) chkNR.Checked = nr == 1;
+                for (int k = 0; k < _forkNrButtons.Length; k++)
+                    if (_forkNrButtons[k].Checked != (nr == k + 2)) _forkNrButtons[k].Checked = nr == k + 2;
+            }
+            else
+            {
+                chkNR.Text = nr >= 2 ? "NR" + nr : "NR"; // the original cycling button
+                if (chkNR.Checked != (nr != 0)) chkNR.Checked = nr != 0;
+            }
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: display options file
+        private string _forkDisplayFile = null;
+
+        private void forkLoadDisplayOptions(string dataPath)
+        {
+            _forkDisplayFile = System.IO.Path.Combine(dataPath ?? "", "fork_display.txt");
+            Color top = Color.FromArgb(255, Display.DataFillColor.R, Display.DataFillColor.G, Display.DataFillColor.B);
+            Display.ForkFillTop = top;
+            Display.ForkFillBottom = Color.FromArgb(255, top.R / 5, top.G / 5, top.B / 5);
+            try
+            {
+                if (!System.IO.File.Exists(_forkDisplayFile)) return;
+                foreach (string line in System.IO.File.ReadAllLines(_forkDisplayFile))
+                {
+                    string[] p = line.Split('\t');
+                    if (p.Length != 2) continue;
+                    int v;
+                    if (p[0] == "fill_gradient") Display.ForkFillGradient = p[1] == "1";
+                    else if (p[0] == "line_gradient") Display.ForkLineGradient = p[1] == "1";
+                    else if (p[0] == "fill_top" && int.TryParse(p[1], out v)) Display.ForkFillTop = Color.FromArgb(v);
+                    else if (p[0] == "fill_bottom" && int.TryParse(p[1], out v)) Display.ForkFillBottom = Color.FromArgb(v);
+                }
+            }
+            catch { }
+        }
+
+        public void ForkSaveDisplayOptions()
+        {
+            if (string.IsNullOrEmpty(_forkDisplayFile)) return;
+            try
+            {
+                System.IO.File.WriteAllText(_forkDisplayFile,
+                    "fill_gradient\t" + (Display.ForkFillGradient ? "1" : "0") + "\r\n" +
+                    "line_gradient\t" + (Display.ForkLineGradient ? "1" : "0") + "\r\n" +
+                    "fill_top\t" + Display.ForkFillTop.ToArgb() + "\r\n" +
+                    "fill_bottom\t" + Display.ForkFillBottom.ToArgb() + "\r\n");
+            }
+            catch { }
+        }
+
         // ---------------------------------------------------------------- Jull1ano fork: band-aware tuning
         // As AltSDR: tuning by hand (spectrum click / drag, wheel, keys, typing a frequency) into another band
         // selects the mode last used in that band - the first time AM on LW/MW, the SW broadcast bands and WWV,
@@ -51653,7 +51840,14 @@ namespace Thetis
 
         private void chkNR_Click(object sender, EventArgs e)
         {
+            if (_forkNrRowShown) // Jull1ano fork: NR1 on / off, the other NRs have their own buttons
+            {
+                SelectNR(1, true, _nr_selected[0] == 1 ? 0 : 1);
+                forkSyncNrButtons();
+                return;
+            }
             incrementNR(1);
+            forkSyncNrButtons();
         }
 
         private void chkRX2NR_Click(object sender, EventArgs e)
