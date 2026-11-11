@@ -26837,6 +26837,16 @@ namespace Thetis
                         //MW0LGE_218k moved K/L to cltr/alt J so not to conflict with anything user defined as L/K
                 }
 
+                // Jull1ano fork: M mutes / unmutes RX1 (as MUT), Shift+M RX2, ahead of the user-defined keys (M was
+                // Thetis' Band Up key); keypad * still mutes RX1, Alt+M (memory) and Ctrl+M (MOX) are unchanged
+                if (e.KeyCode == Keys.M)
+                {
+                    if (e.Shift) { if (chkRX2Mute.Enabled) chkRX2Mute.Checked = !chkRX2Mute.Checked; }
+                    else chkMUT.Checked = !chkMUT.Checked;
+                    e.Handled = true;
+                    return;
+                }
+
                 if (e.KeyCode == key_tune_up_1)
                 {
                     double freq = VFOAFreq;
@@ -45079,6 +45089,27 @@ namespace Thetis
                         if (++st > 3) tl.Stop();
                     };
                     tl.Start();
+                }
+                else if (parts[0] == "keys")
+                {
+                    // keys:<key>:<key>...: each key ("M", "Shift+M", "Multiply") through the console's KeyDown, 2 s apart,
+                    // the mute / band state logged
+                    int k = 1;
+                    System.Windows.Forms.Timer tk = new System.Windows.Forms.Timer();
+                    tk.Interval = 2000;
+                    tk.Tick += (s7, e7) =>
+                    {
+                        HighDpi.Log("keys state: MUT " + chkMUT.Checked + " RX2 mute " + chkRX2Mute.Checked + " band " + rx1_band +
+                            " VFO " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture));
+                        if (k >= parts.Length) { tk.Stop(); return; }
+                        Keys key = Keys.None;
+                        foreach (string part in parts[k].Split('+'))
+                            key |= part == "Shift" ? Keys.Shift : part == "Ctrl" ? Keys.Control : part == "Alt" ? Keys.Alt : (Keys)Enum.Parse(typeof(Keys), part);
+                        HighDpi.Log("keys: " + parts[k]);
+                        Console_KeyDown(this, new KeyEventArgs(key));
+                        k++;
+                    };
+                    tk.Start();
                 }
                 else if (parts[0] == "click")
                 {

@@ -174,6 +174,12 @@ Memory window: one left click on a row's header (the small field left of the row
 Select or a double click do; every recall from the window centres the view on the VFO (as a right click on
 CTUN). Test hooks: `click:<control>:...`, `memrow:<n>`.
 
+## Keys
+
+M mutes / unmutes RX1 (as MUT), Shift+M RX2; it comes before the user-defined keys, so M no longer is Band Up
+(Thetis' default; give Band Up another key in Setup > Keyboard if wanted). Keypad * still mutes RX1, Alt+M (memory)
+and Ctrl+M (MOX) are unchanged. Test hook `keys:M:Shift+M:...` presses keys through the console's KeyDown.
+
 ## NNR, neural noise reduction (WDSP 2.11, as in AetherSDR)
 
 Warren Pratt's NNR from WDSP 2.11 (`nnr.c`, `nnet.c`, `nnio.c`, `nnrbypass.c`, the built-in models
