@@ -180,6 +180,8 @@ M mutes / unmutes RX1 (as MUT), Shift+M RX2; it comes before the user-defined ke
 (Thetis' default; give Band Up another key in Setup > Keyboard if wanted). Keypad * still mutes RX1, Alt+M (memory)
 and Ctrl+M (MOX) are unchanged. Test hook `keys:M:Shift+M:...` presses keys through the console's KeyDown.
 
+F9 collapses / expands the window (the menu's Collapse / Expand); Ctrl+F9 stays CWX memory 9.
+
 ## NNR, neural noise reduction (WDSP 2.11, as in AetherSDR)
 
 Warren Pratt's NNR from WDSP 2.11 (`nnr.c`, `nnet.c`, `nnio.c`, `nnrbypass.c`, the built-in models

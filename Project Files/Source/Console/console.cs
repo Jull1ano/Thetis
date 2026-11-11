@@ -26847,6 +26847,15 @@ namespace Thetis
                     return;
                 }
 
+                // Jull1ano fork: F9 collapses / expands the window (as the menu's Collapse / Expand); Ctrl+F9 stays CWX
+                // memory 9
+                if (e.KeyCode == Keys.F9)
+                {
+                    CollapseToolStripMenuItem_Click(this, EventArgs.Empty);
+                    e.Handled = true;
+                    return;
+                }
+
                 if (e.KeyCode == key_tune_up_1)
                 {
                     double freq = VFOAFreq;
@@ -45099,7 +45108,7 @@ namespace Thetis
                     tk.Interval = 2000;
                     tk.Tick += (s7, e7) =>
                     {
-                        HighDpi.Log("keys state: MUT " + chkMUT.Checked + " RX2 mute " + chkRX2Mute.Checked + " band " + rx1_band +
+                        HighDpi.Log("keys state: collapsed " + CollapsedDisplay + " NR row " + _forkNrRowShown + " MUT " + chkMUT.Checked + " RX2 mute " + chkRX2Mute.Checked + " band " + rx1_band +
                             " VFO " + VFOAFreq.ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture));
                         if (k >= parts.Length) { tk.Stop(); return; }
                         Keys key = Keys.None;
