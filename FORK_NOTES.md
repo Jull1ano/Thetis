@@ -127,6 +127,18 @@ scaling is above 100 % (`Console/HighDpi.cs`, entry point `Console/Program.cs`):
   `menu:<menu item name>` opens that window after start, a button name clicks it (a colour button opens its
   palette); used for captures (build-tools: capture-thetis.ps1 -AlsoTitle "<other>" grabs the window).
 
+## Flatten (Setup > Appearance > RX Display > Noise floor (fork), default 50 %)
+
+AetherSDR's Flatten (`AnanPanView.h` `flattenNoiseFloor()`, fdb4c60e): the noise floor's grass drawn shorter without
+smoothing across frequency. Every point keeps its frequency; points near the floor are pulled towards it vertically
+(50 % = half as tall), smoothly less so further out, and points beyond about three knees (signals) are left exactly
+as they are. The floor is the lower quartile over a 5-block window (block = 1/48 of the width) moved up to the
+noise's middle; the noise spread is the median over the blocks, followed over frames per receiver. After FFT Smooth
+when both are on, into its own buffer (never in place). Display only: the noise floor estimate reads the raw copy,
+the waterfall is not changed. `build-tools/test-fft-flatten.ps1` calls it on synthetic spectra: grass 0.82 dB ->
+0.41 (50 %), 0.25 (70 %), 0.17 (80 %); carrier, SSB and AM levels unchanged; the few neighbour-order flips are
+between points within 0.01 dB of each other (80 %). Saved in `hidpi_fft_flatten.txt`.
+
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
 As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band

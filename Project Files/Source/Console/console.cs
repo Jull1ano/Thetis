@@ -704,6 +704,7 @@ namespace Thetis
             ForkOutput.Load(app_data_path);       // Jull1ano fork: Final Output trim (Setup > DSP > AetherRX)
             Display.SmoothTrace = HighDpi.LoadSmoothTrace(app_data_path); // Jull1ano fork: Setup > Appearance > RX Display > Smooth
             Display.FftSmooth = HighDpi.LoadForkFloat(app_data_path, HighDpi.FFT_SMOOTH_FILE, 0f, 0f, 16f); // and FFT Smooth
+            Display.FftFlatten = HighDpi.LoadForkFloat(app_data_path, HighDpi.FFT_FLATTEN_FILE, 50f, 0f, 90f); // and Flatten (as AetherSDR)
             //AppDataPath has been set at this point
 
             if (_check_error_log)

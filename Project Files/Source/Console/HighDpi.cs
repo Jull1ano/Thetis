@@ -228,6 +228,7 @@ namespace Thetis
         }
 
         public const string FFT_SMOOTH_FILE = "hidpi_fft_smooth.txt";
+        public const string FFT_FLATTEN_FILE = "hidpi_fft_flatten.txt"; // Jull1ano fork: Flatten %
 
         // The original Thetis at 200 % is drawn at 96 DPI and stretched by Windows: the stretch blurs the text,
         // which then looks heavier and about 2 px taller than the same font drawn sharp at 192 DPI (measured on

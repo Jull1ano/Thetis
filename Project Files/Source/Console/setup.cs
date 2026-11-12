@@ -712,6 +712,50 @@ namespace Thetis
                 udDisplayLineWidth.Parent.Controls.Add(lblSmooth);
                 udDisplayLineWidth.Parent.Controls.Add(udSmooth);
                 udDisplayLineWidth.Parent.Controls.Add(lblSmoothUnit);
+
+                // Flatten (as AetherSDR): the grass drawn shorter, vertically only; in its own box under Waterfall
+                if (grpAppRXWaterfall != null && grpAppRXWaterfall.Parent != null)
+                {
+                    GroupBox grpFlat = new GroupBox();
+                    grpFlat.Name = "grpHighDpiFftFlatten";
+                    grpFlat.Text = "Noise floor (fork)";
+                    grpFlat.Location = new Point(grpAppRXWaterfall.Left, grpAppRXWaterfall.Bottom + HighDpi.Px(8));
+                    grpFlat.Size = new Size(grpAppRXWaterfall.Width, HighDpi.Px(52));
+                    Label lblFlatten = new Label();
+                    lblFlatten.Name = "lblHighDpiFftFlatten";
+                    lblFlatten.Text = "Flatten:";
+                    lblFlatten.AutoSize = true;
+                    lblFlatten.Location = new Point(HighDpi.Px(8), HighDpi.Px(23));
+                    NumericUpDown udFlatten = new NumericUpDown();
+                    udFlatten.Name = "udHighDpiFftFlatten";
+                    udFlatten.DecimalPlaces = 0;
+                    udFlatten.Increment = 5;
+                    udFlatten.Minimum = 0;
+                    udFlatten.Maximum = 90;
+                    udFlatten.Value = (decimal)Display.FftFlatten;
+                    udFlatten.Size = udDisplayLineWidth.Size;
+                    udFlatten.Location = new Point(HighDpi.Px(64), HighDpi.Px(21));
+                    udFlatten.ValueChanged += (s, e) =>
+                    {
+                        Display.FftFlatten = (float)udFlatten.Value;
+                        if (console != null) HighDpi.SaveForkFloat(console.AppDataPath, HighDpi.FFT_FLATTEN_FILE, (float)udFlatten.Value);
+                    };
+                    Label lblFlattenUnit = new Label();
+                    lblFlattenUnit.Name = "lblHighDpiFftFlattenUnit";
+                    lblFlattenUnit.Text = "%, 0 = off";
+                    lblFlattenUnit.AutoSize = true;
+                    lblFlattenUnit.Location = new Point(udFlatten.Right + HighDpi.Px(6), HighDpi.Px(23));
+                    string tipF = "Draws the noise floor's grass shorter without smoothing across frequency, as AetherSDR's Flatten:\r\n" +
+                        "every point keeps its frequency, points near the floor are pulled towards it (50 % = half as tall),\r\n" +
+                        "signals keep their exact level and width. 0 = off, 5 % steps up to 90 %. A weak signal inside the grass\r\n" +
+                        "is drawn lower with it. Display only: the noise floor estimate and the waterfall are not changed.";
+                    toolTip1.SetToolTip(udFlatten, tipF);
+                    toolTip1.SetToolTip(lblFlatten, tipF);
+                    grpFlat.Controls.Add(lblFlatten);
+                    grpFlat.Controls.Add(udFlatten);
+                    grpFlat.Controls.Add(lblFlattenUnit);
+                    grpAppRXWaterfall.Parent.Controls.Add(grpFlat);
+                }
             }
         }
 

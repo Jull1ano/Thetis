@@ -346,6 +346,99 @@ namespace Thetis
         //    power fills the deep noise dips even with a tiny neighbour weight, a sudden change near 0.
         // On exponential noise the roughness (mean |step| between points) goes 5.9, 5.0, 4.1, 3.2, 2.5, 1.9 dB
         // for h = 0, 0.2 ... 1.0 and keeps falling (1.0 dB at h = 2).
+        // Jull1ano fork: Flatten, as AetherSDR (AnanPanView.h flattenNoiseFloor, fdb4c60e): the grass of the noise
+        // floor drawn shorter without smoothing across frequency. Every point keeps its frequency; points near the
+        // floor are pulled towards it vertically (amount 50 % = half as tall), smoothly less so further out, and
+        // points beyond ~3 knees (signals) are left exactly as they are. The mapping is monotonic, so no peak is
+        // made or removed. The floor is the lower quartile of a 5-block window (block = 1/48 of the width) moved up
+        // to the noise's middle; the noise spread (sigma) is the median over the blocks, followed over frames per
+        // receiver. Display only: the noise floor estimate reads the raw copy.
+        private static float _fftFlattenPct = 0f;
+        public static float FftFlatten
+        {
+            get { return _fftFlattenPct; }
+            set { _fftFlattenPct = Math.Max(0f, Math.Min(90f, value)); }
+        }
+        private static float[] _flatBuf;
+        private static float[] _flatScratch = new float[0], _flatFloor = new float[0], _flatSpread = new float[0];
+        private static readonly float[] _flatSigma = new float[3]; // per receiver: 0 RX1, 1 RX2, 2 bottom
+
+        private static bool flatFinite(float v) { return !float.IsNaN(v) && !float.IsInfinity(v); }
+
+        private static float[] fftFlattenData(float[] src, int n, float amount, int slot)
+        {
+            if (src == null) return src;
+            n = Math.Min(n, src.Length);
+            amount = Math.Max(0f, Math.Min(0.95f, amount));
+            if (n < 32 || !(amount > 0f)) return src;
+            if (_flatBuf == null || _flatBuf.Length < src.Length) _flatBuf = new float[src.Length];
+            Array.Copy(src, _flatBuf, src.Length);
+
+            const float q2s = 0.6745f; // Gaussian: median - lower quartile, in sigmas
+            int block = Math.Max(4, n / 48);
+            int nb = (n + block - 1) / block;
+            if (_flatFloor.Length < nb) { _flatFloor = new float[nb]; _flatSpread = new float[nb]; }
+            if (_flatScratch.Length < Math.Max(5 * block + 8, nb)) _flatScratch = new float[Math.Max(5 * block + 8, nb)];
+
+            // each block's floor (lower quartile) and spread over it and two blocks either side
+            for (int k = 0; k < nb; k++)
+            {
+                int lo = k >= 2 ? (k - 2) * block : 0;
+                int hi = Math.Min(n, (k + 3) * block);
+                int m = 0;
+                for (int i = lo; i < hi; i++) { float v = src[i]; if (flatFinite(v)) _flatScratch[m++] = v; }
+                if (m < 8) { _flatFloor[k] = float.NaN; _flatSpread[k] = float.NaN; continue; }
+                Array.Sort(_flatScratch, 0, m);
+                float q50 = _flatScratch[m / 2], q25 = _flatScratch[m / 4];
+                _flatFloor[k] = q25;
+                _flatSpread[k] = (q50 - q25) / q2s;
+            }
+
+            // the noise's spread: the median over the blocks (the blocks a signal fills do not count), followed over frames
+            int ms = 0;
+            for (int k = 0; k < nb; k++) if (flatFinite(_flatSpread[k])) _flatScratch[ms++] = _flatSpread[k];
+            if (ms == 0) return src;
+            Array.Sort(_flatScratch, 0, ms);
+            float frameSigma = Math.Max(0.05f, Math.Min(20f, _flatScratch[ms / 2]));
+            if (slot < 0 || slot > 2) slot = 0;
+            _flatSigma[slot] = _flatSigma[slot] > 0f ? _flatSigma[slot] + 0.1f * (frameSigma - _flatSigma[slot]) : frameSigma;
+            float sigma = _flatSigma[slot];
+
+            // a block with too few readable points borrows its neighbour's floor; then lower quartile -> the noise's middle
+            float last = float.NaN;
+            for (int k = 0; k < nb; k++) { if (flatFinite(_flatFloor[k])) last = _flatFloor[k]; else _flatFloor[k] = last; }
+            last = float.NaN;
+            for (int k = nb - 1; k >= 0; k--) { if (flatFinite(_flatFloor[k])) last = _flatFloor[k]; else _flatFloor[k] = last; }
+            for (int k = 0; k < nb; k++) _flatFloor[k] += q2s * sigma;
+
+            float keep = 1f - amount;
+            float knee = Math.Max(0.5f, 2.5f * sigma);         // fully flattened inside
+            float full = Math.Max(knee + 1f, 3f * knee);       // untouched beyond
+            float blockF = block;
+            for (int i = 0; i < n; i++)
+            {
+                // the floor here, between the two nearest block centres
+                float pos = (i + 0.5f) / blockF - 0.5f;
+                int k0 = 0;
+                float t = 0f;
+                if (pos > 0f)
+                {
+                    k0 = Math.Min(nb - 1, (int)pos);
+                    t = Math.Max(0f, Math.Min(1f, pos - k0));
+                }
+                int k1 = Math.Min(nb - 1, k0 + 1);
+                float floorDb = _flatFloor[k0] + t * (_flatFloor[k1] - _flatFloor[k0]);
+                float d = src[i] - floorDb;
+                if (!flatFinite(d)) continue;
+                float ad = Math.Abs(d);
+                if (ad >= full) continue;
+                float u = Math.Max(0f, Math.Min(1f, (ad - knee) / (full - knee)));
+                float share = keep + (1f - keep) * (u * u * (3f - 2f * u));
+                _flatBuf[i] = floorDb + d * share;
+            }
+            return _flatBuf;
+        }
+
         private static double[] _fftSmoothWeights = new double[0];
         private static float[] fftSmoothData(float[] src, int n, float h)
         {
@@ -5421,6 +5514,9 @@ namespace Thetis
                     float halfPts = _fftSmoothPx * HighDpi.Scale / Math.Max(1, m_nDecimation);
                     data = fftSmoothData(data, nDecimatedWidth, halfPts);
                 }
+                // Jull1ano fork: Flatten (its own buffer too), after FFT Smooth when both are on
+                if (_fftFlattenPct > 0)
+                    data = fftFlattenData(data, nDecimatedWidth, _fftFlattenPct / 100f, bottom ? 2 : (rx == 2 ? 1 : 0));
 
                 float averageSum = 0;
                 int averageCount = 1;
