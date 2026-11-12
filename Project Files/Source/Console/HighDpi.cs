@@ -1114,6 +1114,24 @@ namespace Thetis
             catch (Exception ex) { Log("CrispArrowImage: " + ex.Message); return null; }
         }
 
+        // the face's rounded rectangle at w x h (the hover's shape, ForkHover); null without a measured face
+        public static System.Drawing.Drawing2D.GraphicsPath ArrowFacePath(ArrowGeom g, int w, int h)
+        {
+            if (g == null || !g.HasFace || g.W <= 0 || g.H <= 0) return null;
+            float sx = w / (float)g.W, sy = h / (float)g.H;
+            float l = g.L * sx, t = g.T * sy, r = g.R * sx, b = g.B * sy;
+            float rad = Math.Min(g.Radius * (sx + sy) / 2, Math.Min(r - l, b - t) / 2);
+            var p = new System.Drawing.Drawing2D.GraphicsPath();
+            if (rad < 0.5f) { p.AddRectangle(new System.Drawing.RectangleF(l, t, r - l, b - t)); return p; }
+            float d = 2 * rad;
+            p.AddArc(l, t, d, d, 180, 90);
+            p.AddArc(r - d, t, d, d, 270, 90);
+            p.AddArc(r - d, b - d, d, d, 0, 90);
+            p.AddArc(l, b - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
         // button icons (Database Manager ...): WinForms draws a button's Image at its own pixel size, so a 96 DPI
         // icon came out half size in its 200 % button. Redrawn once at the DPI scale when it still fits the button.
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Drawing.Image, object> _scaledImages =
@@ -1721,6 +1739,112 @@ namespace Thetis
             }
             catch { }
         }
+    }
+
+    // Jull1ano fork: a hover for every button: 20 % white over a button (a Button, or a check / radio box drawn as a
+    // button) while the mouse is on it and it is enabled, on top of what the skin draws (some skins give it only a
+    // 1 px light edge). The button under the mouse comes from the mouse messages, so buttons made later and every
+    // window get it; a button with a rounded face (QuickRecall at high DPI) gets it inside its face only.
+    public static class ForkHover
+    {
+        public const int ALPHA = 51; // 20 % of 255
+        private static System.Windows.Forms.ButtonBase _hot;
+        private static bool _installed;
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object> _hooked =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object>();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, System.Drawing.Drawing2D.GraphicsPath> _shape =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, System.Drawing.Drawing2D.GraphicsPath>();
+
+        public static void Install()
+        {
+            if (_installed) return;
+            _installed = true;
+            System.Windows.Forms.Application.AddMessageFilter(new MouseFilter());
+        }
+
+        // the hover only inside this shape (button pixels); null: the whole button
+        public static void SetShape(System.Windows.Forms.Control c, System.Drawing.Drawing2D.GraphicsPath p)
+        {
+            if (c == null) return;
+            _shape.Remove(c);
+            if (p != null) _shape.Add(c, p);
+            c.Invalidate();
+        }
+
+        // test hook (THETIS_HIDPI_OPEN=quickrecall:<n>:<button>): the hover shown as if the mouse were on c
+        public static void TestHover(System.Windows.Forms.Control c)
+        {
+            hover(c);
+            Log("hover test " + (c != null ? c.Name : "-") + ": " + (_hot != null ? "on" : "not a button"));
+        }
+
+        private static bool isButton(System.Windows.Forms.Control c)
+        {
+            if (c is System.Windows.Forms.CheckBox cb)
+                return cb.Appearance == System.Windows.Forms.Appearance.Button && cb.FlatStyle != System.Windows.Forms.FlatStyle.System;
+            if (c is System.Windows.Forms.RadioButton rb)
+                return rb.Appearance == System.Windows.Forms.Appearance.Button && rb.FlatStyle != System.Windows.Forms.FlatStyle.System;
+            return c is System.Windows.Forms.Button b && b.FlatStyle != System.Windows.Forms.FlatStyle.System;
+        }
+
+        private sealed class MouseFilter : System.Windows.Forms.IMessageFilter
+        {
+            public bool PreFilterMessage(ref System.Windows.Forms.Message m)
+            {
+                if (m.Msg == 0x0200) // WM_MOUSEMOVE
+                {
+                    try { hover(System.Windows.Forms.Control.FromHandle(m.HWnd)); }
+                    catch { }
+                }
+                return false;
+            }
+        }
+
+        private static void hover(System.Windows.Forms.Control c)
+        {
+            System.Windows.Forms.ButtonBase b = (c is System.Windows.Forms.ButtonBase bb && isButton(bb)) ? bb : null;
+            if (ReferenceEquals(b, _hot)) return;
+            System.Windows.Forms.ButtonBase old = _hot;
+            _hot = b;
+            if (old != null && !old.IsDisposed) old.Invalidate();
+            if (b == null) return;
+            if (!_hooked.TryGetValue(b, out object _))
+            {
+                _hooked.Add(b, null);
+                b.Paint += onPaint;
+                b.MouseLeave += onLeave;
+            }
+            b.Invalidate();
+        }
+
+        private static void onLeave(object sender, EventArgs e)
+        {
+            if (!ReferenceEquals(sender, _hot)) return;
+            _hot = null;
+            ((System.Windows.Forms.Control)sender).Invalidate();
+        }
+
+        private static void onPaint(object sender, System.Windows.Forms.PaintEventArgs e)
+        {
+            System.Windows.Forms.Control c = sender as System.Windows.Forms.Control;
+            if (c == null || !ReferenceEquals(c, _hot) || !c.Enabled) return;
+            using (var br = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(ALPHA, 255, 255, 255)))
+            {
+                if (_shape.TryGetValue(c, out System.Drawing.Drawing2D.GraphicsPath p))
+                {
+                    var sm = e.Graphics.SmoothingMode;
+                    var po = e.Graphics.PixelOffsetMode;
+                    e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                    e.Graphics.FillPath(br, p);
+                    e.Graphics.SmoothingMode = sm;
+                    e.Graphics.PixelOffsetMode = po;
+                }
+                else e.Graphics.FillRectangle(br, c.ClientRectangle);
+            }
+        }
+
+        private static void Log(string s) { HighDpi.Log(s); }
     }
 
     // Jull1ano fork: NNR (WDSP 2.11 neural noise reduction) settings, as AetherSDR offers them (Setup > DSP > AetherRX > NNR):

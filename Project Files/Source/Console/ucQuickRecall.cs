@@ -50,6 +50,7 @@ namespace Thetis
     public partial class ucQuickRecall : UserControl
     {
         private const int m_nWAITDELAY = 4000; // number of ms the frequency has to be constant before it gets added to the head of the list
+        private const int m_nMAXENTRIES = 30; // Jull1ano fork: 30 entries (was 16), as AetherSDR's copy of this list
 
         private Console m_objConsole;
         private Timer m_objTimerVFOA;
@@ -237,7 +238,7 @@ namespace Thetis
         {
             //insert at front
             m_lstVFOAFrequencies.Insert(0, qi);
-            if (m_lstVFOAFrequencies.Count > 16) m_lstVFOAFrequencies.RemoveAt(m_lstVFOAFrequencies.Count - 1);
+            if (m_lstVFOAFrequencies.Count > m_nMAXENTRIES) m_lstVFOAFrequencies.RemoveAt(m_lstVFOAFrequencies.Count - 1);
             m_nVFOASelectedIndex = 0;
         }
         
@@ -374,11 +375,36 @@ namespace Thetis
                 if (m_nVFOASelectedIndex == index) m_frmPopupList.FreqList.SelectedIndex = index;
             }
 
-            m_host.Width = m_frmPopupList.Width;
-            m_host.Height = 20 + (m_lstVFOAFrequencies.Count * (m_frmPopupList.FontEntryHeight + 1));
-            m_frmPopupList.Height = m_host.Height;
+            // Jull1ano fork: the list as tall as its entries, scrolling only where it would pass the bottom of the
+            // screen, and as wide as its text (it was 20 + rows x (row + 1) px: at high DPI the rows are taller than
+            // that, so it scrolled after 8 of them)
+            Rectangle wa = Screen.FromControl(this).WorkingArea;
+            int top = this.PointToScreen(new Point(0, btnList.Top + btnList.Height)).Y;
+            int room = wa.Bottom - top - HighDpi.Px(2);
+            if (int.TryParse(Environment.GetEnvironmentVariable("THETIS_QR_ROOM"), out int testRoom)) room = testRoom; // test: less room
+            Size s = m_frmPopupList.ForkFit(m_lstVFOAFrequencies.Count, room);
+            m_host.Size = s;
+            m_frmPopupList.Size = s;
 
-            m_popup.Show(this, new Point((btnList.Left + btnList.Width / 2) - (m_frmPopupList.Width / 2), btnList.Top + btnList.Height));
+            m_popup.Show(this, new Point((btnList.Left + btnList.Width / 2) - (s.Width / 2), btnList.Top + btnList.Height));
+            HighDpi.Log("quickrecall list " + m_lstVFOAFrequencies.Count + " rows: popup " + m_popup.Bounds + " list " + m_frmPopupList.FreqList.Bounds +
+                " row " + m_frmPopupList.FreqList.ItemHeight + " room " + room + " top row " + m_frmPopupList.FreqList.TopIndex);
+        }
+
+        // Jull1ano fork: test hook (THETIS_HIDPI_OPEN=quickrecall:<n>): the list filled with n entries, then opened
+        public void ForkTestFill(int n)
+        {
+            double[] f = { 0.864, 0.576, 7.225, 7.132, 3.756, 3.79, 3.6745, 3.69, 14.143, 14.2 };
+            m_lstVFOAFrequencies.Clear();
+            for (int i = n - 1; i >= 0; i--)
+            {
+                QuickInfo qi = new QuickInfo();
+                qi.dFrequency = Math.Round(f[i % f.Length] + (i / f.Length) * 0.001, 6);
+                qi.sFormattedFrequency = formatFrequencyToString(qi.dFrequency);
+                qi.mode = DSPMode.FIRST;
+                addVFOAEntry(qi);
+            }
+            if (n > 0) btnList_Click(this, EventArgs.Empty);
         }
 
         private void ucQuickRecall_BackColorChanged(object sender, EventArgs e)

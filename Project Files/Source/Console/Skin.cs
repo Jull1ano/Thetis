@@ -774,6 +774,7 @@ namespace Thetis
             if (tri == null) tri = HighDpi.ArrowShape(img, dir);
             if (tri == null) return img;
             Image crisp = HighDpi.CrispArrowImage(img, b.Width, b.Height, tri);
+            if (crisp != null) ForkHover.SetShape(b, HighDpi.ArrowFacePath(tri, b.Width, b.Height)); // the hover inside the face only
             return crisp ?? img;
         }
         private static void setupButtonHandlers(Button ctrl)

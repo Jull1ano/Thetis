@@ -156,6 +156,24 @@ group box. `HighDpi.normalizeNestedFontControls` puts its buttons back on the de
 (`snapToDpiGrid`, edges rounded) and the pad fits itself around them again (`ForkFitToButtons`): 121 x 41 at
 354,124 in the 480 x 176 group, 5 px clear of the border (log line `pad ...` with THETIS_HIDPI_LOG).
 
+## QuickRecall list: 30 entries, as tall as its entries
+
+The list (V button) keeps 30 frequencies instead of 16 (`m_nMAXENTRIES`, as AetherSDR's copy of it). Its popup is
+as tall as its rows and as wide as its text (`frmQuickRecallPopupList.ForkFit`); it scrolls only when it would
+pass the bottom of the screen, and then it is widened by the scroll bar. Before, its height was a fixed
+20 + rows x (row + 1) px, so at high DPI it scrolled after 8 rows, and the MHz digits were measured with GDI and
+drawn with GDI+ 8 px back, which left a gap at 200 % ("0 .864.000"); now both measure and draw the same way and the
+MHz column is at least "88" wide. Test hook: `THETIS_HIDPI_OPEN=quickrecall:<n>[:<button>]` (n entries, list
+open, the hover on that button), `THETIS_QR_ROOM=<px>` pretends the screen ends that far below the button.
+
+## Button hover (20 % white)
+
+Every button (Button, or a check / radio box drawn as a button; not FlatStyle.System) gets 20 % white over it while
+the mouse is on it and it is enabled, on top of what the skin draws (OE3IDE-TheBlue only adds a 1 px light edge).
+`ForkHover` in HighDpi.cs finds the button from WM_MOUSEMOVE (an application message filter), so every window and
+buttons made later get it; it draws in the button's Paint event. The QuickRecall arrows at high DPI get it inside
+their rounded face only (`HighDpi.ArrowFacePath`). On at 1x too.
+
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
 As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band

@@ -763,6 +763,7 @@ namespace Thetis
             forkCreateNrButtons();             // Jull1ano fork: NR2..NR4 buttons above NR / ANF
             forkLoadDisplayOptions(app_data_path); // and the two-colour fill
             HighDpi.StartFormWatcher(); // and the same for every other form when it opens
+            ForkHover.Install(); // Jull1ano fork: 20 % white over the button under the mouse (HighDpi.cs)
 
             InitialiseAndromedaMenus();
 
@@ -44901,7 +44902,8 @@ namespace Thetis
         {
             // Jull1ano fork: test hook for high-DPI captures (THETIS_HIDPI_OPEN=setup opens Setup at start)
             // THETIS_HIDPI_OPEN: "setup:tpA:tpB[:button]" opens Setup on those tab pages (and clicks that button), "cwx" the CW memories window,
-            // "finder:text" Finder with that search text
+            // "finder:text" Finder with that search text, "quickrecall:<n>[:<button>]" QuickRecall with n entries, its list open (and
+            // the hover on that button)
             BeginInvoke(new MethodInvoker(() =>
             {
                 _forkReady = true; // Jull1ano fork: band memory records from here on
@@ -44942,6 +44944,25 @@ namespace Thetis
                         if (items.Length > 0) items[0].PerformClick();
                         else HighDpi.Log("menu item not found: " + parts[t]);
                     }
+                }
+                else if (parts[0] == "quickrecall")
+                {
+                    // 3 s after start, when the skin is on
+                    int nq = parts.Length > 1 ? int.Parse(parts[1]) : 30;
+                    System.Windows.Forms.Timer tq = new System.Windows.Forms.Timer();
+                    tq.Interval = 3000;
+                    tq.Tick += (s7, e7) =>
+                    {
+                        tq.Stop();
+                        if (parts.Length > 2)
+                        {
+                            Control[] hb = Controls.Find(parts[2], true);
+                            if (hb.Length > 0) ForkHover.TestHover(hb[0]);
+                            else HighDpi.Log("hover test: no control " + parts[2]);
+                        }
+                        ucQuickRecallPad.ForkTestFill(nq);
+                    };
+                    tq.Start();
                 }
                 else if (parts[0] == "memtime")
                 {

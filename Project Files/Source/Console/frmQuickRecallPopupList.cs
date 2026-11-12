@@ -71,6 +71,27 @@ namespace Thetis
         public int FontEntryHeight {
             get { return lstboxFrequencies.FontEntryHeight; }
         }
+        // Jull1ano fork: the popup as tall as its rows and as wide as its text; the list scrolls only when that would
+        // be taller than maxHeight (the room down to the bottom of the screen). Returns the popup's size.
+        public Size ForkFit(int rows, int maxHeight)
+        {
+            HighDpi.PrepareForm(this); // its high-DPI pass now: from the watcher, later, it would rescale this layout
+            QuickRecallListBox lb = lstboxFrequencies;
+            int m = HighDpi.Px(5);
+            int rowH = Math.Max(1, Math.Min(255, TextRenderer.MeasureText("0", lb.Font).Height));
+            if (lb.ItemHeight != rowH) lb.ItemHeight = rowH;
+            int listH = Math.Max(1, rows) * rowH;
+            bool scroll = listH + 2 * m > maxHeight;
+            if (scroll) listH = Math.Max(rowH, maxHeight - 2 * m);
+            int listW = lb.ForkContentWidth() + (scroll ? SystemInformation.VerticalScrollBarWidth : 0);
+            Size s = new Size(listW + 2 * m, listH + 2 * m);
+            lb.IntegralHeight = false;
+            this.ClientSize = s;
+            lb.Bounds = new Rectangle(m, m, listW, listH);
+            int visible = Math.Max(1, listH / rowH);
+            if (lb.Items.Count > 0) lb.TopIndex = lb.SelectedIndex >= visible ? lb.SelectedIndex - visible + 1 : 0;
+            return s;
+        }
         private void lstboxFrequencies_MouseClick(object sender, MouseEventArgs e)
         {
             int index = lstboxFrequencies.IndexFromPoint(e.Location);
@@ -102,6 +123,7 @@ namespace Thetis
         public void ClearItems()
         {
             m_nFrequencyMHzWidth = -1;
+            m_nForkIntW = -1; // Jull1ano fork
             
             this.Items.Clear();
             this.Invalidate();
@@ -117,6 +139,50 @@ namespace Thetis
         public int FontEntryHeight {
             get { return m_nFontHeight; }
         }
+
+        // Jull1ano fork: the text measured and drawn the same way (GDI+, typographic: no padding), so the MHz digits
+        // sit against the dot at every DPI and text size (a GDI measure, then GDI+ drawing 8 px back, left a gap at
+        // 200 %: "0 .864.000"). The MHz column is at least "88" wide, so the popup keeps its width.
+        private static readonly StringFormat m_forkFormat = forkFormat();
+        private int m_nForkIntW = -1, m_nForkRestW = -1;
+        private static StringFormat forkFormat()
+        {
+            StringFormat f = (StringFormat)StringFormat.GenericTypographic.Clone();
+            f.FormatFlags |= StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces;
+            f.LineAlignment = StringAlignment.Center;
+            return f;
+        }
+        private static void forkSplit(double dNum, out string sInt, out string sRest)
+        {
+            int nFreq = (int)dNum;
+            string remain = (dNum - nFreq).ToString("f6");
+            sInt = nFreq.ToString();
+            sRest = "." + remain.Substring(2, 3) + "." + remain.Substring(5, 3);
+        }
+        private float forkWidth(Graphics g, string s)
+        {
+            return g.MeasureString(s, this.Font, PointF.Empty, m_forkFormat).Width;
+        }
+        private void forkMeasure(Graphics g)
+        {
+            float wi = forkWidth(g, "88"), wr = forkWidth(g, ".888.888");
+            foreach (object o in this.Items)
+            {
+                if (!double.TryParse(o.ToString(), out double d)) continue;
+                forkSplit(Math.Round(d, 6), out string a, out string b);
+                wi = Math.Max(wi, forkWidth(g, a));
+                wr = Math.Max(wr, forkWidth(g, b));
+            }
+            m_nForkIntW = (int)Math.Ceiling(wi);
+            m_nForkRestW = (int)Math.Ceiling(wr);
+        }
+        public int ForkPad { get { return HighDpi.Px(6); } }
+        // the width the rows' text needs, with its padding on both sides
+        public int ForkContentWidth()
+        {
+            using (Graphics g = this.CreateGraphics()) forkMeasure(g);
+            return ForkPad + m_nForkIntW + m_nForkRestW + ForkPad;
+        }
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
             if (this.Items.Count > 0 && e.Index >= 0)
@@ -129,22 +195,13 @@ namespace Thetis
                 {
                     SolidBrush sb = new SolidBrush(this.ForeColor);
 
-                    int nFreq = (int)dNum;//((double)this.Items[e.Index]);
-                    double remain = dNum - nFreq;//(double)this.Items[e.Index] - nFreq;
-                    string remainString = remain.ToString("f6");
-                    string sTmp3After = remainString.Substring(2, 3);
-                    string sTmp3After3 = remainString.Substring(5, 3);
-
-                    Size textSizeBeforeDecimalPoint = TextRenderer.MeasureText(nFreq.ToString(), this.Font);
-
-                    int nTextPos = m_nFrequencyMHzWidth - textSizeBeforeDecimalPoint.Width;
-                    Rectangle r = new Rectangle(nTextPos, e.Bounds.Y, e.Bounds.Width, e.Bounds.Height);
-
-                    e.Graphics.DrawString(nFreq.ToString(), e.Font, sb, r, StringFormat.GenericDefault);
-
-                    r.X = m_nFrequencyMHzWidth - 8;
-
-                    e.Graphics.DrawString("." + sTmp3After + "." + sTmp3After3, e.Font, sb, r, StringFormat.GenericDefault);
+                    // Jull1ano fork: MHz right-aligned against the dot, the rest straight after it (see forkMeasure)
+                    if (m_nForkIntW < 0) forkMeasure(e.Graphics);
+                    forkSplit(dNum, out string sInt, out string sRest);
+                    float x = e.Bounds.X + ForkPad + m_nForkIntW;
+                    float wInt = forkWidth(e.Graphics, sInt);
+                    e.Graphics.DrawString(sInt, e.Font, sb, new RectangleF(x - wInt, e.Bounds.Y, wInt + e.Bounds.Width, e.Bounds.Height), m_forkFormat);
+                    e.Graphics.DrawString(sRest, e.Font, sb, new RectangleF(x, e.Bounds.Y, e.Bounds.Width, e.Bounds.Height), m_forkFormat);
 
                     sb.Dispose();
                 }
