@@ -150,6 +150,12 @@ triangle's place and size come from the glyph's coverage moments (area kept); th
 face along its gradient first. Shape and outline are measured once per button from its first picture, so nothing
 moves when it is pressed. A picture without a light glyph keeps the old stretched look; 1x is unchanged.
 
+The pad itself (`ucQuickRecall`) is a font-scaled control that sizes itself to its buttons: at 200 % they came
+out 43 px wide (the font ratio 2.167) instead of 40, and the pad ran 4 px past the right border of the VFO
+group box. `HighDpi.normalizeNestedFontControls` puts its buttons back on the designer grid at the DPI scale
+(`snapToDpiGrid`, edges rounded) and the pad fits itself around them again (`ForkFitToButtons`): 121 x 41 at
+354,124 in the 480 x 176 group, 5 px clear of the border (log line `pad ...` with THETIS_HIDPI_LOG).
+
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
 As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band

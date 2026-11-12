@@ -326,20 +326,40 @@ namespace Thetis
                     int right = 0, bottom = 0;
                     foreach (System.Windows.Forms.Control ch in uc.Controls) { right = Math.Max(right, ch.Right); bottom = Math.Max(bottom, ch.Bottom); }
                     bool overflows = right > uc.ClientSize.Width + Px(1) || bottom > uc.ClientSize.Height + Px(1);
-                    if (overflows && (Math.Abs(fx - Scale) > 0.02f || Math.Abs(fy - Scale) > 0.02f))
+                    // The QuickRecall pad (< V >) sizes itself to its buttons, so they never overflow it: it grew with
+                    // them instead (3 x 43 + 1 px at 200 % instead of 3 x 40 + 1) and ran past the right border of the
+                    // group box around it. Its buttons go back on the designer's grid at the DPI scale (edges rounded:
+                    // all three the same size, touching), then the pad fits itself around them again.
+                    ucQuickRecall pad = uc as ucQuickRecall;
+                    if ((overflows || pad != null) && (Math.Abs(fx - Scale) > 0.02f || Math.Abs(fy - Scale) > 0.02f))
                     {
                         Log("normalize nested " + uc.Name + " (" + uc.GetType().Name + ") " + fx.ToString("0.000") + " x " + fy.ToString("0.000"));
                         uc.SuspendLayout();
                         try
                         {
                             foreach (System.Windows.Forms.Control ch in uc.Controls)
-                                ch.Scale(new System.Drawing.SizeF(Scale / fx, Scale / fy));
+                                if (pad != null) snapToDpiGrid(ch, fx, fy);
+                                else ch.Scale(new System.Drawing.SizeF(Scale / fx, Scale / fy));
                         }
                         finally { uc.ResumeLayout(true); }
+                        if (pad != null)
+                        {
+                            pad.ForkFitToButtons();
+                            Log("  pad " + pad.Width + " x " + pad.Height + " at " + pad.Left + "," + pad.Top + " in " +
+                                (pad.Parent != null ? pad.Parent.Name + " " + pad.Parent.Width + " x " + pad.Parent.Height : "-"));
+                        }
                     }
                 }
                 if (c.HasChildren) normalizeNestedFontControls(c);
             }
+        }
+
+        // a control laid out at factor f: its edges back in designer units, then at the DPI scale
+        private static void snapToDpiGrid(System.Windows.Forms.Control c, float fx, float fy)
+        {
+            int l = (int)Math.Round(c.Left / fx), t = (int)Math.Round(c.Top / fy);
+            int r = (int)Math.Round(c.Right / fx), b = (int)Math.Round(c.Bottom / fy);
+            c.Bounds = new System.Drawing.Rectangle(Px(l), Px(t), Math.Max(1, Px(r) - Px(l)), Math.Max(1, Px(b) - Px(t)));
         }
 
         private static void normalizeFontScaledForm(System.Windows.Forms.Form form)

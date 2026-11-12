@@ -150,6 +150,12 @@ namespace Thetis
             Point p = new Point(nMidOfbtnListX - (lblFlashColour.Width / 2), nMidOfbtnListY - (lblFlashColour.Height / 2));
             lblFlashColour.Location = p;
         }
+
+        // Jull1ano fork: the pad fitted around its buttons again (HighDpi puts them on the DPI scale first)
+        public void ForkFitToButtons()
+        {
+            resizeAndReposition();
+        }
         private void OnPopupClosed(object sender, ToolStripDropDownClosedEventArgs e)
         {
             this.btnList.Enabled = true;
