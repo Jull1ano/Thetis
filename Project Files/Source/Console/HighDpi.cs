@@ -1741,13 +1741,13 @@ namespace Thetis
         }
     }
 
-    // Jull1ano fork: a hover for every button: 20 % white over a button (a Button, or a check / radio box drawn as a
+    // Jull1ano fork: a hover for every button: 10 % white over a button (a Button, or a check / radio box drawn as a
     // button) while the mouse is on it and it is enabled, on top of what the skin draws (some skins give it only a
     // 1 px light edge). The button under the mouse comes from the mouse messages, so buttons made later and every
     // window get it; a button with a rounded face (QuickRecall at high DPI) gets it inside its face only.
     public static class ForkHover
     {
-        public const int ALPHA = 51; // 20 % of 255
+        public const int ALPHA = 26; // 10 % of 255 (the user's choice; 20 % was too strong)
         private static System.Windows.Forms.ButtonBase _hot;
         private static bool _installed;
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.Forms.Control, object> _hooked =

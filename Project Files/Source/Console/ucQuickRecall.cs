@@ -86,6 +86,7 @@ namespace Thetis
             m_frmPopupList = new frmQuickRecallPopupList();
             m_frmPopupList.TopLevel = false;
             m_frmPopupList.EntrySelectedHandlers += OnEntrySelected;
+            m_frmPopupList.ForkClearHandlers += OnForkClear; // Jull1ano fork: "Clear history"
 
             // build the popup
             m_host = new ToolStripControlHost(m_frmPopupList);
@@ -307,6 +308,7 @@ namespace Thetis
         {
             m_popup.Closed -= OnPopupClosed;
             m_frmPopupList.EntrySelectedHandlers -= OnEntrySelected;
+            m_frmPopupList.ForkClearHandlers -= OnForkClear;
 
             if (m_objConsole != null)
             {
@@ -389,6 +391,26 @@ namespace Thetis
             m_popup.Show(this, new Point((btnList.Left + btnList.Width / 2) - (s.Width / 2), btnList.Top + btnList.Height));
             HighDpi.Log("quickrecall list " + m_lstVFOAFrequencies.Count + " rows: popup " + m_popup.Bounds + " list " + m_frmPopupList.FreqList.Bounds +
                 " row " + m_frmPopupList.FreqList.ItemHeight + " room " + room + " top row " + m_frmPopupList.FreqList.TopIndex);
+        }
+
+        // Jull1ano fork: "Clear history" (as in AetherSDR): the list emptied, and a frequency still waiting for its
+        // 4 s dropped too, so the list stays empty until the VFO moves on
+        private void OnForkClear()
+        {
+            m_popup.Hide();
+            m_objTimerVFOA.Stop();
+            m_objTimerVFOAMode.Stop();
+            m_lstVFOAFrequencies.Clear();
+            m_nVFOASelectedIndex = -1;
+        }
+
+        // Jull1ano fork: test hook (THETIS_HIDPI_OPEN=quickrecall:<n>::clear): "Clear history" clicked, then the list
+        // opened again
+        public void ForkTestClear()
+        {
+            m_frmPopupList.ForkClickClear();
+            HighDpi.Log("quickrecall after clear: " + m_lstVFOAFrequencies.Count + " entries, popup " + (m_popup.Visible ? "open" : "closed"));
+            btnList_Click(this, EventArgs.Empty);
         }
 
         // Jull1ano fork: test hook (THETIS_HIDPI_OPEN=quickrecall:<n>): the list filled with n entries, then opened

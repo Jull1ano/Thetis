@@ -763,7 +763,7 @@ namespace Thetis
             forkCreateNrButtons();             // Jull1ano fork: NR2..NR4 buttons above NR / ANF
             forkLoadDisplayOptions(app_data_path); // and the two-colour fill
             HighDpi.StartFormWatcher(); // and the same for every other form when it opens
-            ForkHover.Install(); // Jull1ano fork: 20 % white over the button under the mouse (HighDpi.cs)
+            ForkHover.Install(); // Jull1ano fork: 10 % white over the button under the mouse (HighDpi.cs)
 
             InitialiseAndromedaMenus();
 
@@ -44902,8 +44902,8 @@ namespace Thetis
         {
             // Jull1ano fork: test hook for high-DPI captures (THETIS_HIDPI_OPEN=setup opens Setup at start)
             // THETIS_HIDPI_OPEN: "setup:tpA:tpB[:button]" opens Setup on those tab pages (and clicks that button), "cwx" the CW memories window,
-            // "finder:text" Finder with that search text, "quickrecall:<n>[:<button>]" QuickRecall with n entries, its list open (and
-            // the hover on that button)
+            // "finder:text" Finder with that search text, "quickrecall:<n>[:<button>[:clear]]" QuickRecall with n entries, its list open
+            // (the hover on that button; then "Clear history" clicked and the list opened again)
             BeginInvoke(new MethodInvoker(() =>
             {
                 _forkReady = true; // Jull1ano fork: band memory records from here on
@@ -44954,13 +44954,20 @@ namespace Thetis
                     tq.Tick += (s7, e7) =>
                     {
                         tq.Stop();
-                        if (parts.Length > 2)
+                        if (parts.Length > 2 && parts[2].Length > 0)
                         {
                             Control[] hb = Controls.Find(parts[2], true);
                             if (hb.Length > 0) ForkHover.TestHover(hb[0]);
                             else HighDpi.Log("hover test: no control " + parts[2]);
                         }
                         ucQuickRecallPad.ForkTestFill(nq);
+                        if (parts.Length > 3 && parts[3] == "clear")
+                        {
+                            System.Windows.Forms.Timer tc = new System.Windows.Forms.Timer();
+                            tc.Interval = 1500;
+                            tc.Tick += (s8, e8) => { tc.Stop(); ucQuickRecallPad.ForkTestClear(); };
+                            tc.Start();
+                        }
                     };
                     tq.Start();
                 }

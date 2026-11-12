@@ -52,6 +52,7 @@ namespace Thetis
         public frmQuickRecallPopupList()
         {
             InitializeComponent();
+            forkCreateClear(); // Jull1ano fork: "Clear history" under the list
         }
 
         public ListBox FreqList {
@@ -71,25 +72,68 @@ namespace Thetis
         public int FontEntryHeight {
             get { return lstboxFrequencies.FontEntryHeight; }
         }
-        // Jull1ano fork: the popup as tall as its rows and as wide as its text; the list scrolls only when that would
-        // be taller than maxHeight (the room down to the bottom of the screen). Returns the popup's size.
+        // Jull1ano fork: "Clear history" under the list, after a line, as in AetherSDR's copy of this list
+        public Action ForkClearHandlers;
+        private Label m_forkClear;
+        private Panel m_forkLine;
+        private bool m_forkClearOn;
+        private void forkCreateClear()
+        {
+            m_forkLine = new Panel();
+            m_forkLine.Name = "forkLine";
+            m_forkLine.BackColor = Color.FromArgb(128, 128, 128);
+            m_forkClear = new Label();
+            m_forkClear.Name = "forkClear";
+            m_forkClear.Text = "Clear history";
+            m_forkClear.AutoSize = false;
+            m_forkClear.TextAlign = ContentAlignment.MiddleLeft;
+            m_forkClear.BackColor = lstboxFrequencies.BackColor;
+            m_forkClear.MouseEnter += (s, e) => { if (m_forkClearOn) m_forkClear.BackColor = Color.Silver; }; // as the list's rows
+            m_forkClear.MouseLeave += (s, e) => { m_forkClear.BackColor = lstboxFrequencies.BackColor; };
+            m_forkClear.MouseClick += (s, e) => { if (m_forkClearOn && e.Button == MouseButtons.Left) ForkClearHandlers?.Invoke(); };
+            this.Controls.Add(m_forkLine);
+            this.Controls.Add(m_forkClear);
+        }
+        // test hook: the same as a click on "Clear history"
+        public void ForkClickClear()
+        {
+            if (m_forkClearOn) ForkClearHandlers?.Invoke();
+        }
+
+        // Jull1ano fork: the popup as tall as its rows (+ the line and "Clear history") and as wide as its text; the
+        // list scrolls only when that would be taller than maxHeight (the room down to the bottom of the screen).
+        // Returns the popup's size.
         public Size ForkFit(int rows, int maxHeight)
         {
             HighDpi.PrepareForm(this); // its high-DPI pass now: from the watcher, later, it would rescale this layout
             QuickRecallListBox lb = lstboxFrequencies;
-            int m = HighDpi.Px(5);
+            int m = HighDpi.Px(5), gap = HighDpi.Px(4), line = Math.Max(1, HighDpi.Px(1));
             int rowH = Math.Max(1, Math.Min(255, TextRenderer.MeasureText("0", lb.Font).Height));
             if (lb.ItemHeight != rowH) lb.ItemHeight = rowH;
-            int listH = Math.Max(1, rows) * rowH;
-            bool scroll = listH + 2 * m > maxHeight;
-            if (scroll) listH = Math.Max(rowH, maxHeight - 2 * m);
-            int listW = lb.ForkContentWidth() + (scroll ? SystemInformation.VerticalScrollBarWidth : 0);
-            Size s = new Size(listW + 2 * m, listH + 2 * m);
+            int footer = (rows > 0 ? gap + line + gap : 0) + rowH;
+            int listH = rows * rowH;
+            bool scroll = rows > 0 && listH + footer + 2 * m > maxHeight;
+            if (scroll) listH = Math.Max(rowH, maxHeight - footer - 2 * m);
+            m_forkClear.Font = lb.Font;
+            m_forkClear.Padding = new Padding(lb.ForkPad, 0, 0, 0);
+            int clearW = TextRenderer.MeasureText(m_forkClear.Text, lb.Font).Width + 2 * lb.ForkPad;
+            int listW = Math.Max(lb.ForkContentWidth(), clearW) + (scroll ? SystemInformation.VerticalScrollBarWidth : 0);
+            Size s = new Size(listW + 2 * m, listH + footer + 2 * m);
             lb.IntegralHeight = false;
             this.ClientSize = s;
-            lb.Bounds = new Rectangle(m, m, listW, listH);
+            lb.Visible = rows > 0;
+            m_forkLine.Visible = rows > 0;
+            if (rows > 0)
+            {
+                lb.Bounds = new Rectangle(m, m, listW, listH);
+                m_forkLine.Bounds = new Rectangle(m, m + listH + gap, listW, line);
+            }
+            m_forkClearOn = rows > 0; // nothing to clear: shown greyed
+            m_forkClear.Bounds = new Rectangle(m, s.Height - m - rowH, listW, rowH);
+            m_forkClear.BackColor = lb.BackColor;
+            m_forkClear.ForeColor = m_forkClearOn ? lb.ForeColor : Color.FromArgb(112, 112, 112);
             int visible = Math.Max(1, listH / rowH);
-            if (lb.Items.Count > 0) lb.TopIndex = lb.SelectedIndex >= visible ? lb.SelectedIndex - visible + 1 : 0;
+            if (rows > 0 && lb.Items.Count > 0) lb.TopIndex = lb.SelectedIndex >= visible ? lb.SelectedIndex - visible + 1 : 0;
             return s;
         }
         private void lstboxFrequencies_MouseClick(object sender, MouseEventArgs e)
