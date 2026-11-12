@@ -738,20 +738,21 @@ namespace Thetis
                 else b.ImageList.Images.Clear();
                 b.ImageList.ImageSize = b.Size; // may be an issue with smaller images
                 b.ImageList.ColorDepth = ColorDepth.Depth32Bit;
+                HighDpi.ArrowGeom tri = null; // Jull1ano fork: the arrow's shape, from this button's first picture
 
                 for (int i = 0; i < 8; i++)
                 {
                     if (File.Exists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
                     {
                         Image img = loadImage(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext);
-                        if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), img);
+                        if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), forkCrispArrow(img, b, ii, ref tri));
                     }
                     else
                     {
                         if (File.Exists(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
                         {
                             Image img = loadImage(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext);
-                            if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), img);
+                            if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), forkCrispArrow(img, b, ii, ref tri));
                         }
                     }
                 }
@@ -760,6 +761,20 @@ namespace Thetis
                 setupButtonHandlers(b);
                 Button_StateChanged(b, EventArgs.Empty);
             }
+        }
+        // Jull1ano fork: at high DPI the QuickRecall arrows (20 px skin pictures, stretched and blurry at 200 %) are
+        // redrawn sharp at the button's size: the face's outline and the triangle drawn one screen pixel sharp
+        // (HighDpi.CrispArrowImage). The shape is measured once per button from its first picture, so it stays put
+        // when the button changes state. which: 0 previous (left), 1 list (down), 2 next (right).
+        private static Image forkCrispArrow(Image img, Button b, int which, ref HighDpi.ArrowGeom tri)
+        {
+            if (!HighDpi.Enabled || img == null || b.Width <= 0 || b.Height <= 0) return img;
+            if (img.Width == b.Width && img.Height == b.Height) return img;
+            int dir = which == 0 ? 0 : (which == 1 ? 1 : 2);
+            if (tri == null) tri = HighDpi.ArrowShape(img, dir);
+            if (tri == null) return img;
+            Image crisp = HighDpi.CrispArrowImage(img, b.Width, b.Height, tri);
+            return crisp ?? img;
         }
         private static void setupButtonHandlers(Button ctrl)
         {

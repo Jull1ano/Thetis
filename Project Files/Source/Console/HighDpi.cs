@@ -778,6 +778,322 @@ namespace Thetis
             finally { _fixingContrast = false; }
         }
 
+        // Jull1ano fork: sharp skin arrows. A skin's small arrow buttons (QuickRecall < V >: 20 x 20 px pictures)
+        // stretched to their 200 % buttons came out blurry. The picture is split into its button face and its light
+        // triangle: the triangle's pixels (those near the lightest grey inside the face, plus 2 px around) are filled
+        // in from the face on either side, along the face's gradient; the face is then drawn smoothly at the button's
+        // size and the triangle on top as a sharp anti-aliased shape in its own colour. The triangle's place and size
+        // come from the picture's coverage moments (area kept), so another skin's arrows keep their own look. A
+        // picture without a light glyph is left as it was (null).
+        private sealed class ArrowScan
+        {
+            public int W, H;
+            public System.Drawing.Color Glyph;
+            public System.Drawing.Color[,] Face;
+            public float[,] Cover;
+        }
+
+        private static double colorDist(System.Drawing.Color a, System.Drawing.Color b)
+        {
+            int dr = a.R - b.R, dg = a.G - b.G, db = a.B - b.B;
+            return Math.Sqrt(dr * dr + dg * dg + db * db);
+        }
+
+        private static ArrowScan scanArrow(System.Drawing.Image src)
+        {
+            if (src == null) return null;
+            int sw = src.Width, sh = src.Height;
+            if (sw < 8 || sh < 8 || sw > 128 || sh > 128) return null;
+            System.Drawing.Color[,] p = new System.Drawing.Color[sw, sh];
+            using (System.Drawing.Bitmap b = new System.Drawing.Bitmap(src))
+                for (int y = 0; y < sh; y++) for (int x = 0; x < sw; x++) p[x, y] = b.GetPixel(x, y);
+
+            // the glyph's colour: the lightest, most grey pixel inside the face
+            int ring = Math.Max(2, Math.Min(sw, sh) / 7);
+            double best = -1;
+            System.Drawing.Color g = System.Drawing.Color.Empty;
+            for (int y = ring; y < sh - ring; y++)
+                for (int x = ring; x < sw - ring; x++)
+                {
+                    System.Drawing.Color c = p[x, y];
+                    if (c.A < 200) continue;
+                    int mx = Math.Max(c.R, Math.Max(c.G, c.B)), mn = Math.Min(c.R, Math.Min(c.G, c.B));
+                    double sc = (c.R + c.G + c.B) / 3.0 - 1.5 * (mx - mn);
+                    if (sc > best) { best = sc; g = c; }
+                }
+            if (best < 120) return null;
+
+            // the glyph's pixels and 3 px around them (its faint anti-aliased tips)
+            bool[,] r = new bool[sw, sh];
+            int cores = 0;
+            for (int y = ring; y < sh - ring; y++)
+                for (int x = ring; x < sw - ring; x++)
+                {
+                    if (p[x, y].A < 200 || colorDist(p[x, y], g) >= 24) continue;
+                    cores++;
+                    for (int yy = Math.Max(ring, y - 3); yy < Math.Min(sh - ring, y + 4); yy++)
+                        for (int xx = Math.Max(ring, x - 3); xx < Math.Min(sw - ring, x + 4); xx++) r[xx, yy] = true;
+                }
+            if (cores < 4) return null;
+
+            // the face under the glyph: filled in from the nearest face pixels across or down, whichever pair is
+            // closer in colour (that is the direction along the face's gradient)
+            ArrowScan a = new ArrowScan { W = sw, H = sh, Glyph = g, Face = new System.Drawing.Color[sw, sh], Cover = new float[sw, sh] };
+            for (int y = 0; y < sh; y++)
+                for (int x = 0; x < sw; x++)
+                {
+                    a.Face[x, y] = p[x, y];
+                    if (!r[x, y]) continue;
+                    int xl = x, xr = x, ya = y, yb = y;
+                    while (xl >= 0 && r[xl, y]) xl--;
+                    while (xr < sw && r[xr, y]) xr++;
+                    while (ya >= 0 && r[x, ya]) ya--;
+                    while (yb < sh && r[x, yb]) yb++;
+                    System.Drawing.Color c0, c1;
+                    float t;
+                    bool hOk = xl >= 0 && xr < sw, vOk = ya >= 0 && yb < sh;
+                    if (hOk && (!vOk || colorDist(p[xl, y], p[xr, y]) <= colorDist(p[x, ya], p[x, yb])))
+                    { c0 = p[xl, y]; c1 = p[xr, y]; t = (x - xl) / (float)(xr - xl); }
+                    else if (vOk)
+                    { c0 = p[x, ya]; c1 = p[x, yb]; t = (y - ya) / (float)(yb - ya); }
+                    else continue;
+                    a.Face[x, y] = System.Drawing.Color.FromArgb(255,
+                        (int)Math.Round(c0.R + (c1.R - c0.R) * t), (int)Math.Round(c0.G + (c1.G - c0.G) * t), (int)Math.Round(c0.B + (c1.B - c0.B) * t));
+
+                    // how much of this pixel the glyph covers
+                    System.Drawing.Color f = a.Face[x, y], q = p[x, y];
+                    double vr = g.R - f.R, vg = g.G - f.G, vb = g.B - f.B, n2 = vr * vr + vg * vg + vb * vb;
+                    if (n2 < 1) continue;
+                    double cov = ((q.R - f.R) * vr + (q.G - f.G) * vg + (q.B - f.B) * vb) / n2;
+                    a.Cover[x, y] = (float)Math.Max(0, Math.Min(1, cov));
+                }
+            return a;
+        }
+
+        // A skin arrow button's shape, measured once from its first picture and used for all its pictures, so
+        // nothing moves when the button changes state: the triangle (x0 y0 x1 y1 x2 y2, in the picture's pixels) and
+        // how much of each picture pixel is button face (0 = the picture's outside colour .. 1 = face).
+        public sealed class ArrowGeom
+        {
+            public float[] Tri;
+            public int W, H;
+            public bool HasFace;             // the face's rounded rectangle, in the picture's pixels
+            public float L, T, R, B, Radius;
+        }
+
+        private static float arrowMedian(System.Collections.Generic.List<float> v)
+        {
+            v.Sort();
+            return v.Count == 0 ? float.NaN : (v.Count % 2 == 1 ? v[v.Count / 2] : (v[v.Count / 2 - 1] + v[v.Count / 2]) / 2);
+        }
+
+        // where the 0.5 line falls between two neighbouring pixel centres (0 = at the first, 1 = at the second)
+        private static float arrowCross(float a, float b)
+        {
+            return Math.Abs(b - a) < 1e-6f ? 0.5f : Math.Max(0f, Math.Min(1f, (0.5f - a) / (b - a)));
+        }
+
+        // signed distance from the face's rounded rectangle (negative inside), in the picture's pixels
+        private static float arrowRectDist(ArrowGeom g, float x, float y)
+        {
+            float hx = (g.R - g.L) / 2, hy = (g.B - g.T) / 2, rr = g.Radius;
+            float qx = Math.Abs(x - (g.L + g.R) / 2) - (hx - rr), qy = Math.Abs(y - (g.T + g.B) / 2) - (hy - rr);
+            float ox = Math.Max(qx, 0), oy = Math.Max(qy, 0);
+            return (float)Math.Sqrt(ox * ox + oy * oy) + Math.Min(Math.Max(qx, qy), 0) - rr;
+        }
+
+        private static float arrowSample(float[,] m, int w, int h, float x, float y)
+        {
+            float u = Math.Max(0, Math.Min(w - 1, x - 0.5f)), v = Math.Max(0, Math.Min(h - 1, y - 0.5f));
+            int x0 = (int)u, y0 = (int)v, x1 = Math.Min(w - 1, x0 + 1), y1 = Math.Min(h - 1, y0 + 1);
+            float tx = u - x0, ty = v - y0;
+            return (m[x0, y0] * (1 - tx) + m[x1, y0] * tx) * (1 - ty) + (m[x0, y1] * (1 - tx) + m[x1, y1] * tx) * ty;
+        }
+
+        // The face as a rounded rectangle: each side where the face mask crosses 0.5 (median over the side's middle
+        // half), the corner radius from where the face begins along each corner's diagonal (a radius r starts
+        // r * (1 - 1/sqrt 2) in from the corner; median of the four). Fitting one clean shape keeps the outline
+        // smooth where the skin's soft edge is uneven.
+        private static bool arrowFaceRect(float[,] m, int W, int H, ArrowGeom g)
+        {
+            System.Collections.Generic.List<float> ls = new System.Collections.Generic.List<float>(), rs = new System.Collections.Generic.List<float>(),
+                ts = new System.Collections.Generic.List<float>(), bs = new System.Collections.Generic.List<float>(), rads = new System.Collections.Generic.List<float>();
+            for (int y = H / 4; y < H - H / 4; y++)
+            {
+                if (m[0, y] >= 0.5f) ls.Add(0);
+                else for (int x = 0; x + 1 < W; x++) if (m[x + 1, y] >= 0.5f) { ls.Add(x + 0.5f + arrowCross(m[x, y], m[x + 1, y])); break; }
+                if (m[W - 1, y] >= 0.5f) rs.Add(W);
+                else for (int x = W - 1; x - 1 >= 0; x--) if (m[x - 1, y] >= 0.5f) { rs.Add(x + 0.5f - arrowCross(m[x, y], m[x - 1, y])); break; }
+            }
+            for (int x = W / 4; x < W - W / 4; x++)
+            {
+                if (m[x, 0] >= 0.5f) ts.Add(0);
+                else for (int y = 0; y + 1 < H; y++) if (m[x, y + 1] >= 0.5f) { ts.Add(y + 0.5f + arrowCross(m[x, y], m[x, y + 1])); break; }
+                if (m[x, H - 1] >= 0.5f) bs.Add(H);
+                else for (int y = H - 1; y - 1 >= 0; y--) if (m[x, y - 1] >= 0.5f) { bs.Add(y + 0.5f - arrowCross(m[x, y], m[x, y - 1])); break; }
+            }
+            if (ls.Count == 0 || rs.Count == 0 || ts.Count == 0 || bs.Count == 0) return false;
+            g.L = arrowMedian(ls); g.R = arrowMedian(rs); g.T = arrowMedian(ts); g.B = arrowMedian(bs);
+            if (g.R - g.L < 4 || g.B - g.T < 4) return false;
+            float half = Math.Min(g.R - g.L, g.B - g.T) / 2;
+            float[,] corners = { { g.L, g.T, 1, 1 }, { g.R, g.T, -1, 1 }, { g.L, g.B, 1, -1 }, { g.R, g.B, -1, -1 } };
+            for (int c = 0; c < 4; c++)
+                for (float d = 0; d < half; d += 0.05f)
+                    if (arrowSample(m, W, H, corners[c, 0] + corners[c, 2] * d, corners[c, 1] + corners[c, 3] * d) >= 0.5f)
+                    { rads.Add(d / 0.29289f); break; }
+            g.Radius = rads.Count > 0 ? Math.Max(0, Math.Min(half, arrowMedian(rads))) : 0;
+            g.HasFace = true;
+            return true;
+        }
+
+        // the picture's outside colour: its four corners
+        private static System.Drawing.Color arrowOutside(ArrowScan a)
+        {
+            System.Drawing.Color[] c = { a.Face[0, 0], a.Face[a.W - 1, 0], a.Face[0, a.H - 1], a.Face[a.W - 1, a.H - 1] };
+            int r = 0, g = 0, b = 0;
+            foreach (System.Drawing.Color k in c) { r += k.R; g += k.G; b += k.B; }
+            return System.Drawing.Color.FromArgb(255, r / 4, g / 4, b / 4);
+        }
+
+        // face share per pixel: distance from the outside colour against the face's typical distance (median inside)
+        private static float[,] arrowFaceMask(ArrowScan a)
+        {
+            System.Drawing.Color o = arrowOutside(a);
+            int ring = Math.Max(2, Math.Min(a.W, a.H) / 7);
+            System.Collections.Generic.List<double> d = new System.Collections.Generic.List<double>();
+            for (int y = ring; y < a.H - ring; y++) for (int x = ring; x < a.W - ring; x++) d.Add(colorDist(a.Face[x, y], o));
+            d.Sort();
+            double D = Math.Max(16, d.Count > 0 ? d[d.Count / 2] : 16);
+            float[,] m = new float[a.W, a.H];
+            for (int y = 0; y < a.H; y++) for (int x = 0; x < a.W; x++) m[x, y] = (float)Math.Min(1, colorDist(a.Face[x, y], o) / D);
+            return m;
+        }
+
+        // The triangle from the glyph's coverage moments: for a triangle with base B and height T the spread across
+        // the base is B^2/24 and along it T^2/18, its centroid a third of the way from the base; then sized to the
+        // glyph's area. dir: 0 left, 1 down, 2 right.
+        public static ArrowGeom ArrowShape(System.Drawing.Image src, int dir)
+        {
+            try
+            {
+                ArrowScan a = scanArrow(src);
+                if (a == null) return null;
+                double A = 0, sx = 0, sy = 0, sxx = 0, syy = 0;
+                for (int y = 0; y < a.H; y++)
+                    for (int x = 0; x < a.W; x++)
+                    {
+                        double c = a.Cover[x, y];
+                        if (c <= 0) continue;
+                        double cx = x + 0.5, cy = y + 0.5;
+                        A += c; sx += c * cx; sy += c * cy; sxx += c * cx * cx; syy += c * cy * cy;
+                    }
+                if (A < 4) return null;
+                double mx = sx / A, my = sy / A;
+                double vx = Math.Max(0.1, sxx / A - mx * mx + 1.0 / 12), vy = Math.Max(0.1, syy / A - my * my + 1.0 / 12);
+                bool across = dir == 0 || dir == 2;              // the base is vertical
+                double baseLen = Math.Sqrt(24 * (across ? vy : vx)), len = Math.Sqrt(18 * (across ? vx : vy));
+                double k = Math.Sqrt(A / Math.Max(1e-6, baseLen * len / 2)); // the glyph's own area
+                k = Math.Max(0.75, Math.Min(1.1, k));
+                baseLen *= k; len *= k;
+                double[] t;
+                if (dir == 2) t = new double[] { mx - len / 3, my - baseLen / 2, mx - len / 3, my + baseLen / 2, mx + 2 * len / 3, my };
+                else if (dir == 0) t = new double[] { mx + len / 3, my - baseLen / 2, mx + len / 3, my + baseLen / 2, mx - 2 * len / 3, my };
+                else t = new double[] { mx - baseLen / 2, my - len / 3, mx + baseLen / 2, my - len / 3, mx, my + 2 * len / 3 };
+                ArrowGeom geo = new ArrowGeom { Tri = new float[6], W = a.W, H = a.H };
+                for (int i = 0; i < 6; i++) geo.Tri[i] = (float)t[i];
+                arrowFaceRect(arrowFaceMask(a), a.W, a.H, geo);
+                Log("arrow shape dir " + dir + " from " + a.W + "x" + a.H + ": " + string.Join(" ", Array.ConvertAll(geo.Tri, v => v.ToString("0.00"))) +
+                    " area " + A.ToString("0.0") + " k " + k.ToString("0.00") + (geo.HasFace ? " face " + geo.L.ToString("0.00") + " " + geo.T.ToString("0.00") + " " +
+                    geo.R.ToString("0.00") + " " + geo.B.ToString("0.00") + " r " + geo.Radius.ToString("0.00") : " no face"));
+                return geo;
+            }
+            catch (Exception ex) { Log("ArrowShape: " + ex.Message); return null; }
+        }
+
+        // The picture redrawn at w x h, sharp: the face's rounded rectangle (ArrowGeom) with a one screen pixel
+        // anti-aliased edge, inside it the skin's own face shading scaled smoothly, outside it the picture's outside
+        // colour, and the triangle on top. Without a measured face the scaled face shading fills the button.
+        public static System.Drawing.Bitmap CrispArrowImage(System.Drawing.Image src, int w, int h, ArrowGeom geo)
+        {
+            try
+            {
+                if (geo == null || geo.Tri == null || geo.Tri.Length != 6 || w <= 0 || h <= 0) return null;
+                ArrowScan a = scanArrow(src);
+                if (a == null) return null;
+                float[,] m = arrowFaceMask(a);
+                System.Drawing.Color o = arrowOutside(a);
+
+                // the face's colours carried out over its edge, so no outside colour is mixed into the scaled face (a
+                // pixel is face when its centre is half a pixel inside the measured outline, so a skin's rim stays)
+                bool[,] inside = new bool[a.W, a.H];
+                for (int y = 0; y < a.H; y++)
+                    for (int x = 0; x < a.W; x++)
+                        inside[x, y] = geo.HasFace ? arrowRectDist(geo, x + 0.5f, y + 0.5f) <= -0.5f : m[x, y] >= 0.85f;
+                System.Drawing.Color[,] fc = new System.Drawing.Color[a.W, a.H];
+                for (int y = 0; y < a.H; y++)
+                    for (int x = 0; x < a.W; x++)
+                    {
+                        fc[x, y] = a.Face[x, y];
+                        if (inside[x, y]) continue;
+                        int bestD = int.MaxValue, n = 0, r = 0, g = 0, b = 0;
+                        for (int yy = Math.Max(0, y - 4); yy <= Math.Min(a.H - 1, y + 4); yy++)
+                            for (int xx = Math.Max(0, x - 4); xx <= Math.Min(a.W - 1, x + 4); xx++)
+                            {
+                                if (!inside[xx, yy]) continue;
+                                int dd = (xx - x) * (xx - x) + (yy - y) * (yy - y);
+                                if (dd > bestD) continue;
+                                if (dd < bestD) { bestD = dd; n = r = g = b = 0; }
+                                System.Drawing.Color c = a.Face[xx, yy];
+                                n++; r += c.R; g += c.G; b += c.B;
+                            }
+                        if (n > 0) fc[x, y] = System.Drawing.Color.FromArgb(255, r / n, g / n, b / n);
+                    }
+
+                System.Drawing.Bitmap outB = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (System.Drawing.Bitmap face = new System.Drawing.Bitmap(a.W, a.H, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                using (System.Drawing.Bitmap faceUp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                {
+                    for (int y = 0; y < a.H; y++) for (int x = 0; x < a.W; x++) face.SetPixel(x, y, fc[x, y]);
+                    using (System.Drawing.Graphics gr = System.Drawing.Graphics.FromImage(faceUp))
+                    using (System.Drawing.Imaging.ImageAttributes ia = new System.Drawing.Imaging.ImageAttributes())
+                    {
+                        ia.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY); // no see-through rim at the edges
+                        gr.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        gr.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        gr.DrawImage(face, new System.Drawing.Rectangle(0, 0, w, h), 0, 0, a.W, a.H, System.Drawing.GraphicsUnit.Pixel, ia);
+                    }
+
+                    // the face's rounded rectangle: signed distance from its outline, in screen pixels -> coverage
+                    float fx = w / (float)a.W, fy = h / (float)a.H, fs = (fx + fy) / 2;
+                    for (int Y = 0; Y < h; Y++)
+                        for (int X = 0; X < w; X++)
+                        {
+                            float k = 1f;
+                            if (geo.HasFace) k = Math.Max(0, Math.Min(1, 0.5f - arrowRectDist(geo, (X + 0.5f) / fx, (Y + 0.5f) / fy) * fs));
+                            System.Drawing.Color f = faceUp.GetPixel(X, Y);
+                            outB.SetPixel(X, Y, System.Drawing.Color.FromArgb(255,
+                                (int)Math.Round(o.R + (f.R - o.R) * k), (int)Math.Round(o.G + (f.G - o.G) * k), (int)Math.Round(o.B + (f.B - o.B) * k)));
+                        }
+                }
+
+                using (System.Drawing.Graphics gr = System.Drawing.Graphics.FromImage(outB))
+                {
+                    gr.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    gr.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                    float fx = w / (float)a.W, fy = h / (float)a.H;
+                    float[] t = geo.Tri;
+                    System.Drawing.PointF[] pts = {
+                        new System.Drawing.PointF(t[0] * fx, t[1] * fy),
+                        new System.Drawing.PointF(t[2] * fx, t[3] * fy),
+                        new System.Drawing.PointF(t[4] * fx, t[5] * fy) };
+                    using (System.Drawing.SolidBrush br = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, a.Glyph.R, a.Glyph.G, a.Glyph.B)))
+                        gr.FillPolygon(br, pts);
+                }
+                return outB;
+            }
+            catch (Exception ex) { Log("CrispArrowImage: " + ex.Message); return null; }
+        }
+
         // button icons (Database Manager ...): WinForms draws a button's Image at its own pixel size, so a 96 DPI
         // icon came out half size in its 200 % button. Redrawn once at the DPI scale when it still fits the button.
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Drawing.Image, object> _scaledImages =

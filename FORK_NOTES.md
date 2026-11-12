@@ -139,6 +139,17 @@ the waterfall is not changed. `build-tools/test-fft-flatten.ps1` calls it on syn
 0.41 (50 %), 0.25 (70 %), 0.17 (80 %); carrier, SSB and AM levels unchanged; the few neighbour-order flips are
 between points within 0.01 dB of each other (80 %). Saved in `hidpi_fft_flatten.txt`.
 
+## Sharp QuickRecall arrows (high DPI)
+
+The QuickRecall buttons (< V > next to Save / Restore) take 20 x 20 px skin pictures, which came out blurry when
+stretched to their 200 % buttons. At high DPI each picture is redrawn at the button's own size (`HighDpi.ArrowShape`,
+`HighDpi.CrispArrowImage`, called from `Skin.SetupQuickRecallImages`): the face's rounded rectangle (its sides and
+corner radius measured where the face mask crosses half way, median per side) with a one-screen-pixel edge, the
+skin's own face shading scaled smoothly inside it, and the triangle as a vector shape in the glyph's colour. The
+triangle's place and size come from the glyph's coverage moments (area kept); the old glyph is filled in from the
+face along its gradient first. Shape and outline are measured once per button from its first picture, so nothing
+moves when it is pressed. A picture without a light glyph keeps the old stretched look; 1x is unchanged.
+
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
 As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band
