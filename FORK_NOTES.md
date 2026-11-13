@@ -178,19 +178,25 @@ their rounded face only (`HighDpi.ArrowFacePath`). On at 1x too. First 20 %; the
 
 ## Memory window: back / play / next (as AltSDR's MEMORY tab)
 
-A bar above the grid (`Memory/MemoryForm.Fork.cs`): back, play, next and "n / N" (current row / rows).
+A bar right under the window's top (`Memory/MemoryForm.Fork.cs`), sized and drawn as AltSDR's: back, play, next
+(24 x 17 px at 100 %, 3 px apart, at the grid's left edge; a 1 px border that lights under the mouse, a dark ring, a
+dark bevelled face, play green, stop red), "n / N" (current row / rows) 8 px after them, and SLOW.
 
 - Back / next: the previous / next row with a frequency becomes the current one and is tuned, as a click on the
   row's header (without "Close after selection"); round at the ends; the grid's order as shown (a column sort
   reorders the list itself).
-- Play: a slow seek. From the row after the current one each memory is tuned in turn (the grid's current row
-  following) until one has a signal; it stays there with play lit, and play again goes on to the next one with a
-  signal. While it steps play is a red stop, which stays on the memory it is on. Round at the end. It stops when
-  the VFO is tuned by hand, a memory is picked, back / next is clicked, TX, or the window closes; with the radio
-  off it does not start.
+- Play: a slow seek. From the row after the current one each memory with Scan ticked is tuned in turn (the grid's
+  current row following) until one has a signal; it stays there with play lit, and play again goes on to the next
+  one with a signal. While it steps play is a red stop, which stops on the memory it is on; play then goes on from
+  that memory. While a seek is on, back is its BACK (the previous memory, stopped there) and next its FORWARD (on
+  to the next memory; when stopped, the next memory, still stopped). Round at the end. A hand tune, a memory
+  picked, TX or closing the window ends the seek; with the radio off it does not start.
 - A signal: with SQL on (not FM) the RX1 meter at or over the squelch level; otherwise the passband SNR (the info
   bar's PB SNR: meter against the display's noise floor) 6 dB or more (`Console.ForkSignalMargin`). Each memory:
-  400 ms to settle, then 4 readings 60 ms apart averaged; with no noise floor reading in 2.5 s it is passed over.
+  400 ms to settle, then readings 60 ms apart for 240 ms (about 0.65 s a memory), all averaged; with no noise
+  floor reading in 2.5 s more it is passed over.
+- SLOW (saved in `fork_memory_bar.txt` in the data folder, off by default): readings for 1 s (about 1.4 s a
+  memory), so a weak signal is averaged longer too; it applies to a running seek at once.
 
 A memory or QuickRecall jump now lands exactly on its frequency (`Console.ForkJumpVfoA`). With CTUN on and Setup's
 "Click Tune Drag" + "limit to the spectral area" on, a jump to a frequency outside the view but less than 0.5 MHz
@@ -198,7 +204,7 @@ past its edges was left at the view's edge (memory 0.531 MHz -> VFO 0.483844); n
 a CAT jump does.
 
 Test hook: `THETIS_HIDPI_OPEN=memnav:<row>:<action>,<action>...` (the window open, that row tuned, then one action
-a second: next / back / play / stop / vfo (1 kHz up, as a hand tune) / w, the state logged);
+a second: next / back / play / stop / slow / vfo (1 kHz up, as a hand tune) / w, the state logged);
 `THETIS_SEEK_FAKE=<row>,<row>` makes those rows the ones with a signal; `THETIS_SEEK_MARGIN=<dB>` sets the margin.
 
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
