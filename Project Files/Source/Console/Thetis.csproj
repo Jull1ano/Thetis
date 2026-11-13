@@ -757,6 +757,10 @@
     <Compile Include="Memory\MemoryForm.designer.cs">
       <DependentUpon>MemoryForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Memory\MemoryForm.Fork.cs">
+      <DependentUpon>MemoryForm.cs</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Memory\MemoryList.cs" />
     <Compile Include="Memory\MemoryRecord.cs" />
     <Compile Include="Midi2CatCommands.cs" />

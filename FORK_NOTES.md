@@ -176,6 +176,31 @@ the mouse is on it and it is enabled, on top of what the skin draws (OE3IDE-TheB
 buttons made later get it; it draws in the button's Paint event. The QuickRecall arrows at high DPI get it inside
 their rounded face only (`HighDpi.ArrowFacePath`). On at 1x too. First 20 %; the user chose 10 % (`ForkHover.ALPHA`).
 
+## Memory window: back / play / next (as AltSDR's MEMORY tab)
+
+A bar above the grid (`Memory/MemoryForm.Fork.cs`): back, play, next and "n / N" (current row / rows).
+
+- Back / next: the previous / next row with a frequency becomes the current one and is tuned, as a click on the
+  row's header (without "Close after selection"); round at the ends; the grid's order as shown (a column sort
+  reorders the list itself).
+- Play: a slow seek. From the row after the current one each memory is tuned in turn (the grid's current row
+  following) until one has a signal; it stays there with play lit, and play again goes on to the next one with a
+  signal. While it steps play is a red stop, which stays on the memory it is on. Round at the end. It stops when
+  the VFO is tuned by hand, a memory is picked, back / next is clicked, TX, or the window closes; with the radio
+  off it does not start.
+- A signal: with SQL on (not FM) the RX1 meter at or over the squelch level; otherwise the passband SNR (the info
+  bar's PB SNR: meter against the display's noise floor) 6 dB or more (`Console.ForkSignalMargin`). Each memory:
+  400 ms to settle, then 4 readings 60 ms apart averaged; with no noise floor reading in 2.5 s it is passed over.
+
+A memory or QuickRecall jump now lands exactly on its frequency (`Console.ForkJumpVfoA`). With CTUN on and Setup's
+"Click Tune Drag" + "limit to the spectral area" on, a jump to a frequency outside the view but less than 0.5 MHz
+past its edges was left at the view's edge (memory 0.531 MHz -> VFO 0.483844); now the view re-centres on it, as
+a CAT jump does.
+
+Test hook: `THETIS_HIDPI_OPEN=memnav:<row>:<action>,<action>...` (the window open, that row tuned, then one action
+a second: next / back / play / stop / vfo (1 kHz up, as a hand tune) / w, the state logged);
+`THETIS_SEEK_FAKE=<row>,<row>` makes those rows the ones with a signal; `THETIS_SEEK_MARGIN=<dB>` sets the margin.
+
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
 As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band

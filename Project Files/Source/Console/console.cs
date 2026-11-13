@@ -40671,7 +40671,7 @@ namespace Thetis
 
         public void RecallMemory(MemoryRecord record)
         {
-            VFOAFreq = record.RXFreq;
+            ForkJumpVfoA(record.RXFreq); // Jull1ano fork: exactly there, the view re-centred if it is outside it
             RX1DSPMode = record.DSPMode;
             if (_forkMemorySimple)
             {
@@ -45015,6 +45015,19 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "memnav")
+                {
+                    // memnav:<row>:<action>,<action>...: the Memory window open, that row tuned, then one action a
+                    // second through its bar (next / back / play / stop / w), the state logged (MemoryForm.Fork.cs);
+                    // THETIS_SEEK_FAKE=<row>,<row> makes those rows the ones with a signal
+                    memoryToolStripMenuItem_Click(this, EventArgs.Empty);
+                    int row = parts.Length > 1 ? int.Parse(parts[1]) : 0;
+                    string[] acts = parts.Length > 2 ? parts[2].Split(',') : new string[0];
+                    System.Windows.Forms.Timer tn = new System.Windows.Forms.Timer();
+                    tn.Interval = 2000;
+                    tn.Tick += (s4, e4) => { tn.Stop(); memoryForm.ForkTestNav(row, acts); };
+                    tn.Start();
+                }
                 else if (parts[0] == "nnrtest" || parts[0] == "nr4test")
                 {
                     // nr4test:<MHz>:<mode>...: the same measurement for NR4 (each estimator, reduction 40, masking 0 /
@@ -46184,6 +46197,46 @@ namespace Thetis
             if (!ClickTuneDisplay) return; // without CTUN the view is centred on the VFO already
             chkFWCATU.Checked = false;
             chkFWCATU.Checked = true;
+        }
+
+        // Jull1ano fork: a jump to a remembered frequency (a memory, a QuickRecall entry). With CTUN on and the
+        // frequency outside the view, the view re-centres on it, as a CAT jump does (_update_centerfreq): with Setup's
+        // "Click Tune Drag" + "limit to the spectral area" on, a jump less than 0.5 MHz past the view's edges was
+        // otherwise left at the edge (memory 0.531 MHz -> VFO 0.483844).
+        public void ForkJumpVfoA(double freq)
+        {
+            bool recentre = _click_tune_display && forkOutsideView(freq);
+            if (recentre) _update_centerfreq = true;
+            try { VFOAFreq = freq; }
+            finally { if (recentre) _update_centerfreq = false; }
+        }
+
+        // the frequency (MHz) outside RX1's view, by the same test the VFO change uses (5 % in from the view's edges,
+        // the filter's sides included)
+        private bool forkOutsideView(double freq)
+        {
+            double off = (freq - CentreFrequency) * 1e6;
+            double w = (double)Display.RXDisplayHigh - Display.RXDisplayLow, m = w * 0.05;
+            double lo = Math.Max(0.0, -(double)Display.RX1FilterLow), hi = Math.Max(0.0, (double)Display.RX1FilterHigh);
+            return off - lo < Display.RXDisplayLow + m || off + hi > Display.RXDisplayHigh - m;
+        }
+
+        // Jull1ano fork: the Memory window's seek (play): how far RX1 is above "a signal", in dB (>= 0: a signal), NaN
+        // while it can't tell yet (power off, TX, the noise floor not measured yet after a jump). With SQL on (not
+        // FM) the squelch level decides, as the squelch would open; otherwise the passband SNR (the info bar's PB
+        // SNR: the RX1 meter against the display's noise floor) against snrMargin dB.
+        public double ForkSignalMargin(double snrMargin, out string how)
+        {
+            if (!chkPower.Checked || MOX) { how = "power off / TX"; return double.NaN; }
+            float dbm = WDSP.CalculateRXMeter(0, 0, WDSP.MeterType.AVG_SIGNAL_STRENGTH) + RXOffset(1);
+            if (chkSquelch.CheckState == CheckState.Checked && _rx1_dsp_mode != DSPMode.FM)
+            {
+                how = "meter " + dbm.ToString("0.0") + " dBm, SQL " + ptbSquelch.Value;
+                return dbm - ptbSquelch.Value;
+            }
+            double snr = RXPBsnr(1);
+            how = "meter " + dbm.ToString("0.0") + " dBm, PB SNR " + (snr <= -998 ? "-" : snr.ToString("0.0")) + " dB";
+            return snr <= -998 ? double.NaN : snr - snrMargin;
         }
 
         public bool KeepCtunOn

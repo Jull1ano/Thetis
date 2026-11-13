@@ -252,6 +252,7 @@ namespace Thetis
             this.dataGridView1.Columns["Scan"].Visible = false;//
 
             dataGridView1.CellValidating += new DataGridViewCellValidatingEventHandler(dataGridView1_CellValidating);
+            forkCreateBar(); // Jull1ano fork: back / play / next over the grid (MemoryForm.Fork.cs)
 
             // dataGridView1.CurrentCell = dataGridView1[0, Convert.ToInt16(portBox2.Text)];
 
@@ -630,6 +631,7 @@ namespace Thetis
         private void btnSelect_Click(object sender, EventArgs e)
         {
 
+            forkSeekStop("a memory selected"); // Jull1ano fork: a seek ends at a memory picked by hand
             if (console.MemoryList.List.Count == 0) return; // nothing in the list, exit
 
 

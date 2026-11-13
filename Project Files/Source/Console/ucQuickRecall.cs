@@ -351,7 +351,7 @@ namespace Thetis
             if (index < 0 || index > m_lstVFOAFrequencies.Count - 1) return;
 
             // frequency first, so we get notified of a frequency change first
-            console.VFOAFreq = m_lstVFOAFrequencies[index].dFrequency;
+            console.ForkJumpVfoA(m_lstVFOAFrequencies[index].dFrequency); // Jull1ano fork: exactly there (view re-centred if outside it)
             if (m_lstVFOAFrequencies[index].mode != DSPMode.FIRST) console.RX1DSPMode = m_lstVFOAFrequencies[index].mode;
         }
         private void btnList_Click(object sender, EventArgs e)
