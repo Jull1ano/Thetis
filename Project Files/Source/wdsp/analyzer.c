@@ -794,23 +794,64 @@ static void sm_publish(DP a, int i, double tag_mhz)
 	if (a->normalize[i])
 		for (j = 0; j < n; j++)
 			out[j] += (dOUTREAL)a->norm_oneHz;
-	if (i == 0)
+	if (i == 0 && a->shown)
 	{
-		if (a->ease_len > 0.0)
+		double now = sm_now_ms(), mean = 0.0;
+		int same_grid = a->shown_n == n && a->shown_low_hz == a->av_low_hz[0] && a->shown_hzpp == a->av_hzpp[0];
+		if (a->ease_state && (a->ease_n != n || a->ease_low_hz != a->av_low_hz[0] || a->ease_hzpp != a->av_hzpp[0]))
+			a->ease_state = 0;	// the view moved (a pan / zoom has its own handling): no glide
+		if (a->ease_state == 1)
 		{
-			double tt = (sm_now_ms() - a->ease_t0) / a->ease_len, e;
-			if (tt >= 1.0 || tt < 0.0 || a->ease_n != n || a->ease_low_hz != a->av_low_hz[0] || a->ease_hzpp != a->av_hzpp[0])
-				a->ease_len = 0.0;	// done, or the view moved (a pan / zoom has its own handling)
+			// the first publish of the new stage: the glide's length and start slope from the shown trace's speed
+			double tm = 0.0, gap, rate, len, slope;
+			for (j = 0; j < n; j++)
+				tm += (double)out[j];
+			tm /= (double)n;
+			gap = tm - a->shown_mean;
+			rate = fabs(gap) > 0.05 ? a->speed / gap : 0.0;						// 1/s
+			len = rate > 0.0 ? 2.0 / rate : 0.3;								// s
+			if (len < 0.1) len = 0.1;
+			if (len > 0.45) len = 0.45;
+			slope = rate > 0.0 ? rate * len : 0.0;
+			if (slope > 3.0) slope = 3.0;
+			a->ease_len = len * 1000.0;
+			a->ease_slope = slope;
+			a->ease_state = 2;
+		}
+		if (a->ease_state == 2)
+		{
+			double x = (now - a->ease_t0) / a->ease_len, w;
+			if (x >= 1.0)
+				a->ease_state = 0;
 			else
 			{
-				e = 1.0 - (1.0 - tt) * (1.0 - tt) * (1.0 - tt);	// cubic ease-out: most of the way in the first 0.1 s
+				if (x < 0.0) x = 0.0;
+				// start slope = ease_slope, end slope 0: from rest a smooth start and end; a moving trace keeps its
+				// speed and slows evenly to a stop
+				w = 1.0 - (1.0 - x) * (1.0 - x) * (1.0 + (2.0 - a->ease_slope) * x);
 				for (j = 0; j < n; j++)
-					out[j] = (dOUTREAL)(a->ease_from[j] + ((double)out[j] - a->ease_from[j]) * e);
+					out[j] = (dOUTREAL)(a->ease_from[j] + ((double)out[j] - a->ease_from[j]) * w);
 			}
 		}
-		a->pub_n = n;
-		a->pub_low_hz = a->av_low_hz[0];
-		a->pub_hzpp = a->av_hzpp[0];
+		// the trace as shown, and how fast its mean moves (AltSDR: kSpeedSec 0.06)
+		for (j = 0; j < n; j++)
+			mean += (double)out[j];
+		mean /= (double)n;
+		if (a->shown_at > 0.0 && same_grid)
+		{
+			double dt = (now - a->shown_at) * 1.0e-3;
+			if (dt > 1.0e-4)
+				a->speed += ((mean - a->shown_mean) / dt - a->speed) * (1.0 - exp(-dt / 0.06));
+		}
+		else
+			a->speed = 0.0;
+		for (j = 0; j < n; j++)
+			a->shown[j] = (double)out[j];
+		a->shown_mean = mean;
+		a->shown_at = now;
+		a->shown_n = n;
+		a->shown_low_hz = a->av_low_hz[0];
+		a->shown_hzpp = a->av_hzpp[0];
 	}
 
 	EnterCriticalSection(&a->PB_ControlsSection[i]);
@@ -964,34 +1005,43 @@ static void sm_follow_view(DP a, int publish)
 	}
 }
 
-// the glide starts from what pixel output 0 shows: the last published trace if it is on the current grid, else the
-// state as sm_publish would show it (pixels without data at the floor)
+// a fill stage change: the glide starts from the trace shown last (mid-glide too: never restarted from rest) at the
+// time it was shown, so the first glided publish is already one step along; its length and start slope come at that
+// publish, when the new values are known (sm_publish)
 static void sm_ease_start(DP a)
 {
 	int j, n = a->num_pixels;
-	double fl;
-	if (!a->ease_from || n < 2 || n != a->av_n[0])
+	double now = sm_now_ms(), fl;
+	if (!a->ease_from || !a->shown || n < 2 || n != a->av_n[0])
 		return;
-	if (a->pub_n == n && a->pub_low_hz == a->av_low_hz[0] && a->pub_hzpp == a->av_hzpp[0])
+	if (a->shown_at > 0.0 && a->shown_n == n && a->shown_low_hz == a->av_low_hz[0] && a->shown_hzpp == a->av_hzpp[0])
 	{
-		dOUTREAL* last = a->pixels[0][a->last_pix_buff[0]];
-		for (j = 0; j < n; j++)
-			a->ease_from[j] = (double)last[j];
+		if (now - a->shown_at > 50.0)
+		{
+			// nothing published meanwhile (a band change waits for its first stage): the trace stood still,
+			// as AltSDR's display keeps drawing the held trace
+			a->speed *= exp(-(now - a->shown_at) / 60.0);
+			a->shown_at = now - 16.7;
+		}
+		memcpy(a->ease_from, a->shown, n * sizeof(double));
+		a->ease_t0 = a->shown_at;
 	}
 	else
 	{
+		// no shown trace on this grid: the state as sm_publish would show it (pixels without data at the floor)
 		fl = a->av_floor[0] < 1.0e29 ? a->av_floor[0] : -200.0;
 		for (j = 0; j < n; j++)
 			a->ease_from[j] = a->av_valid[0][j] ? sm_db(a, 0, j) : fl;
 		if (a->normalize[0])
 			for (j = 0; j < n; j++)
 				a->ease_from[j] += a->norm_oneHz;
+		a->speed = 0.0;
+		a->ease_t0 = now - 16.7;
 	}
 	a->ease_n = n;
 	a->ease_low_hz = a->av_low_hz[0];
 	a->ease_hzpp = a->av_hzpp[0];
-	a->ease_t0 = sm_now_ms();
-	a->ease_len = 300.0;
+	a->ease_state = 1;
 }
 
 // quick fill: a short FFT of the newest samples (all taken at the newest LO), when the frame's valid part does not
@@ -2247,6 +2297,7 @@ void XCreateAnalyzer(	int disp,
 	a->req_valid = 0;
 	a->sm_tmp = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);
 	a->ease_from = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);	// Jull1ano fork: the glide
+	a->shown = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);
 	a->sm_tmp2 = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);
 	a->sm_vtmp = (unsigned char*) malloc0 (dMAX_PIXELS);
 	for (i = 0; i < dMAX_PIXOUTS; i++)
@@ -2358,6 +2409,7 @@ void DestroyAnalyzer(int disp)
 	}
 	_aligned_free (a->sm_tmp);
 	_aligned_free (a->ease_from);
+	_aligned_free (a->shown);
 	_aligned_free (a->sm_tmp2);
 	_aligned_free (a->sm_vtmp);
 	sm_quick_setup(a, 0);	// Jull1ano fork: quick fill

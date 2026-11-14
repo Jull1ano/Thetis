@@ -63,8 +63,13 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   1.37 s at 262144 / 192 kHz), drawn like the full one (no Welch, no blend), then the full window takes over
   (user: "when changing band, cut the time in half"). Since 01:4x: from a quarter window (0.34 s), then half (0.68 s),
   then full (1.37 s). At each stage change (also the first trace after the flat floor line) the panadapter trace
-  glides from what it showed to the new values in 0.3 s (cubic ease-out), as AltSDR's antenna fade; the averaging is
-  untouched (the stages replace, nothing coarse is averaged in); the waterfall gets the frames as they are.
+  glides from what it showed to the new values, AltSDR's antenna fade exactly (SpectrumView::antennaFade): the shown
+  trace's mean speed is tracked at every publish (dB/s, 60 ms smoothing); at a stage change the glide starts from the
+  trace shown last at the time it was shown (a running glide continues, never restarted from rest); its length is
+  2 / rate (rate = speed / gap) within 0.1-0.45 s (0.3 s from rest) and w = 1 - (1-x)^2 (1 + (2 - slope) x) with the
+  start slope rate x length (0..3) and end slope 0. A band change's first stage starts from rest (the hold publishes
+  nothing, so the trace counts as still). The first version (cubic ease-out from rest at every stage) lurched:
+  "speeding up then resuming at normal speed". The averaging is untouched; the waterfall gets the frames as they are.
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.
 - Its own settings and skins: `%APPDATA%\OpenHPSDR\Thetis-aether` (a first start copies Thetis-x64 there once) with
