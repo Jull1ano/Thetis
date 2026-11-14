@@ -603,9 +603,32 @@ namespace Thetis
             get { return m_bGreenThumb; }
             set { m_bGreenThumb = value; this.Invalidate(); }
         }
+        // Jull1ano fork: a skin's round handle (ForkTheme <Slider><Knob>, AetherSDR Style) drawn as a vector circle, sharp
+        // at any scale, lighter under the mouse; otherwise the skin's picture
+        private bool _forkHover;
+        protected override void OnMouseEnter(EventArgs e) { _forkHover = true; if (!Thetis.ForkTheme.SliderKnob.IsEmpty) Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _forkHover = false; if (!Thetis.ForkTheme.SliderKnob.IsEmpty) Invalidate(); base.OnMouseLeave(e); }
+
+        private bool forkDrawKnob(Graphics g)
+        {
+            if (Thetis.ForkTheme.SliderKnob.IsEmpty || !Thetis.ForkTheme.Themes(this) || _head_rect.Width < 2 || _head_rect.Height < 2) return false;
+            float d = Math.Min(_head_rect.Width, _head_rect.Height) - 1;
+            float x = _head_rect.X + (_head_rect.Width - d) / 2f, y = _head_rect.Y + (_head_rect.Height - d) / 2f;
+            System.Drawing.Drawing2D.SmoothingMode sm = g.SmoothingMode;
+            System.Drawing.Drawing2D.PixelOffsetMode pm = g.PixelOffsetMode;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            Color c = !Enabled ? Color.FromArgb(86, 104, 122) : (_forkHover || sliding) ? Thetis.ForkTheme.SliderKnobHover : Thetis.ForkTheme.SliderKnob;
+            using (SolidBrush b = new SolidBrush(c)) g.FillEllipse(b, x, y, d, d);
+            g.SmoothingMode = sm;
+            g.PixelOffsetMode = pm;
+            return true;
+        }
+
         // Jull1ano fork: the whole image into the handle rectangle (scaled at high DPI, crisp: nearest pixel)
         private void drawHead(Graphics g, ImageAttributes imageAttributes)
         {
+            if (forkDrawKnob(g)) return;
             if (_head_image.Width != _head_rect.Width || _head_image.Height != _head_rect.Height)
             {
                 System.Drawing.Drawing2D.InterpolationMode im = g.InterpolationMode;

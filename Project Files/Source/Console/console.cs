@@ -763,6 +763,12 @@ namespace Thetis
             forkCreateNrButtons();             // Jull1ano fork: NR2..NR4 buttons above NR / ANF
             forkTieAtt(udRX1StepAttData, comboPreamp);    // Jull1ano fork: the S-ATT box exactly over the ATT drop-down
             forkTieAtt(udRX2StepAttData, comboRX2Preamp);
+            forkCreatePause();                 // Jull1ano fork: pause (P) above Power
+            forkTieBandBox(txtVFOABand, chkVFOATX); // Jull1ano fork: band text as tall as its TX button (themed)
+            forkTieBandBox(txtVFOBBand, chkVFOBTX);
+            ForkTheme.Applied += (root) => { if (root == this) { forkAlignBandBox(txtVFOABand, chkVFOATX); forkAlignBandBox(txtVFOBBand, chkVFOBTX); } };
+            _forkModeBaseTop = panelMode.Top;
+            panelMode.LocationChanged += (s, e) => { if (!_forkMovingMode) _forkModeBaseTop = panelMode.Top; }; // the layout's place
             forkLoadDisplayOptions(app_data_path); // and the two-colour fill
             HighDpi.StartFormWatcher(); // and the same for every other form when it opens
             ForkHover.Install(); // Jull1ano fork: 10 % white over the button under the mouse (HighDpi.cs)
@@ -24348,7 +24354,7 @@ namespace Thetis
                             displaydidit = true;
                         }
 
-                        if (!_pause_DisplayThread) // skip any of this
+                        if (!_pause_DisplayThread && !_forkDisplayFrozen) // skip any of this // Jull1ano fork: and while paused (P)
                         {
                             if ((!Display.DataReady || !Display.WaterfallDataReady) &&
                                 Display.CurrentDisplayMode != DisplayMode.OFF)
@@ -24452,6 +24458,7 @@ namespace Thetis
                                 if (bWaterfallDataReady)
                                     Display.SetPendingWaterfallPixelRef(1, pixel_ref);
 
+                                if (bDataReady) forkBlendResume(Display.new_display_data, _forkFrozenTop); // Jull1ano fork: glide out of a pause
                                 Display.DataReady = bDataReady;
                                 Display.WaterfallDataReady = bWaterfallDataReady;
                                 if (bN1mm && N1MM.IsStarted)
@@ -24560,6 +24567,7 @@ namespace Thetis
                                 if (bWaterfallDataReady)
                                     Display.SetPendingWaterfallPixelRef(2, pixel_ref);
 
+                                if (bDataReady) forkBlendResume(Display.new_display_data_bottom, _forkFrozenBottom); // Jull1ano fork
                                 Display.DataReadyBottom = bDataReady;
                                 Display.WaterfallDataReadyBottom = bWaterfallDataReady;
                                 if (bN1mm && N1MM.IsStarted)
@@ -26892,6 +26900,15 @@ namespace Thetis
                 {
                     if (e.Shift) { if (chkRX2Mute.Enabled) chkRX2Mute.Checked = !chkRX2Mute.Checked; }
                     else chkMUT.Checked = !chkMUT.Checked;
+                    e.Handled = true;
+                    return;
+                }
+
+                // Jull1ano fork: P pauses / resumes the spectrum and waterfall (as AetherSDR's pause, to compare antennas);
+                // P was Thetis' XIT down key (Setup > Keyboard can give XIT down another key); Ctrl+P / Alt+P unchanged
+                if (e.KeyCode == Keys.P && !e.Control && !e.Alt)
+                {
+                    forkSetPaused(!_forkDisplayFrozen);
                     e.Handled = true;
                     return;
                 }
@@ -42168,6 +42185,7 @@ namespace Thetis
 
             SelectModeDependentPanel(); //MW0LGE [2.9.0.7] moved here
             setPAProfileLabelPos(); //[2.10.1.0] MW0LGE
+            forkPlacePause(); // Jull1ano fork
 
             if (bSuspendDraw) ResumeDrawing(this);
         }
@@ -46354,23 +46372,42 @@ namespace Thetis
             }
         }
 
+        // the mode panel's place as the layout set it (it is moved down to make room for the SWL bands)
+        private int _forkModeBaseTop;
+        private bool _forkMovingMode;
+        private void forkModeShift(int dy)
+        {
+            int want = _forkModeBaseTop + Math.Max(0, dy);
+            if (panelMode.Top == want) return;
+            _forkMovingMode = true;
+            try { panelMode.Top = want; }
+            finally { _forkMovingMode = false; }
+        }
+
         private void forkPlaceBandPanels()
         {
-            if (!_forkBandsTogether || collapsedDisplay || LegacyItemController.HideBands) return;
-            if (_bands_VHF_selected || !(_bands_HF_selected || _bands_GEN_selected)) return;
-            if (panelBandGEN.Parent != panelBandHF.Parent) return;
-            // by the buttons, not the panels (they have empty margins): the SWL buttons a row gap and a half under the
-            // ham buttons, their panel cut to its buttons so its margin never covers what is below
+            forkPlacePause();
+            bool want = _forkBandsTogether && !collapsedDisplay && !LegacyItemController.HideBands && !_bands_VHF_selected &&
+                (_bands_HF_selected || _bands_GEN_selected) && panelBandGEN.Parent == panelBandHF.Parent;
+            if (!want)
+            {
+                if (!collapsedDisplay) forkModeShift(0);
+                return;
+            }
+            forkModeShift(0); // measure from the layout's place
+            // by the buttons, not the panels (they have empty margins)
             Rectangle hf = forkContent(panelBandHF), gen = forkContent(panelBandGEN);
             if (hf.IsEmpty || gen.IsEmpty) return;
             int hfBottom = panelBandHF.Top + hf.Bottom;
             int left = panelBandHF.Left + Math.Min(hf.Left, gen.Left), right = panelBandHF.Left + Math.Max(hf.Right, gen.Right);
-            // the room: down to the first thing under the ham buttons in their column (the mode buttons), or the window's end
-            int limit = panelBandHF.Parent.ClientSize.Height;
-            Control block = null;
+            // what is under the ham buttons in their column: the mode buttons, and what is under those
+            Control next = null;
+            Rectangle nextR = Rectangle.Empty;
+            int bottomLimit = panelBandHF.Parent.ClientSize.Height;
+            System.Collections.Generic.List<KeyValuePair<Control, Rectangle>> below = new System.Collections.Generic.List<KeyValuePair<Control, Rectangle>>();
             foreach (Control c in panelBandHF.Parent.Controls)
             {
-                if (c == panelBandGEN || c == panelBandHF || c == panelBandVHF || !c.Visible) continue;
+                if (c == panelBandGEN || c == panelBandHF || c == panelBandVHF || c == _forkPause || !c.Visible) continue;
                 Rectangle r = c.Bounds;
                 if (c is Panel || c is GroupBox)
                 {
@@ -46379,12 +46416,25 @@ namespace Thetis
                     r = new Rectangle(c.Left + k.Left, c.Top + k.Top, k.Width, k.Height);
                 }
                 if (r.Right <= left || r.Left >= right || r.Bottom <= panelBandHF.Top + hf.Top) continue; // beside or above
-                if (r.Top < limit) { limit = r.Top; block = c; }
+                below.Add(new KeyValuePair<Control, Rectangle>(c, r));
+                if (next == null || r.Top < nextR.Top) { next = c; nextR = r; }
             }
-            int spare = limit - hfBottom - gen.Height;
-            int gap = Math.Min(HighDpi.Px(12), spare / 2); // as much space between the groups as there is, up to 12 px
-            int y = hfBottom + gap - gen.Top;
-            if (gap < HighDpi.Px(1)) // (the amber SWL buttons set the groups apart even when close)
+            // the mode panel can move down (to whatever is under it); anything else stays
+            bool movable = next == panelMode;
+            if (movable)
+                foreach (KeyValuePair<Control, Rectangle> kv in below)
+                    if (kv.Key != panelMode && kv.Value.Top >= nextR.Bottom && kv.Value.Top < bottomLimit) bottomLimit = kv.Value.Top;
+            int G = HighDpi.Px(12), gap, shift = 0;
+            if (next == null) gap = G;
+            else if (hfBottom + 2 * G + gen.Height <= nextR.Top) gap = G; // room as it is
+            else if (movable)
+            {
+                // the three groups evenly apart, up to 12 px, the mode buttons moved down as far as needed
+                gap = Math.Min(G, (bottomLimit - hfBottom - gen.Height - nextR.Height) / 3);
+                shift = Math.Max(0, hfBottom + 2 * gap + gen.Height - nextR.Top);
+            }
+            else gap = (nextR.Top - hfBottom - gen.Height) / 2;
+            if (gap < HighDpi.Px(1) || hfBottom + 2 * gap + gen.Height > bottomLimit)
             {
                 // no room: one page at a time, both in the HF page's place (as Thetis)
                 if (panelBandGEN.Top != panelBandHF.Top)
@@ -46393,20 +46443,153 @@ namespace Thetis
                     panelBandGEN.Visible = _bands_GEN_selected;
                     panelBandHF.Visible = _bands_HF_selected;
                 }
-                HighDpi.Log("bands together: no room under the ham bands" + (block != null ? " (" + block.Name + " " + block.Bounds + ")" : "") +
-                    ": ham buttons end at " + hfBottom + ", room to " + limit + ", SWL buttons " + gen + ", ham buttons " + hf + " in " + panelBandHF.Bounds);
+                HighDpi.Log("bands together: no room under the ham bands" + (next != null ? " (" + next.Name + " " + nextR + ")" : ""));
                 return;
             }
+            int y = hfBottom + gap - gen.Top;
             panelBandHF.Height = hf.Bottom + Math.Max(1, gap / 2); // its empty bottom margin would cover the SWL buttons' top
             panelBandGEN.Location = new Point(panelBandHF.Left, y);
             panelBandGEN.Height = gen.Bottom + Math.Max(1, gap / 2);
+            forkModeShift(shift);
             panelBandHF.Visible = true;
             panelBandGEN.Visible = true;
             // the panels' empty margins overlap their neighbours: the ham panel on top (its margin under the SWL
             // panel's empty top), then the SWL panel over the mode panel's empty top
             panelBandGEN.BringToFront();
             panelBandHF.BringToFront();
-            HighDpi.Log("bands together: SWL at " + panelBandGEN.Bounds + ", ham " + panelBandHF.Bounds);
+            HighDpi.Log("bands together: gap " + gap + ", SWL at " + panelBandGEN.Bounds + ", ham " + panelBandHF.Bounds + ", modes moved " + shift);
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: pause (P)
+        // As AetherSDR's pause (asked of its Brick3 session): the spectrum and the waterfall stop taking new frames and
+        // keep showing the last ones, to compare signals while switching antennas; the radio, the DSP (its averaging
+        // too), the audio and the overlays (VFO, filter, cursor, scale) go on. Resume: the trace glides from the frozen
+        // frame to the live one over 450 ms, the waterfall goes on under the frozen rows. Power off ends a pause.
+        private volatile bool _forkDisplayFrozen;
+        private float[] _forkFrozenTop, _forkFrozenBottom;
+        private long _forkResumeAt; // Stopwatch time of the resume, 0: none
+        private const double ForkResumeGlideMs = 450;
+        private ForkPauseButton _forkPause;
+
+        public bool DisplayPaused { get { return _forkDisplayFrozen; } set { forkSetPaused(value); } }
+
+        private void forkCreatePause()
+        {
+            _forkPause = new ForkPauseButton();
+            _forkPause.Name = "forkPause";
+            _forkPause.Visible = false;
+            _forkPause.Click += (s, e) => forkSetPaused(!_forkDisplayFrozen);
+            Controls.Add(_forkPause);
+            chkPower.CheckedChanged += (s, e) => { if (!chkPower.Checked) forkSetPaused(false); _forkPause.Enabled = chkPower.Checked; };
+            _forkPause.Enabled = chkPower.Checked;
+            forkPauseTip();
+        }
+
+        private void forkPauseTip()
+        {
+            if (_forkPause == null) return;
+            toolTip1.SetToolTip(_forkPause, _forkDisplayFrozen
+                ? "Paused (P): the spectrum and waterfall are frozen; the radio and the audio go on. Click or press P to resume."
+                : "Pause (P): freeze the spectrum and waterfall, e.g. while you change antennas, to compare the signals.");
+        }
+
+        private void forkSetPaused(bool on)
+        {
+            if (on == _forkDisplayFrozen) return;
+            if (on)
+            {
+                if (!chkPower.Checked) return;
+                _forkFrozenTop = Display.new_display_data == null ? null : (float[])Display.new_display_data.Clone();
+                _forkFrozenBottom = Display.new_display_data_bottom == null ? null : (float[])Display.new_display_data_bottom.Clone();
+                _forkResumeAt = 0;
+                _forkDisplayFrozen = true;
+            }
+            else
+            {
+                _forkResumeAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                _forkDisplayFrozen = false;
+            }
+            if (_forkPause != null) _forkPause.Paused = on;
+            forkPauseTip();
+            HighDpi.Log("display " + (on ? "paused" : "resumed"));
+        }
+
+        // new frames for the 450 ms after a resume: frozen + a (live - frozen), a a smoothstep from 0 to 1
+        private void forkBlendResume(float[] live, float[] frozen)
+        {
+            long t0 = _forkResumeAt;
+            if (t0 == 0 || live == null || frozen == null) return;
+            double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            if (ms >= ForkResumeGlideMs) { _forkResumeAt = 0; return; }
+            double x = ms / ForkResumeGlideMs;
+            float a = (float)(x * x * (3 - 2 * x));
+            int n = Math.Min(live.Length, frozen.Length);
+            for (int i = 0; i < n; i++) live[i] = frozen[i] + a * (live[i] - frozen[i]);
+        }
+
+        // the pause button above Power, as wide as it (when there is room under the menu; P works anyway)
+        private void forkPlacePause()
+        {
+            if (_forkPause == null) return;
+            if (collapsedDisplay || !panelPower.Visible || !chkPower.Visible) { _forkPause.Visible = false; return; }
+            int h = HighDpi.Px(26), gap = HighDpi.Px(6);
+            int top = panelPower.Top + chkPower.Top - gap - h;
+            int minTop = (menuStrip1.Visible ? menuStrip1.Bottom : 0) + HighDpi.Px(4);
+            if (top < minTop) { _forkPause.Visible = false; return; }
+            _forkPause.Bounds = new Rectangle(panelPower.Left + chkPower.Left, top, chkPower.Width, h);
+            _forkPause.Visible = true;
+            _forkPause.BringToFront();
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: band boxes in line
+        // With a themed console (ForkTheme): the band text under each VFO as tall as the TX button beside it, their edges
+        // in line, the text centred in it. With any other skin back to Thetis' size.
+        private readonly Dictionary<TextBox, Rectangle> _forkBandBoxOrig = new Dictionary<TextBox, Rectangle>();
+        private bool _forkAligning;
+        private void forkTieBandBox(TextBox box, Control tx)
+        {
+            EventHandler h = (s, e) => forkAlignBandBox(box, tx);
+            tx.SizeChanged += h;
+            tx.LocationChanged += h;
+            box.LocationChanged += h;
+            box.SizeChanged += h;
+            box.HandleCreated += (s, e) => forkCentreText(box);
+        }
+
+        private void forkAlignBandBox(TextBox box, Control tx)
+        {
+            if (_forkAligning || box.Parent != tx.Parent) return;
+            bool themed = !ForkTheme.BoxBorder.IsEmpty && ForkTheme.Themes(box);
+            _forkAligning = true;
+            try
+            {
+                if (themed)
+                {
+                    if (!_forkBandBoxOrig.ContainsKey(box)) _forkBandBoxOrig[box] = box.Bounds;
+                    if (!box.Multiline) { box.WordWrap = false; box.Multiline = true; }
+                    if (box.Top != tx.Top || box.Height != tx.Height) box.SetBounds(box.Left, tx.Top, box.Width, tx.Height);
+                    forkCentreText(box);
+                }
+                else if (_forkBandBoxOrig.TryGetValue(box, out Rectangle o))
+                {
+                    _forkBandBoxOrig.Remove(box);
+                    box.Multiline = false;
+                    box.SetBounds(box.Left, o.Top, box.Width, o.Height);
+                }
+            }
+            finally { _forkAligning = false; }
+        }
+
+        // a multi-line box's text area: one line high, in the middle
+        private static void forkCentreText(TextBox box)
+        {
+            if (!box.Multiline || !box.IsHandleCreated) return;
+            int lineH = TextRenderer.MeasureText("Ag", box.Font).Height;
+            Size c = box.ClientSize;
+            int top = Math.Max(0, (c.Height - lineH) / 2);
+            ForkTheme.RECT r = new ForkTheme.RECT { Left = HighDpi.Px(2), Top = top, Right = Math.Max(HighDpi.Px(3), c.Width - HighDpi.Px(2)), Bottom = top + lineH };
+            ForkTheme.SendMessageRect(box.Handle, ForkTheme.EM_SETRECT, IntPtr.Zero, ref r);
+            box.Invalidate();
         }
 
         // the area a panel's buttons take (all of them, shown or not: a hidden page's buttons read as hidden)

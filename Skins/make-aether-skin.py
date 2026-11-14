@@ -236,13 +236,17 @@ def slider_back(w, h, vertical=False):
     return big.resize((W, H), Image.LANCZOS)
 
 
+KNOB = 14  # the handle: AetherSDR's 12 px, a little larger (the user)
+
+
 def slider_head():
-    # drawn by Thetis at 96 DPI pixels, scaled 2x nearest at 200 %: AetherSDR's round 12 px handle, #c8d8e8
-    big = Image.new('RGBA', (12 * 8, 12 * 8), (0, 0, 0, 0))
+    # the picture gives the handle's size (Thetis scales it by the DPI); the fork draws the knob itself as a vector
+    # circle (<Slider> below); this picture is what other Thetis builds show
+    big = Image.new('RGBA', (KNOB * 8, KNOB * 8), (0, 0, 0, 0))
     d = ImageDraw.Draw(big)
-    d.ellipse((2, 2, 12 * 8 - 3, 12 * 8 - 3), fill=rgb('#c8d8e8') + (255,))
-    small = big.resize((12, 12), Image.LANCZOS)
-    out = Image.new('RGB', (12, 12), BG)  # opaque: the handle's corners show the background
+    d.ellipse((2, 2, KNOB * 8 - 3, KNOB * 8 - 3), fill=rgb('#c8d8e8') + (255,))
+    small = big.resize((KNOB, KNOB), Image.LANCZOS)
+    out = Image.new('RGB', (KNOB, KNOB), BG)  # opaque: the handle's corners show the background
     out.paste(small, (0, 0), small)
     return out
 
@@ -298,6 +302,9 @@ Image.new('RGB', (400, 200), (12, 13, 24)).save(os.path.join(cons, 'picDisplay.p
 
 # ---------------------------------------------------------------- the xml: text colours
 neutral = {'White', 'ControlLightLight', 'ControlText', 'ControlLight', 'Gainsboro', 'WhiteSmoke', 'LightGray', 'Silver'}
+# the VFO, band and meter readouts take Setup's colours (Appearance > VFO / Band Data / Meter)
+VFO_BOXES = {'txtVFOAFreq', 'txtVFOAMSD', 'txtVFOALSD', 'txtVFOABand', 'txtVFOBFreq', 'txtVFOBMSD', 'txtVFOBLSD', 'txtVFOBBand',
+             'txtMultiText', 'txtRX2Meter'}
 lines = ['<?xml version="1.0" encoding="utf-8"?>', '<Form>',
          '  <BackColor>%s</BackColor>' % hexcol(BG), '  <ForeColor>%s</ForeColor>' % hexcol('#c8d8e8'), '  <Controls>']
 for n in sorted(buttons):
@@ -311,6 +318,9 @@ for n, t in sorted(types.items()):
     elif t in ('ComboBoxTS', 'ComboBox'):
         lines.append('    <%s><BackColor>%s</BackColor><FlatStyle>Flat</FlatStyle><ForeColor>%s</ForeColor></%s>' % (n, hexcol((30, 40, 55, 220)), hexcol('#c8d8e8'), n))
     elif t in ('NumericUpDownTS', 'NumericUpDown'):
+        lines.append('    <%s><BackColor>%s</BackColor><ForeColor>%s</ForeColor></%s>' % (n, hexcol((20, 28, 40, 220)), hexcol('#c8d8e8'), n))
+    elif t in ('TextBoxTS', 'TextBox') and n not in VFO_BOXES:
+        # value boxes (tune step, quick memory, band stack): AetherSDR's value field (BandBar kValueStyle)
         lines.append('    <%s><BackColor>%s</BackColor><ForeColor>%s</ForeColor></%s>' % (n, hexcol((20, 28, 40, 220)), hexcol('#c8d8e8'), n))
 for n in ('chkForkNR2', 'chkForkNR3', 'chkForkNR4', 'chkForkNNR'):  # the fork's NR buttons (drawn with chkNR's pictures)
     lines.append('    <%s><ForeColor>%s</ForeColor></%s>' % (n, hexcol(STYLES['dsp']['text']), n))
@@ -332,6 +342,10 @@ lines += ['  </Controls>',
           '      <ListSelectText>FFFFFFFF</ListSelectText>',
           '      <Radius>2</Radius>',
           '    </Combo>',
+          '    <Slider>',
+          '      <Knob>%s</Knob>' % hexcol('#c8d8e8'),
+          '      <KnobHover>FFFFFFFF</KnobHover>',
+          '    </Slider>',
           '  </ForkTheme>',
           '</Form>', '']
 open(os.path.join(OUT, NAME + '.xml'), 'w', encoding='utf-8', newline='\r\n').write('\n'.join(lines))

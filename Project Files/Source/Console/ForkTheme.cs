@@ -33,6 +33,11 @@ namespace Thetis
         public static bool ComboModern = false;
         public static Color ComboBack, ComboBorder, ComboBorderHover, ComboText, ComboArrow, ComboListBack, ComboListSelect, ComboListSelectText;
         public static int ComboRadius = 2;
+        // sliders: the handle drawn as a vector circle (<Slider><Knob/><KnobHover/></Slider>); Empty: the skin's picture
+        public static Color SliderKnob = Color.Empty, SliderKnobHover = Color.Empty;
+
+        // after the skin's extras are applied to a window (the console lines up its band boxes)
+        public static event Action<Control> Applied;
 
         public static bool GroupBorderHidden { get { return !GroupBorder.IsEmpty && GroupBorder.A == 0; } }
 
@@ -70,6 +75,8 @@ namespace Thetis
             BoxBorder = Color.Empty;
             BoxRadius = 0;
             ComboModern = false;
+            SliderKnob = Color.Empty;
+            SliderKnobHover = Color.Empty;
             XmlNodeList l = doc == null ? null : doc.GetElementsByTagName("ForkTheme");
             if (l == null || l.Count == 0) { HighDpi.Log("fork theme: none"); return; }
             XmlNode t = l[0];
@@ -90,6 +97,12 @@ namespace Thetis
                 ComboListSelectText = parse(c, "ListSelectText", Color.White);
                 ComboRadius = parseInt(c, "Radius", 2);
             }
+            XmlNode sl = t.SelectSingleNode("Slider");
+            if (sl != null)
+            {
+                SliderKnob = parse(sl, "Knob", Color.FromArgb(200, 216, 232));
+                SliderKnobHover = parse(sl, "KnobHover", Color.White);
+            }
             HighDpi.Log("fork theme: group border " + GroupBorder + ", box border " + BoxBorder + " r " + BoxRadius + ", combos " + (ComboModern ? "modern" : "Thetis"));
         }
 
@@ -101,6 +114,7 @@ namespace Thetis
             walk(root);
             root.Invalidate(true);
             foreach (Control c in allBoxes(root)) ForkBoxBorder.RedrawFrame(c);
+            try { Applied?.Invoke(root); } catch (Exception ex) { HighDpi.Log("fork theme applied: " + ex.Message); }
         }
 
         private static void walk(Control p)
@@ -187,6 +201,8 @@ namespace Thetis
         [DllImport("user32.dll")] internal static extern bool EndPaint(IntPtr h, ref PAINTSTRUCT ps);
         [DllImport("user32.dll")] internal static extern bool GetComboBoxInfo(IntPtr h, ref COMBOBOXINFO i);
         [DllImport("user32.dll")] internal static extern bool RedrawWindow(IntPtr h, IntPtr r, IntPtr rgn, uint flags);
+        [DllImport("user32.dll", EntryPoint = "SendMessage")] internal static extern IntPtr SendMessageRect(IntPtr h, int msg, IntPtr w, ref RECT r);
+        internal const int EM_SETRECT = 0x00B3;
         internal const uint RDW_INVALIDATE = 0x1, RDW_FRAME = 0x400, RDW_UPDATENOW = 0x100;
     }
 
@@ -279,6 +295,48 @@ namespace Thetis
                     e.Graphics.Clip = old;
                 }
             };
+            // the up / down buttons (a child control Windows draws light): drawn over as the drop-downs' arrow - the
+            // box's face, two small arrows, the one under the mouse lit, a pressed one on the theme's blue
+            foreach (Control b in u.Controls)
+                if (!(b is TextBoxBase)) attachButtons(u, b);
+        }
+
+        private static void attachButtons(UpDownBase u, Control b)
+        {
+            int hover = 0, down = 0; // 1 up, 2 down
+            Func<Point, int> half = p => p.Y < b.Height / 2 ? 1 : 2;
+            b.MouseMove += (s, e) => { int h = half(e.Location); if (h != hover) { hover = h; b.Invalidate(); } };
+            b.MouseLeave += (s, e) => { hover = 0; down = 0; b.Invalidate(); };
+            b.MouseDown += (s, e) => { down = half(e.Location); b.Invalidate(); };
+            b.MouseUp += (s, e) => { down = 0; b.Invalidate(); };
+            b.Paint += (s, e) =>
+            {
+                if (ForkTheme.BoxBorder.IsEmpty || !ForkTheme.ComboModern || !ForkTheme.Themes(u)) return;
+                Graphics g = e.Graphics;
+                Rectangle r = b.ClientRectangle;
+                g.SmoothingMode = SmoothingMode.None;
+                using (SolidBrush f = new SolidBrush(u.BackColor)) g.FillRectangle(f, r);
+                int hh = r.Height / 2;
+                for (int k = 1; k <= 2; k++)
+                {
+                    Rectangle part = k == 1 ? new Rectangle(0, 0, r.Width, hh) : new Rectangle(0, hh, r.Width, r.Height - hh);
+                    if (down == k)
+                        using (SolidBrush f = new SolidBrush(ForkTheme.ComboListSelect)) g.FillRectangle(f, part);
+                    else if (hover == k)
+                        using (SolidBrush f = new SolidBrush(Color.FromArgb(40, ForkTheme.ComboBorderHover))) g.FillRectangle(f, part);
+                    float cx = part.X + part.Width / 2f, cy = part.Y + part.Height / 2f, aw = HighDpi.Px(4), ah = HighDpi.Px(2) + 0.5f;
+                    Color ac = !u.Enabled ? Color.FromArgb(86, 104, 122) : (hover == k || down == k) ? ForkTheme.ComboText : ForkTheme.ComboArrow;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    using (SolidBrush a = new SolidBrush(ac))
+                        g.FillPolygon(a, k == 1
+                            ? new[] { new PointF(cx - aw, cy + ah), new PointF(cx + aw, cy + ah), new PointF(cx, cy - ah - 1) }
+                            : new[] { new PointF(cx - aw, cy - ah), new PointF(cx + aw, cy - ah), new PointF(cx, cy + ah + 1) });
+                    g.SmoothingMode = SmoothingMode.None;
+                }
+                using (Pen p = new Pen(ForkTheme.BoxBorder, Math.Max(1, HighDpi.Px(1)))) // a thin line between the edit and the buttons
+                    g.DrawLine(p, 0, 0, 0, r.Height);
+            };
+            b.Invalidate();
         }
     }
 
@@ -385,6 +443,68 @@ namespace Thetis
                 {
                     if (!item.IsEmpty) dg.ExcludeClip(item); // an editable one: its edit box draws itself
                     dg.DrawImageUnscaled(bmp, 0, 0);
+                }
+            }
+        }
+    }
+
+    // The pause button (P) above Power, as AetherSDR's: running - grey bars on the bar face, a subtle edge, blue under
+    // the mouse; paused - an amber face and edge with a play triangle
+    public class ForkPauseButton : Control
+    {
+        private bool _paused, _hover;
+
+        public ForkPauseButton()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.ResizeRedraw, true);
+            SetStyle(ControlStyles.Selectable | ControlStyles.StandardDoubleClick, false);
+            TabStop = false;
+        }
+
+        public bool Paused { get { return _paused; } set { if (_paused != value) { _paused = value; Invalidate(); } } }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+
+        private static Color rgba(int r, int g, int b, int a, Color under)
+        {
+            float k = a / 255f;
+            return Color.FromArgb((int)(r * k + under.R * (1 - k)), (int)(g * k + under.G * (1 - k)), (int)(b * k + under.B * (1 - k)));
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Color behind = ForkTheme.BehindColor(this);
+            Rectangle r = ClientRectangle;
+            if (r.Width < 4 || r.Height < 4) return;
+            bool lit = _hover && Enabled;
+            Color face, edge, glyph;
+            if (_paused)
+            {
+                face = Color.FromArgb(0x5a, 0x3a, 0x0a);
+                edge = lit ? Color.FromArgb(0xff, 0xc0, 0x30) : Color.FromArgb(0xe0, 0xa0, 0x00);
+                glyph = Color.FromArgb(0xff, 0xd0, 0x70);
+            }
+            else
+            {
+                face = lit ? rgba(0, 112, 192, 180, behind) : rgba(30, 40, 55, 220, behind);
+                edge = lit ? Color.FromArgb(0x00, 0x90, 0xe0) : Color.FromArgb(0x30, 0x40, 0x50);
+                glyph = !Enabled ? Color.FromArgb(0x4a, 0x5a, 0x6a) : lit ? Color.FromArgb(0xe6, 0xf0, 0xfa) : Color.FromArgb(0x8f, 0xa8, 0xc0);
+            }
+            ForkTheme.PaintFrame(g, r, behind, face, edge, 2);
+            float cx = r.Width / 2f, cy = r.Height / 2f, s = HighDpi.Scale;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (SolidBrush b = new SolidBrush(glyph))
+            {
+                if (_paused) // play: resume
+                    g.FillPolygon(b, new[] { new PointF(cx - 4.5f * s, cy - 6f * s), new PointF(cx - 4.5f * s, cy + 6f * s), new PointF(cx + 6f * s, cy) });
+                else // pause: two bars
+                {
+                    g.FillRectangle(b, cx - 5.5f * s, cy - 6f * s, 4f * s, 12f * s);
+                    g.FillRectangle(b, cx + 1.5f * s, cy - 6f * s, 4f * s, 12f * s);
                 }
             }
         }

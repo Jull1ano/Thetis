@@ -20,6 +20,15 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   2.5k / 5.0k (and Setup's FM RX high cut) put it back to deviation + high cut. Kept across mode changes; a start
   begins at the deviation's width. Before: locked to deviation + high cut. Test hook `THETIS_HIDPI_OPEN=fmtest`.
 - Memory window: never narrower than the fields under the grid (a saved 853 px window cut Name and Comments off).
+- Pause (P, and a button above Power), as AetherSDR's: the spectrum and waterfall stop taking new frames and keep
+  the last ones (the display pump skips GetPixels while paused), so signals can be compared while switching
+  antennas; the radio, the DSP and its averaging, the audio and the overlays go on. Resume: the trace glides from the
+  frozen frame to the live one over 450 ms (smoothstep), the waterfall goes on under the frozen rows. Power off ends
+  a pause. P was Thetis' default XIT-down key (Setup > Keyboard can give XIT down another key).
+- The three band / mode groups 12 px apart: the mode buttons move down into the free space under them when needed.
+- Value boxes (tune step, quick memory, band stack) in AetherSDR's value colours (skin xml); the slider knob a vector
+  circle (14 px, lighter under the mouse; ForkTheme <Slider>); the console's number boxes' up / down buttons drawn as
+  the drop-downs' arrow (Setup's untouched); the band text under each VFO as tall as its TX button, text centred.
 
 
 Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
