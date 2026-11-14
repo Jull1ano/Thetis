@@ -674,6 +674,7 @@
     </Compile>
     <Compile Include="SmoothPan.cs" />
     <Compile Include="HighDpi.cs" />
+    <Compile Include="ForkTheme.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="cwedit.cs">
       <SubType>Form</SubType>

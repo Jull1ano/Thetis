@@ -313,7 +313,26 @@ for n, t in sorted(types.items()):
         lines.append('    <%s><BackColor>%s</BackColor><ForeColor>%s</ForeColor></%s>' % (n, hexcol((20, 28, 40, 220)), hexcol('#c8d8e8'), n))
 for n in ('chkForkNR2', 'chkForkNR3', 'chkForkNR4', 'chkForkNNR'):  # the fork's NR buttons (drawn with chkNR's pictures)
     lines.append('    <%s><ForeColor>%s</ForeColor></%s>' % (n, hexcol(STYLES['dsp']['text']), n))
-lines += ['  </Controls>', '</Form>', '']
+lines += ['  </Controls>',
+          # the fork's extras (ForkTheme.cs; other Thetis builds ignore them): frames without a border (the title
+          # stays), AetherSDR's subtle box edges, modern drop-downs as AetherSDR's combo boxes
+          '  <ForkTheme>',
+          '    <GroupBorder>00000000</GroupBorder>',
+          '    <BoxBorder>%s</BoxBorder>' % hexcol('#304050'),
+          '    <BoxRadius>3</BoxRadius>',
+          '    <Combo>',
+          '      <Back>%s</Back>' % hexcol((30, 40, 55, 220)),
+          '      <Border>%s</Border>' % hexcol('#304050'),
+          '      <BorderHover>%s</BorderHover>' % hexcol('#0090e0'),
+          '      <Text>%s</Text>' % hexcol('#c8d8e8'),
+          '      <Arrow>%s</Arrow>' % hexcol('#8ea8c0'),
+          '      <ListBack>%s</ListBack>' % hexcol('#1a2433'),
+          '      <ListSelect>%s</ListSelect>' % hexcol('#0070c0'),
+          '      <ListSelectText>FFFFFFFF</ListSelectText>',
+          '      <Radius>2</Radius>',
+          '    </Combo>',
+          '  </ForkTheme>',
+          '</Form>', '']
 open(os.path.join(OUT, NAME + '.xml'), 'w', encoding='utf-8', newline='\r\n').write('\n'.join(lines))
 
 print('skin', NAME, 'buttons', len(buttons), count, 'sliders', len(ptbs), 'xml lines', len(lines))

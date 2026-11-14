@@ -963,5 +963,26 @@ namespace System.Windows.Forms
 		}
 
 		#endregion
+
+		// Jull1ano fork: a skin can hide the frame (its <ForkTheme><GroupBorder> with alpha 0, ForkTheme.cs): only the
+		// title is drawn, where the frame would have it; with any other skin the frame is drawn as before
+		protected override void OnPaint(PaintEventArgs e)
+		{
+			if (!Thetis.ForkTheme.GroupBorderHidden || FlatStyle == FlatStyle.System)
+			{
+				base.OnPaint(e);
+				return;
+			}
+			if (string.IsNullOrEmpty(Text)) return;
+			TextFormatFlags f = TextFormatFlags.Default | TextFormatFlags.TextBoxControl | TextFormatFlags.WordBreak |
+				TextFormatFlags.PreserveGraphicsClipping | TextFormatFlags.PreserveGraphicsTranslateTransform;
+			if (!ShowKeyboardCues) f |= TextFormatFlags.HidePrefix;
+			const int textOffset = 8; // as GroupBoxRenderer
+			System.Drawing.Rectangle r = new System.Drawing.Rectangle(0, 0, Width, Height);
+			r.Width -= 2 * textOffset;
+			System.Drawing.Size s = TextRenderer.MeasureText(e.Graphics, Text, Font, new System.Drawing.Size(r.Width, r.Height), f);
+			r = new System.Drawing.Rectangle(textOffset, 0, s.Width, s.Height);
+			TextRenderer.DrawText(e.Graphics, Text, Font, r, Enabled ? ForeColor : SystemColors.GrayText, f);
+		}
 	}
 }

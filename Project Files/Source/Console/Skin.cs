@@ -183,6 +183,8 @@ namespace Thetis
                    "Skin file error",
                    MessageBoxButtons.OK,
                    MessageBoxIcon.Error);*/
+                ForkTheme.Load(null); // Jull1ano fork: no xml, none of the fork's theme extras
+                ForkTheme.Apply(f);
                 return true;
             }
 
@@ -210,6 +212,9 @@ namespace Thetis
 
             foreach (Control c in f.Controls)
                 Restore(c, doc);
+
+            ForkTheme.Load(doc); // Jull1ano fork: the skin's extras (ForkTheme.cs)
+            ForkTheme.Apply(f);
 
             return true;
         }
@@ -1584,6 +1589,8 @@ namespace Thetis
             ctrl.EnabledChanged += handler;
             ctrl.MouseEnter -= new EventHandler(RadioButton_MouseEnter);
             ctrl.MouseEnter += new EventHandler(RadioButton_MouseEnter);
+            ctrl.MouseLeave -= handler; // Jull1ano fork: a skin with mouse-over pictures stayed lit after the mouse left
+            ctrl.MouseLeave += handler;
             //MW0LGE_21d surely we want to add handlers?
             //ctrl.GotFocus += handler;
             //ctrl.GotFocus -= handler;

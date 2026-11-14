@@ -704,12 +704,17 @@ namespace Thetis
         {
             System.Windows.Forms.ComboBox cb = sender as System.Windows.Forms.ComboBox;
             if (cb == null) return;
-            e.DrawBackground();
+            bool modern = Thetis.ForkTheme.ComboModern; // a skin's modern drop-downs (ForkTheme.cs): its list colours
+            bool selItem = (e.State & System.Windows.Forms.DrawItemState.Selected) != 0;
+            if (modern)
+                using (System.Drawing.SolidBrush bb = new System.Drawing.SolidBrush(selItem ? Thetis.ForkTheme.ComboListSelect : Thetis.ForkTheme.ComboListBack))
+                    e.Graphics.FillRectangle(bb, e.Bounds);
+            else e.DrawBackground();
             if (e.Index >= 0 && e.Index < cb.Items.Count)
             {
                 string t = cb.GetItemText(cb.Items[e.Index]);
-                bool sel = (e.State & System.Windows.Forms.DrawItemState.Selected) != 0;
-                System.Drawing.Color fore = !cb.Enabled ? System.Drawing.SystemColors.GrayText : sel ? System.Drawing.SystemColors.HighlightText : cb.ForeColor;
+                bool sel = selItem;
+                System.Drawing.Color fore = !cb.Enabled ? System.Drawing.SystemColors.GrayText : sel ? (modern ? Thetis.ForkTheme.ComboListSelectText : System.Drawing.SystemColors.HighlightText) : (modern ? Thetis.ForkTheme.ComboText : cb.ForeColor);
                 int textW = System.Windows.Forms.TextRenderer.MeasureText(t, cb.Font, System.Drawing.Size.Empty,
                     System.Windows.Forms.TextFormatFlags.NoPadding | System.Windows.Forms.TextFormatFlags.SingleLine).Width;
                 int pad = Math.Max(Px(1), Math.Min(EditPad, e.Bounds.Width - textW - Px(1)));

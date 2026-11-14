@@ -761,6 +761,8 @@ namespace Thetis
             HighDpi.EnsureReadable(txtVFOABand); // Jull1ano fork: band text at least 4.5:1 on its background
             HighDpi.EnsureReadable(txtVFOBBand);
             forkCreateNrButtons();             // Jull1ano fork: NR2..NR4 buttons above NR / ANF
+            forkTieAtt(udRX1StepAttData, comboPreamp);    // Jull1ano fork: the S-ATT box exactly over the ATT drop-down
+            forkTieAtt(udRX2StepAttData, comboRX2Preamp);
             forkLoadDisplayOptions(app_data_path); // and the two-colour fill
             HighDpi.StartFormWatcher(); // and the same for every other form when it opens
             ForkHover.Install(); // Jull1ano fork: 10 % white over the button under the mouse (HighDpi.cs)
@@ -46064,6 +46066,28 @@ namespace Thetis
                 if (rc.IntersectsWith(c.Bounds)) return false;
             }
             return true;
+        }
+
+        // Jull1ano fork: the step-attenuator box and the ATT drop-down share one place (the one in front shows, see
+        // updateAttNudsCombos); at high DPI the box came out a few pixels wider than the drop-down and its light edge
+        // showed beside it. It keeps the drop-down's left edge and width whenever either moves or resizes.
+        private bool _forkTyingAtt = false;
+        private void forkTieAtt(Control box, Control combo)
+        {
+            EventHandler h = (s, e) =>
+            {
+                if (_forkTyingAtt || box.Parent != combo.Parent) return;
+                if (Math.Abs(box.Left - combo.Left) > HighDpi.Px(8) || Math.Abs(box.Top - combo.Top) > HighDpi.Px(4)) return; // placed apart on purpose
+                if (box.Left == combo.Left && box.Width == combo.Width) return;
+                _forkTyingAtt = true;
+                try { box.SetBounds(combo.Left, box.Top, combo.Width, box.Height); }
+                finally { _forkTyingAtt = false; }
+            };
+            combo.SizeChanged += h;
+            combo.LocationChanged += h;
+            box.SizeChanged += h;
+            box.LocationChanged += h;
+            h(this, EventArgs.Empty);
         }
 
         private void forkSyncNrButtons()

@@ -219,9 +219,25 @@ scaled down at 100 %), opaque (Thetis paints selected buttons' back colour yello
 
     python -I Skins/make-aether-skin.py "%APPDATA%\OpenHPSDR\Skins\AetherSDR Style" "Project Files/Source/Console" "%APPDATA%\OpenHPSDR\Skins"
 
-then Setup > Appearance > General > Skins > AetherSDR Style. Not reachable by a skin: the VFO digits, the band
-text, the spectrum grid and labels, the status bar and the meters (Setup > Appearance colours), the arrow box of a
-combo and the spin buttons of a number box (drawn by Windows).
+then Setup > Appearance > General > Skins > AetherSDR Style.
+
+The skin's xml also has a `<ForkTheme>` element, read by `Console/ForkTheme.cs` (other skins have none, so Thetis
+looks as before with them; the original Thetis ignores it):
+- `GroupBorder` 00000000: the frames (VFO A, VFO B, RX1 Meter, the Signal / Fwd Pwr box ...) keep their title, the
+  border is not drawn (`GroupBoxTS.OnPaint`); another colour draws it in that colour.
+- `BoxBorder` / `BoxRadius`: text, picture and number boxes get a 1 px rounded edge in that colour instead of the
+  bright one (their window frame repainted, WM_NCPAINT; number boxes after they paint).
+- `Combo`: every drop-down on the console drawn the AetherSDR way (`ForkComboPainter`): a flat rounded face, a 1 px
+  edge lit under the mouse / open / focused, the text, a small arrow, no button; the open list in the theme's colours.
+
+The Setup colours that go with it (VFO, band text, spectrum grid / labels / VFO line / passband, cursor readout,
+multimeter, status bar; the trace and fill are left alone): `Skins/set-aether-colours.py <Thetis data folder>`
+with Thetis closed (back the database up first).
+
+Fixed on the way: skinned radio buttons (mode, band, filter) stayed in their mouse-over picture after the mouse
+left (Skin.cs never hooked MouseLeave for them; no skin had mouse-over pictures before). The S-ATT number box and the
+ATT drop-down share one place; at 200 % the box was a few pixels wider and its light edge showed; it now keeps the
+drop-down's left edge and width (`forkTieAtt`).
 
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
