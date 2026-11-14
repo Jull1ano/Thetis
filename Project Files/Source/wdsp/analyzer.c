@@ -1073,8 +1073,8 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	// "the lines are too grassy"), its resolution matters less
 	if (mode == 2)
 	{
-		// a band change or a tune (not a pan): nothing until a quarter window of new samples, then one FFT of the
-		// longest power of two that fits (a quarter, then half the window), drawn like the full one (no Welch), then the
+		// a band change or a tune (not a pan): nothing until a quarter window of new samples, then the longest power of
+		// two that fits (a quarter, then half the window), Welch-averaged over all samples since the change, then the
 		// full window takes over: 0.34 / 0.68 / 1.37 s at 262144 points and 192 kHz (user, 2026-11-15: "when changing
 		// band, cut the time in half", then "even again almost half, 0.4 s")
 		for (k = a->qf_levels - 1; k >= 0; k--)
@@ -1101,7 +1101,9 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	hs = Ls / 2;
 	nseg = 1 + (int)((fresh - (long long)Ls) / (long long)hs);
 	if (nseg > 8) nseg = 8;
-	if (nseg < 1 || mode == 2) nseg = 1;
+	if (nseg < 1) nseg = 1;	// mode 2 too: the step spans all the time since the change (its motion slows steadily
+							// to the full window's pace; one FFT of the newest 0.34 s made a station's sidebands
+							// "dance" faster for the first second, user 2026-11-15)
 	scale = a->main_E / a->qf_E[k] / (double)nseg;
 	for (i = 0; i < Ls; i++)
 		a->qf_disp[i] = 0.0;

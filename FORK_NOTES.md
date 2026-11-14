@@ -60,7 +60,8 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   carries the flag): after a band change the full spectrum comes at once, as before (the user called the morphing
   coarse spectrum after a band change "weird movement", as in AltSDR rc28). Since 01:4x: any other LO change (a band
   change, a tune) shows one FFT of half the window once half a window of new samples is in (0.68 s instead of
-  1.37 s at 262144 / 192 kHz), drawn like the full one (no Welch, no blend), then the full window takes over
+  1.37 s at 262144 / 192 kHz), Welch-averaged over all samples since the change (since 01:5x: a single FFT of the
+  newest 0.34 / 0.68 s made a station's sidebands "dance" faster for the first second), no blend, then the full window takes over
   (user: "when changing band, cut the time in half"). Since 01:4x: from a quarter window (0.34 s), then half (0.68 s),
   then full (1.37 s). At each stage change (also the first trace after the flat floor line) the panadapter trace
   glides from what it showed to the new values, AltSDR's antenna fade exactly (SpectrumView::antennaFade): the shown
