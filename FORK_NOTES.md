@@ -207,6 +207,22 @@ Test hook: `THETIS_HIDPI_OPEN=memnav:<row>:<action>,<action>...` (the window ope
 a second: next / back / play / stop / slow / vfo (1 kHz up, as a hand tune) / w, the state logged);
 `THETIS_SEEK_FAKE=<row>,<row>` makes those rows the ones with a signal; `THETIS_SEEK_MARGIN=<dB>` sets the margin.
 
+## Skin "AetherSDR Style"
+
+A Thetis skin (no code) in AetherSDR's look, made by `Skins/make-aether-skin.py` from AetherSDR's own styles
+(BandBar.cpp, the applet buttons, default-dark theme): mode buttons teal (#a8e8d0 text, teal when on), ham bands
+and filters grey-blue (blue when on), SWL bands amber (#ffcc66, amber when on), NR / ANF / NB and the other DSP
+buttons green when on, MOX / TUNE amber edged (red when on), the rest dark navy with a blue "on"; hover and
+disabled states; AetherSDR's sliders (4 px groove, round light handle); a dark navy window; text colours, flat dark
+combo boxes and number boxes from the skin's xml. Pictures are drawn at each control's 200 % size (crisp at 4K,
+scaled down at 100 %), opaque (Thetis paints selected buttons' back colour yellow behind them).
+
+    python -I Skins/make-aether-skin.py "%APPDATA%\OpenHPSDR\Skins\AetherSDR Style" "Project Files/Source/Console" "%APPDATA%\OpenHPSDR\Skins"
+
+then Setup > Appearance > General > Skins > AetherSDR Style. Not reachable by a skin: the VFO digits, the band
+text, the spectrum grid and labels, the status bar and the meters (Setup > Appearance colours), the arrow box of a
+combo and the spin buttons of a number box (drawn by Windows).
+
 ## Band-aware tuning (Setup > Appearance > General > Receive (fork), on by default)
 
 As AltSDR: tuning by hand (spectrum click / drag, mouse wheel, keys, typing a frequency) into another band
