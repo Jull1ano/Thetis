@@ -32,7 +32,8 @@ namespace Thetis
     public partial class Console
     {
         private const int PAN_DRAG_THRESHOLD_PX = 3;        // a press that moves less than this is a click
-        private const double PAN_RETUNE_PACING_MS = 25.0;   // at most one DDC retune per this time while panning
+        private const double PAN_RETUNE_PACING_MS = 25.0;   // (not used while dragging since 2026-11-15, see panTowardsTarget)
+        private const double PAN_PAUSE_RETUNE_MS = 250.0;   // the mouse held still this long while dragging: the DDC follows
         private const double PAN_INERTIA_DECAY = 0.92;      // velocity factor per timer tick
         private const double PAN_INERTIA_MIN_PX = 0.05;     // inertia stops below this (px per tick)
         private const int PAN_TIMER_MS = 15;
@@ -319,6 +320,7 @@ namespace Thetis
             bool fits = wantLow >= g.MinLow - 0.5 && wantLow <= g.MaxLow + 0.5;
             if (fits)
             {
+                forkClearViewShift();
                 _pan_retune_pending = false;
                 double pan = panSliderForLow(g, wantLow);
                 if (Math.Abs(pan - exactPanSlider()) > 1e-12) applyPanZoomExact(exactZoomSlider(), pan, false);
@@ -326,18 +328,82 @@ namespace Thetis
             }
 
             double now = _pan_sw.Elapsed.TotalMilliseconds;
-            if (final_ || now - _pan_last_retune_ms >= PAN_RETUNE_PACING_MS)
+            if (final_)
             {
+                forkClearViewShift();
                 _pan_retune_pending = false;
                 _pan_last_retune_ms = now;
                 panRetune(Math.Round(_pan_view_centre, 6));
             }
             else
             {
-                // wait for the pacing slot; show the view at the span edge meanwhile
+                // No DDC retune while the mouse drags (user, 2026-11-15: "brbrr" in the audio). Each retune mutes the audio
+                // for a few ms around the switch (its exact sample is not known); up to 40 a second were a buzz. The
+                // analyzer's view stays at the span edge and the display shows the rest of the view shifted, without
+                // data, until the DDC re-centres once: at the release, or when the mouse rests (PAN_PAUSE_RETUNE_MS).
                 _pan_retune_pending = true;
                 double pan = wantLow < g.MinLow ? 0.0 : 1.0;
                 if (Math.Abs(pan - exactPanSlider()) > 1e-12) applyPanZoomExact(exactZoomSlider(), pan, false);
+                forkSetViewShift(spec, wantLow - (pan == 0.0 ? g.MinLow : g.MaxLow));
+            }
+        }
+
+        // ---------------------------------------------------------------- the view past the received span
+        public sealed class ForkViewShift
+        {
+            public int Px;          // analyzer pixels the view is moved by (+: to higher frequencies)
+            public double MHz;      // the same in frequency
+            public int BaseLow, BaseHigh;   // the analyzer's view (Hz from the DDC centre) the shift is added to
+        }
+        private volatile ForkViewShift _forkViewShift;
+
+        private void forkSetViewShift(SpecHPSDR spec, double offHz)
+        {
+            if (!panGeometry(spec, exactZoomSlider(), exactPanSlider(), out PanGeometry g) || spec.Pixels < 2) return;
+            double hzpp = g.WidthHz / (double)spec.Pixels;
+            int px = (int)Math.Round(offHz / hzpp);
+            px = Math.Max(-spec.Pixels, Math.Min(spec.Pixels, px));
+            if (px == 0) { forkClearViewShift(); return; }
+            // the analyzer's own view (at the span edge), as SpecHPSDR.initAnalyzer gives it to the display
+            double clipL = exactPanSlider() * (g.intervals - g.width);
+            double clipH = g.intervals - g.width - clipL;
+            int baseLow = -(int)((g.intervals / 2.0 - clipL) * g.bw), baseHigh = +(int)((g.intervals / 2.0 - clipH) * g.bw);
+            ForkViewShift old = _forkViewShift;
+            if (old != null && old.Px == px && old.BaseLow == baseLow && old.BaseHigh == baseHigh) return;
+            ForkViewShift s = new ForkViewShift { Px = px, MHz = px * hzpp * 1e-6, BaseLow = baseLow, BaseHigh = baseHigh };
+            int hz = (int)Math.Round(px * hzpp);
+            _forkViewShift = s;
+            Display.RXDisplayLow = s.BaseLow + hz;
+            Display.RXDisplayHigh = s.BaseHigh + hz;
+        }
+
+        private void forkClearViewShift()
+        {
+            ForkViewShift s = _forkViewShift;
+            if (s == null) return;
+            _forkViewShift = null;
+            Display.RXDisplayLow = s.BaseLow;
+            Display.RXDisplayHigh = s.BaseHigh;
+        }
+
+        // the display pump: a frame of the analyzer's view moved by the shift, no data where the view has none
+        private static void forkShiftPixels(float[] a, int n, int px)
+        {
+            if (a == null || px == 0) return;
+            n = Math.Min(n, a.Length);
+            if (n <= 0) return;
+            const float none = -200.0f;
+            if (px >= n || px <= -n) { for (int i = 0; i < n; i++) a[i] = none; return; }
+            if (px > 0)
+            {
+                Array.Copy(a, px, a, 0, n - px);
+                for (int i = n - px; i < n; i++) a[i] = none;
+            }
+            else
+            {
+                int k = -px;
+                Array.Copy(a, 0, a, k, n - k);
+                for (int i = 0; i < k; i++) a[i] = none;
             }
         }
 
@@ -379,6 +445,7 @@ namespace Thetis
                     panTowardsTarget(spec, g, true);                // the exact final position
             }
             _pan_retune_pending = false;
+            forkClearViewShift();
             _pan_view_centre = double.NaN;
             if (_pan_timer != null) _pan_timer.Stop();
         }
@@ -417,12 +484,13 @@ namespace Thetis
             }
             if (_rx1_pan_drag)
             {
-                // mouse held still: send a retune that waited for its pacing slot
-                if (_pan_retune_pending && !double.IsNaN(_pan_view_centre))
+                // mouse held still: the DDC re-centres once on the view (no retunes while it moves)
+                if (_pan_retune_pending && !double.IsNaN(_pan_view_centre) &&
+                    _pan_sw.Elapsed.TotalMilliseconds - _pan_last_move_ms >= PAN_PAUSE_RETUNE_MS)
                 {
                     SpecHPSDR spec = specRX.GetSpecRX(0);
                     if (panGeometry(spec, exactZoomSlider(), exactPanSlider(), out PanGeometry g))
-                        panTowardsTarget(spec, g, false);
+                        panTowardsTarget(spec, g, true);
                 }
                 return;
             }

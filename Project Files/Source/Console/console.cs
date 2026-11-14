@@ -24488,6 +24488,19 @@ namespace Thetis
                                         break;
                                 }
 
+                                // Jull1ano fork: a pan past the received span (SmoothPan.cs): the frame moved with the view
+                                ForkViewShift vshift = _forkViewShift;
+                                if (vshift != null && !bLocalMox)
+                                {
+                                    DisplayMode dm = Display.CurrentDisplayMode;
+                                    if (dm == DisplayMode.PANADAPTER || dm == DisplayMode.PANAFALL || dm == DisplayMode.WATERFALL || dm == DisplayMode.PANASCOPE)
+                                    {
+                                        int npx = specRX.GetSpecRX(0).Pixels;
+                                        if (bDataReady) forkShiftPixels(Display.new_display_data, npx, vshift.Px);
+                                        if (bWaterfallDataReady) { forkShiftPixels(Display.new_waterfall_data, npx, vshift.Px); pixel_ref += vshift.MHz; }
+                                    }
+                                }
+
                                 if (bWaterfallDataReady)
                                     Display.SetPendingWaterfallPixelRef(1, pixel_ref);
 

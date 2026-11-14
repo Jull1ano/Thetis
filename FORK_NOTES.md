@@ -42,6 +42,12 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   store / recall) zoom RX2 alone; until RX2 is zoomed on its own it follows the Zoom slider as before. The slider and
   the buttons without Shift are RX1's (and TX's); the pan stays shared. Zooming RX2 in keeps VFO B in view (CTUN).
   Saved as `option rx2_zoom` in fork_band_memory.txt.
+- Panning past the received span (SmoothPan.cs): no DDC retune while the mouse drags. Each retune mutes the audio
+  for a few ms around the switch (its exact sample is not known), and up to 40 a second (one per 25 ms) were a buzz
+  ("brbrr", user 2026-11-15). The analyzer's view stays at the span edge; the display shows the rest of the view
+  shifted (spectrum, waterfall rows via the frame's pixel reference, the frequency scale and overlays via
+  RXDisplayLow/High), without data where the view has none; the DDC re-centres once at the release or when the mouse
+  rests 250 ms. The audio is untouched while dragging; one short soft mute at that re-centre.
 - One gap between neighbours (`forkGaps`): buttons, drop-downs and boxes side by side that touch or overlap (Rx Ant |
   Save | Restore, VFO lock A | B, AGC | ATT, the FM row, RX2's mode rows) get the SPLT | A > B grid's gap, measured
   from it; the row keeps its outer edges, the px come from the controls with room around their text (one each in
