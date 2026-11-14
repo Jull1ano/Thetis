@@ -239,6 +239,20 @@ namespace Thetis
             catch { }
         }
 
+        // Jull1ano fork: a step after the start (Power on, the first spectrum frame) added to the same file, once each,
+        // timed from the same start as the steps above
+        private static readonly HashSet<string> _forkMarks = new HashSet<string>();
+        public static void ForkMark(string text)
+        {
+            try
+            {
+                lock (_forkMarks) { if (!_forkMarks.Add(text)) return; }
+                string line = "+" + (DateTime.UtcNow - _total_start_utc).TotalSeconds.ToString("0.00").PadLeft(6) + " s  after start: " + text + "\r\n";
+                System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "thetis-fork-startup.txt"), line);
+            }
+            catch { }
+        }
+
         public static void Finish()
         {
             forkSaveTimes();

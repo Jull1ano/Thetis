@@ -275,6 +275,7 @@ namespace Thetis
             if (!pnlDisplay.ClientRectangle.Contains(p) || pnlDisplay.Width <= 0) return true;
 
             int rx = (rx2_enabled && p.Y > pnlDisplay.Height / 2) ? 2 : 1;
+            if (rx == 2) return forkWheelZoomRx2(e); // RX2's own zoom (console.cs)
             SpecHPSDR spec = specRX.GetSpecRX(rx == 2 ? 1 : 0);
             if (!panGeometry(spec, exactZoomSlider(), exactPanSlider(), out PanGeometry g)) return true;
 

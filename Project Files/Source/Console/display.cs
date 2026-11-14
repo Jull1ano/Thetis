@@ -270,6 +270,8 @@ namespace Thetis
         private static bool _forkLineGradient = false;
         private static Color _forkFillTop = Color.FromArgb(255, 30, 144, 255);
         private static Color _forkFillBottom = Color.FromArgb(255, 6, 29, 51);
+        // Jull1ano fork: pause (P, console.forkSetPaused): no new waterfall rows while the display is frozen
+        public static volatile bool ForkFrozen;
         public static bool ForkFillGradient { get { return _forkFillGradient; } set { _forkFillGradient = value; } }
         public static bool ForkLineGradient { get { return _forkLineGradient; } set { _forkLineGradient = value; } }
         public static Color ForkFillTop { get { return _forkFillTop; } set { _forkFillTop = value; } }
@@ -6854,6 +6856,8 @@ namespace Thetis
                         bRXdraw = true;
                     }
                 }
+
+                if (bRXdraw && ForkFrozen) bRXdraw = false; // Jull1ano fork: a pause freezes the waterfall too
 
                 if (bRXdraw)
                 {

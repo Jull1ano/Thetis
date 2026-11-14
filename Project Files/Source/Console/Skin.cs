@@ -2034,7 +2034,70 @@ namespace Thetis
             // Jull1ano fork: upstream drew a resized copy here and then returned the original image anyway (the
             // ImageList scales it to its ImageSize); the wasted bicubic draw per picture is gone, the result is the same
             if (c.ClientSize.Width == 0 || c.ClientSize.Width == 0) return null;
+            if (image != null && ForkFit.Contains(c) && (image.Width != c.Width || image.Height != c.Height))
+                return forkNineSlice(image, c.Width, c.Height);
             return image;
+        }
+
+        // Jull1ano fork: buttons the console made narrower or wider after the skin was applied (console.forkGaps: one gap
+        // between neighbours) get their pictures cut to the new size: the ends (rounded corners, the side edges) kept
+        // pixel for pixel, only the middle squeezed or stretched. Before, the ImageList kept the old size and drew it
+        // centred, the side edges cut off (user, 2026-11-14: "the vertical stroke margins of the buttons are clipped").
+        public static readonly HashSet<Control> ForkFit = new HashSet<Control>();
+
+        public static void ForkRefit(Control c)
+        {
+            if (c == null || string.IsNullOrEmpty(path) || c.TopLevelControl == null) return;
+            try
+            {
+                if (c.Parent is ucQuickRecall qr) { SetupQuickRecallImages(qr); return; } // its arrows are drawn at their size
+                if (c is Button b) { if (b.ImageList != null && b.ImageList.Images.Count > 0) SetupButtonImages(b); }
+                else if (c is CheckBox cb) { if (cb.Appearance == Appearance.Button && cb.ImageList != null && cb.ImageList.Images.Count > 0) SetupCheckBoxImages(cb); }
+                else if (c is RadioButton rb) { if (rb.Appearance == Appearance.Button && rb.ImageList != null && rb.ImageList.Images.Count > 0) SetupRadioButtonImages(rb); }
+                c.Invalidate();
+            }
+            catch (Exception ex) { HighDpi.Log("refit " + c.Name + ": " + ex.Message); }
+        }
+
+        // the picture to the control's height first (its proportions kept), then only its middle to the width
+        private static Image forkNineSlice(Image img, int w, int h)
+        {
+            System.Drawing.Bitmap scaled = null;
+            try
+            {
+                Image src = img;
+                int sw = Math.Max(1, (int)Math.Round(img.Width * (double)h / img.Height));
+                if (img.Height != h)
+                {
+                    scaled = new System.Drawing.Bitmap(sw, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (Graphics g = Graphics.FromImage(scaled))
+                    {
+                        g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        g.DrawImage(img, new Rectangle(0, 0, sw, h));
+                    }
+                    src = scaled;
+                }
+                int e = Math.Min((int)Math.Round(h * 0.3), Math.Min(sw, w) / 2 - 1); // covers the corner radius and the edge
+                if (e < 1) return img;
+                System.Drawing.Bitmap dst = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (Graphics g = Graphics.FromImage(dst))
+                using (System.Drawing.Imaging.ImageAttributes ia = new System.Drawing.Imaging.ImageAttributes())
+                {
+                    ia.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY); // no bleed at the cuts
+                    g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                    g.DrawImage(src, new Rectangle(0, 0, e, h), 0, 0, e, h, GraphicsUnit.Pixel, ia);
+                    g.DrawImage(src, new Rectangle(w - e, 0, e, h), sw - e, 0, e, h, GraphicsUnit.Pixel, ia);
+                    if (w - 2 * e > 0 && sw - 2 * e > 0)
+                        g.DrawImage(src, new Rectangle(e, 0, w - 2 * e, h), e, 0, sw - 2 * e, h, GraphicsUnit.Pixel, ia);
+                }
+                return dst;
+            }
+            catch { return img; }
+            finally { if (scaled != null) scaled.Dispose(); }
         }
     }
 }

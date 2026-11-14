@@ -764,11 +764,12 @@ namespace Thetis
             forkTieAtt(udRX1StepAttData, comboPreamp);    // Jull1ano fork: the S-ATT box exactly over the ATT drop-down
             forkTieAtt(udRX2StepAttData, comboRX2Preamp);
             forkCreatePause();                 // Jull1ano fork: pause (P) above Power
+            forkHookZoomButtons();             // Jull1ano fork: Shift + a zoom button = RX2's own zoom
             forkTieBox(txtVFOABand, chkVFOATX); // Jull1ano fork: (themed) band text as tall as its TX button,
             forkTieBox(txtVFOBBand, chkVFOBTX); // the quick memory box as the VFO lock buttons, the tune step box as its - / +
             forkTieBox(txtMemoryQuick, chkVFOLock);
             forkTieBox(txtWheelTune, btnTuneStepChangeSmaller);
-            ForkTheme.Applied += (root) => { if (root == this) foreach (KeyValuePair<TextBox, Control> kv in _forkBoxRefs) forkAlignBox(kv.Key, kv.Value); };
+            ForkTheme.Applied += (root) => { if (root == this) { foreach (KeyValuePair<TextBox, Control> kv in _forkBoxRefs) forkAlignBox(kv.Key, kv.Value); forkThemeLabels(); forkGaps(); } };
             _forkModeBaseTop = panelMode.Top;
             panelMode.LocationChanged += (s, e) => { if (!_forkMovingMode) _forkModeBaseTop = panelMode.Top; }; // the layout's place
             forkLoadDisplayOptions(app_data_path); // and the two-colour fill
@@ -982,6 +983,7 @@ namespace Thetis
             LogTool.Completed("DSP");
 
             // still waiting PA
+            LogTool.AddLogEntry("Waiting for PortAudio...", "PAW"); // Jull1ano fork: the steps up to the finder timed too
             if (_portAudioInitalising && portAudioThread != null && portAudioThread.IsAlive)
             {
                 Splash.SetStatus("Waiting for PortAudio");
@@ -992,9 +994,14 @@ namespace Thetis
                 MessageBox.Show("There was an issue initialising PortAudio", "PortAudio", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, Common.MB_TOPMOST);
 
             //            
+            LogTool.Completed("PAW"); // Jull1ano fork
+            LogTool.AddLogEntry("ASIO page...", "CMA");
             if (!IsSetupFormNull) SetupForm.SetupCMAsio(_portAudioIssue, Common.HasArg(args, "-cmasioconfig"));
+            LogTool.Completed("CMA");
 
+            LogTool.AddLogEntry("CPU usage counter...", "CPU");
             CpuUsage(); //[2.10.1.0] MW0LGE initial call to setup check marks in status bar as a minimum
+            LogTool.Completed("CPU");
 
             LogTool.AddLogEntry("Processing finder info...", "FIND");
             Splash.SetStatus("Processing Finder Info");
@@ -20790,14 +20797,36 @@ namespace Thetis
         private bool m_bShowSystemCPUUsage = true;
         public volatile PerformanceCounter _total_cpu_usage = null;
 
-        private bool _cpu_usage_setup = false;
+        private volatile bool _cpu_usage_setup = false;
+        // Jull1ano fork: the counter is made on a worker thread. Making it took 4.6 s of every start (measured 2026-11-14,
+        // "CPU usage counter" in %TEMP%\thetis-fork-startup.txt); the status bar shows the CPU % once it is ready.
+        private readonly object _forkCpuLock = new object();
+        private int _forkCpuSeq;
         private void CpuUsage()
         {
             try
             {
                 systemToolStripMenuItem.Checked = m_bShowSystemCPUUsage;
                 thetisOnlyToolStripMenuItem.Checked = !m_bShowSystemCPUUsage;
+            }
+            catch { }
+            _cpu_usage_setup = false; // the status bar timer leaves the counter alone from here (it runs on this thread)
+            int seq = System.Threading.Interlocked.Increment(ref _forkCpuSeq);
+            System.Threading.SynchronizationContext ui = System.Threading.SynchronizationContext.Current;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                lock (_forkCpuLock)
+                {
+                    if (seq != _forkCpuSeq) return; // asked again meanwhile
+                    if (!forkMakeCpuCounter() && ui != null) ui.Post(_ => disableCpuVoltsUsage(), null);
+                }
+            });
+        }
 
+        private bool forkMakeCpuCounter()
+        {
+            try
+            {
                 string sMachineName = System.Environment.MachineName;
 
                 if (_total_cpu_usage != null)
@@ -20823,10 +20852,11 @@ namespace Thetis
                 float tmp = _total_cpu_usage.NextValue();
 
                 _cpu_usage_setup = true;
+                return true;
             }
             catch
             {
-                disableCpuVoltsUsage();
+                return false;
             }
         }
 
@@ -24460,6 +24490,7 @@ namespace Thetis
                                 if (bWaterfallDataReady)
                                     Display.SetPendingWaterfallPixelRef(1, pixel_ref);
 
+                                if (bDataReady && !_forkFirstFrame) { _forkFirstFrame = true; LogTool.ForkMark("first spectrum frame"); } // Jull1ano fork: start-up times
                                 if (bDataReady) forkBlendResume(Display.new_display_data, _forkFrozenTop); // Jull1ano fork: glide out of a pause
                                 Display.DataReady = bDataReady;
                                 Display.WaterfallDataReady = bWaterfallDataReady;
@@ -27355,6 +27386,7 @@ namespace Thetis
 
             if (chkPower.Checked)
             {
+                LogTool.ForkMark("Power on"); // Jull1ano fork: start-up times file (clsProgressLog.cs)
                 chkPower.BackColor = button_selected_color;
                 txtVFOAFreq.ForeColor = vfo_text_light_color;
                 txtVFOAMSD.ForeColor = vfo_text_light_color;
@@ -33757,7 +33789,8 @@ namespace Thetis
             if ((int)(spanMHz * 1e6) > spec.SampleRate)
             {
                 // can't fit, so max zoom out
-                Zoom = ptbDisplayZoom.Minimum;
+                if (rx == 2) forkSetRx2Zoom(0.0, false); // Jull1ano fork: RX2's own zoom
+                else Zoom = ptbDisplayZoom.Minimum;
             }
             else
             {
@@ -33777,7 +33810,8 @@ namespace Thetis
                 m_bIgnoreZoomCentre = true; //[2.10.3.5]MW0LGE used in ptbDisplayZoom_Scroll to ignore the shift key which might be held for RX2
                 PanCentre();
 
-                Zoom = (int)((zoom * 230.0) + 10.0);
+                if (rx == 2) forkSetRx2Zoom(zoom, false); // Jull1ano fork: RX2's own zoom
+                else Zoom = (int)((zoom * 230.0) + 10.0);
 
                 m_bIgnoreZoomCentre = false;
 
@@ -33819,7 +33853,7 @@ namespace Thetis
 
             double zoom = exactZoomSlider(); // Jull1ano fork: keeps a Ctrl+wheel zoom's exact value
             specRX.GetSpecRX(0).ZoomSlider = zoom;
-            specRX.GetSpecRX(1).ZoomSlider = zoom;
+            specRX.GetSpecRX(1).ZoomSlider = forkRx2Zoom(zoom); // Jull1ano fork: RX2's own zoom once it has one
             specRX.GetSpecRX(cmaster.inid(1, 0)).ZoomSlider = zoom;
             double zoom_factor = 1.0 / ((ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - ptbDisplayZoom.Value) * 0.01);
 
@@ -33870,7 +33904,7 @@ namespace Thetis
                     CentreFrequency = VFOAFreq;
                     txtVFOAFreq_LostFocus(this, EventArgs.Empty);
                 }
-                if (rx2_enabled && (ClickTuneRX2Display && zoomingIn) && bCentre)  //MW0LGE - we should do rx2 as well !
+                if (double.IsNaN(_forkRx2Zoom) && rx2_enabled && (ClickTuneRX2Display && zoomingIn) && bCentre)  //MW0LGE - we should do rx2 as well ! // Jull1ano fork: unless RX2 has its own zoom
                 {
                     CentreRX2Frequency = VFOBFreq;
                     txtVFOBFreq_LostFocus(this, EventArgs.Empty);
@@ -33891,7 +33925,7 @@ namespace Thetis
 
         private void radDisplayZoom05_CheckedChanged(object sender, System.EventArgs e)
         {
-            if (radDisplayZoom05.Checked)
+            if (radDisplayZoom05.Checked && !forkZoomButtonNotRx1())
             {
                 displayZoom05();
             }
@@ -33904,7 +33938,7 @@ namespace Thetis
 
         private void radDisplayZoom1x_CheckedChanged(object sender, System.EventArgs e)
         {
-            if (radDisplayZoom1x.Checked)
+            if (radDisplayZoom1x.Checked && !forkZoomButtonNotRx1())
             {
                 displayZoom1();
             }
@@ -33917,7 +33951,7 @@ namespace Thetis
 
         private void radDisplayZoom2x_CheckedChanged(object sender, System.EventArgs e)
         {
-            if (radDisplayZoom2x.Checked)
+            if (radDisplayZoom2x.Checked && !forkZoomButtonNotRx1())
             {
                 displayZoom2();
             }
@@ -33929,7 +33963,7 @@ namespace Thetis
         }
         private void radDisplayZoom4x_CheckedChanged(object sender, System.EventArgs e)
         {
-            if (radDisplayZoom4x.Checked)
+            if (radDisplayZoom4x.Checked && !forkZoomButtonNotRx1())
             {
                 displayZoom4();
             }
@@ -46389,6 +46423,7 @@ namespace Thetis
         private void forkPlaceBandPanels()
         {
             forkPlacePause();
+            forkGaps(); // one gap between neighbours (themed)
             bool want = _forkBandsTogether && !collapsedDisplay && !LegacyItemController.HideBands && !_bands_VHF_selected &&
                 (_bands_HF_selected || _bands_GEN_selected) && panelBandGEN.Parent == panelBandHF.Parent;
             if (!want)
@@ -46467,7 +46502,10 @@ namespace Thetis
         // keep showing the last ones, to compare signals while switching antennas; the radio, the DSP (its averaging
         // too), the audio and the overlays (VFO, filter, cursor, scale) go on. Resume: the trace glides from the frozen
         // frame to the live one over 450 ms, the waterfall goes on under the frozen rows. Power off ends a pause.
+        // Since dce5681 the receivers stop too (forkPauseDsp), and the waterfall adds no rows while paused
+        // (Display.ForkFrozen; before, it kept adding the last row, streaks down the waterfall).
         private volatile bool _forkDisplayFrozen;
+        private bool _forkFirstFrame; // the first spectrum frame after the start noted in the start-up times file
         private float[] _forkFrozenTop, _forkFrozenBottom;
         private long _forkResumeAt; // Stopwatch time of the resume, 0: none
         private const double ForkResumeGlideMs = 450;
@@ -46507,6 +46545,7 @@ namespace Thetis
                 _forkFrozenBottom = Display.new_display_data_bottom == null ? null : (float[])Display.new_display_data_bottom.Clone();
                 _forkResumeAt = 0;
                 _forkDisplayFrozen = true;
+                Display.ForkFrozen = true; // the waterfall adds no rows (user: "the waterfall needs to stop as well")
                 forkPauseDsp(true);
             }
             else
@@ -46514,6 +46553,7 @@ namespace Thetis
                 forkPauseDsp(false);
                 _forkResumeAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 _forkDisplayFrozen = false;
+                Display.ForkFrozen = false;
             }
             if (_forkPause != null) _forkPause.Paused = on;
             forkPauseTip();
@@ -46626,6 +46666,296 @@ namespace Thetis
                 }
             }
             finally { _forkAligning = false; }
+        }
+
+        // The two-line labels by the boxes in line (Tune Step, Band Stack, VFO Lock), with a themed console: a font 1 px
+        // smaller and no background of their own, the boxes drawn in front of them. "Tune Step:" reached down over the
+        // top edge of the quick memory box once that box moved up to the lock buttons' line (user, 2026-11-14).
+        // Thetis' font and background with any other skin.
+        private readonly Dictionary<Label, Font> _forkLabelFont = new Dictionary<Label, Font>();
+        private readonly Dictionary<Label, Font> _forkLabelSmall = new Dictionary<Label, Font>();
+        private readonly Dictionary<Label, Color> _forkLabelBack = new Dictionary<Label, Color>();
+        private void forkThemeLabels()
+        {
+            try
+            {
+                foreach (Label l in new Label[] { lblTuneStep, lblBandStack, labelTS1 })
+                {
+                    if (l == null) continue;
+                    bool themed = !ForkTheme.BoxBorder.IsEmpty && ForkTheme.Themes(l);
+                    _forkLabelSmall.TryGetValue(l, out Font mine);
+                    if (themed)
+                    {
+                        if (mine == null || l.Font != mine) // first time, or the font was set again since (text size)
+                        {
+                            _forkLabelFont[l] = l.Font;
+                            mine = new Font(l.Font.FontFamily, Math.Max(6f, l.Font.SizeInPoints - 0.75f), l.Font.Style, GraphicsUnit.Point);
+                            _forkLabelSmall[l] = mine;
+                            l.Font = mine; // 0.75 pt = 1 px at 100 % (2 px at 200 %)
+                        }
+                        if (l.BackColor != Color.Transparent) { _forkLabelBack[l] = l.BackColor; l.BackColor = Color.Transparent; }
+                    }
+                    else if (mine != null)
+                    {
+                        if (l.Font == mine && _forkLabelFont.TryGetValue(l, out Font f)) l.Font = f;
+                        // another skin's own colour stays; the one from before the theme where the skin has none
+                        if (l.BackColor == Color.Transparent && _forkLabelBack.TryGetValue(l, out Color b)) l.BackColor = b;
+                        _forkLabelSmall.Remove(l); _forkLabelFont.Remove(l); _forkLabelBack.Remove(l);
+                    }
+                }
+                foreach (TextBox box in _forkBoxRefs.Keys)
+                    if (!ForkTheme.BoxBorder.IsEmpty && ForkTheme.Themes(box)) box.BringToFront();
+            }
+            catch (Exception ex) { HighDpi.Log("theme labels: " + ex.Message); }
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: RX2's own zoom
+        // Thetis has one zoom for both receivers (user, 2026-11-14: "how do i control zoom on the RX2?" ... "Yes, add it").
+        // RX2 gets its own once it is zoomed on its own: Ctrl + wheel over RX2's spectrum, Shift + 0.5x / 1x / 2x / 4x, Shift
+        // + ZTB (zoom to band, its store / recall). Until then RX2 follows the Zoom slider as before. The slider and the
+        // buttons without Shift are RX1's (and TX's); the pan stays shared. Kept in fork_band_memory.txt (option rx2_zoom).
+        private double _forkRx2Zoom = double.NaN; // zoom slider value 0..1 (as SpecHPSDR.ZoomSlider), NaN: follows RX1
+        private bool _forkZoomBtnRx2, _forkZoomSync;
+        private System.Windows.Forms.Timer _forkRx2ZoomSave;
+
+        private double forkRx2Zoom(double rx1) { return double.IsNaN(_forkRx2Zoom) ? rx1 : _forkRx2Zoom; }
+
+        private void forkSetRx2Zoom(double z, bool centreOnVfo)
+        {
+            z = Math.Max(0.0, Math.Min(1.0, z));
+            bool zoomingIn = z > forkRx2Zoom(exactZoomSlider()) + 1e-9;
+            _forkRx2Zoom = z;
+            specRX.GetSpecRX(1).ZoomSlider = z;
+            CalcRX2DisplayFreq();
+            // zooming in keeps VFO B in view (as the Zoom slider does with CTUN)
+            if (centreOnVfo && zoomingIn && rx2_enabled && ClickTuneRX2Display)
+            {
+                CentreRX2Frequency = VFOBFreq;
+                txtVFOBFreq_LostFocus(this, EventArgs.Empty);
+            }
+            if (_display_max_bin_enabled[1]) setupDisplayMaxBinDetect(2, false, true);
+            if (_forkRx2ZoomSave == null)
+            {
+                _forkRx2ZoomSave = new System.Windows.Forms.Timer { Interval = 800 };
+                _forkRx2ZoomSave.Tick += (s, e) => { _forkRx2ZoomSave.Stop(); forkSaveBandMemory(); };
+            }
+            _forkRx2ZoomSave.Stop();
+            _forkRx2ZoomSave.Start();
+        }
+
+        // Ctrl + wheel over RX2's spectrum: RX2's zoom, one notch = span x 2^(-1/3) as RX1's
+        private bool forkWheelZoomRx2(MouseEventArgs e)
+        {
+            SpecHPSDR spec = specRX.GetSpecRX(1);
+            if (!panGeometry(spec, forkRx2Zoom(exactZoomSlider()), exactPanSlider(), out PanGeometry g)) return true;
+            double notches = e.Delta / 120.0;
+            if (notches == 0) return true;
+            double newWidth = g.width * Math.Pow(2.0, -notches * WHEEL_ZOOM_STEP);
+            newWidth = Math.Max(g.intervals / 100.0, Math.Min(g.intervals, newWidth));
+            double z = zoomSliderForWidth(newWidth, g.intervals);
+            if (z < 0.02 / 230.0) z = 0.0;
+            forkSetRx2Zoom(z, true);
+            return true;
+        }
+
+        // Shift + a zoom button: RX2 to that factor; the buttons keep showing RX1's zoom
+        private void forkHookZoomButtons()
+        {
+            RadioButton[] rads = { radDisplayZoom05, radDisplayZoom1x, radDisplayZoom2x, radDisplayZoom4x };
+            double[] factors = { 0.5, 1.0, 2.0, 4.0 };
+            for (int i = 0; i < rads.Length; i++)
+            {
+                RadioButton r = rads[i];
+                double f = factors[i];
+                if (r == null) continue;
+                r.MouseDown += (s, e) => { _forkZoomBtnRx2 = e.Button == MouseButtons.Left && rx2_enabled && Common.ShiftKeyDown; };
+                r.Click += (s, e) =>
+                {
+                    if (!_forkZoomBtnRx2) return;
+                    _forkZoomBtnRx2 = false;
+                    int v = ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - (int)(100.0 / f);
+                    forkSetRx2Zoom((v - 10.0) / 230.0, true);
+                    BeginInvoke(new MethodInvoker(forkSyncZoomButtons));
+                };
+                r.MouseUp += (s, e) => { if (_forkZoomBtnRx2) BeginInvoke(new MethodInvoker(() => { if (_forkZoomBtnRx2) { _forkZoomBtnRx2 = false; forkSyncZoomButtons(); } })); };
+                string tip = toolTip1.GetToolTip(r);
+                toolTip1.SetToolTip(r, (string.IsNullOrEmpty(tip) ? "" : tip + "\n") + "Shift + click: RX2's zoom (RX2 has its own; Ctrl + wheel over its spectrum too).");
+            }
+        }
+
+        // a zoom button press that was RX2's (or a resync) leaves RX1's zoom alone
+        private bool forkZoomButtonNotRx1() { return _forkZoomBtnRx2 || _forkZoomSync; }
+
+        private void forkSyncZoomButtons()
+        {
+            _forkZoomSync = true;
+            try
+            {
+                double zf = 1.0 / ((ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - ptbDisplayZoom.Value) * 0.01);
+                radDisplayZoom05.Checked = zf == 0.5;
+                radDisplayZoom1x.Checked = zf == 1.0;
+                radDisplayZoom2x.Checked = zf == 2.0;
+                radDisplayZoom4x.Checked = zf == 4.0;
+            }
+            catch { }
+            finally { _forkZoomSync = false; }
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: one gap between neighbours
+        // With a themed console, buttons / drop-downs / boxes side by side in a row that touch or overlap (Rx Ant | Save |
+        // Restore, VFO lock A | B, AGC | ATT, the FM and RX2 mode rows ...) get the gap of the SPLT | A > B grid, measured
+        // from it (1 px at 100 %; user: "we need everywhere to be consistent with this gap"). The row keeps its outer
+        // edges: the px come from the controls with room around their text, one at a time in turn (so equal rows stay
+        // equal); where none has room, the row moves right into free space, with the label over a moved control.
+        // Rows placed one over the other on purpose (overlapping by more than a few px) are left alone; up / down boxes
+        // follow their drop-down (forkTieAtt). Thetis' bounds again with any other skin.
+        private readonly Dictionary<Control, Rectangle> _forkGapOrig = new Dictionary<Control, Rectangle>();
+        private bool _forkGapping;
+        private void forkGaps()
+        {
+            if (_forkGapping) return;
+            _forkGapping = true;
+            try
+            {
+                bool themed = !ForkTheme.BoxBorder.IsEmpty && ForkTheme.Themes(this);
+                if (!themed)
+                {
+                    foreach (KeyValuePair<Control, Rectangle> kv in _forkGapOrig)
+                        if (!kv.Key.IsDisposed)
+                        {
+                            bool sized = kv.Key.Width != kv.Value.Width;
+                            kv.Key.SetBounds(kv.Value.Left, kv.Key.Top, kv.Value.Width, kv.Key.Height);
+                            if (Skin.ForkFit.Remove(kv.Key) || sized) Skin.ForkRefit(kv.Key);
+                        }
+                    _forkGapOrig.Clear();
+                    return;
+                }
+                int gap = Math.Max(1, btnVFOAtoB.Left - chkVFOSplit.Right); // the reference grid's own gap
+                forkGapsIn(this, gap);
+            }
+            catch (Exception ex) { HighDpi.Log("gaps: " + ex.Message); }
+            finally { _forkGapping = false; }
+        }
+
+        private static bool forkGapKind(Control c)
+        {
+            if (c is UpDownBase || c.Parent is UpDownBase) return false; // the S-ATT box follows its drop-down
+            if (c is ButtonBase || c is ComboBox) return !c.AutoSize;
+            TextBox t = c as TextBox;
+            return t != null && !t.Multiline && t.BorderStyle != BorderStyle.None;
+        }
+
+        // the narrowest a control can be without cutting its text (a drop-down: its longest item)
+        private static int forkGapMinWidth(Control c)
+        {
+            Font f = c.Font;
+            if (c is ComboBox cb)
+            {
+                int w = forkTextWidth(cb.Text, f);
+                foreach (object o in cb.Items) w = Math.Max(w, forkTextWidth(cb.GetItemText(o), f));
+                return w + HighDpi.Px(18);
+            }
+            if (c is TextBox) return forkTextWidth(c.Text, f) + HighDpi.Px(6);
+            return forkTextWidth((c.Text ?? "").Replace("&&", "&"), f) + HighDpi.Px(8);
+        }
+        private static int forkTextWidth(string s, Font f)
+        {
+            return string.IsNullOrEmpty(s) ? 0 : TextRenderer.MeasureText(s, f, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width;
+        }
+
+        private void forkGapsIn(Control parent, int gap)
+        {
+            List<Control> kids = new List<Control>();
+            foreach (Control c in parent.Controls)
+            {
+                if (c.HasChildren && !(c is UpDownBase) && !(c is ComboBox)) forkGapsIn(c, gap);
+                if (forkGapKind(c)) kids.Add(c);
+            }
+            if (kids.Count < 2) return;
+            kids.Sort((a, b) => a.Left != b.Left ? a.Left.CompareTo(b.Left) : a.Top.CompareTo(b.Top));
+            int maxOverlap = HighDpi.Px(10);
+            HashSet<Control> done = new HashSet<Control>();
+            foreach (Control first in kids)
+            {
+                if (done.Contains(first)) continue;
+                // the row from this control to the right: the next neighbour on the same line closer than the gap
+                List<Control> row = new List<Control> { first };
+                Control cur = first;
+                while (true)
+                {
+                    Control next = null;
+                    foreach (Control b in kids)
+                    {
+                        if (b == cur || b.Left <= cur.Left || done.Contains(b) || row.Contains(b)) continue;
+                        int vo = Math.Min(cur.Bottom, b.Bottom) - Math.Max(cur.Top, b.Top);
+                        if (vo < 0.6 * Math.Min(cur.Height, b.Height)) continue;
+                        int g = b.Left - cur.Right;
+                        if (g >= gap || g < -Math.Min(maxOverlap, Math.Min(cur.Width, b.Width) / 3)) continue;
+                        if (next == null || b.Left < next.Left) next = b;
+                    }
+                    if (next == null) break;
+                    row.Add(next);
+                    cur = next;
+                }
+                if (row.Count < 2) continue;
+                foreach (Control c in row) done.Add(c);
+                forkGapRow(parent, row, kids, gap);
+            }
+        }
+
+        private void forkGapRow(Control parent, List<Control> row, List<Control> kids, int gap)
+        {
+            int n = row.Count, left = row[0].Left, right = row[n - 1].Right;
+            int[] w = new int[n], min = new int[n];
+            int sum = 0;
+            for (int i = 0; i < n; i++) { w[i] = row[i].Width; min[i] = forkGapMinWidth(row[i]); sum += w[i]; }
+            int need = sum + gap * (n - 1) - (right - left);
+            if (need <= 0) return;
+            // 1) from the controls with room, one px each in turn
+            bool took = true;
+            while (need > 0 && took)
+            {
+                took = false;
+                for (int i = 0; i < n && need > 0; i++)
+                    if (w[i] > min[i]) { w[i]--; need--; took = true; }
+            }
+            // 2) the rest: the row ends further right, where nothing is in the way
+            int shift = 0;
+            if (need > 0)
+            {
+                int free = parent.ClientSize.Width - right;
+                Control last = row[n - 1];
+                foreach (Control c in parent.Controls)
+                {
+                    if (row.Contains(c) || !c.Visible && !kids.Contains(c) || c.Left < right) continue;
+                    int vo = Math.Min(last.Bottom, c.Bottom) - Math.Max(last.Top, c.Top);
+                    if (vo > 0) free = Math.Min(free, c.Left - right);
+                }
+                if (free < need) { HighDpi.Log("gaps: no room for " + string.Join(" | ", row.ConvertAll(c => c.Name)) + " (" + need + " px)"); return; }
+                shift = need;
+                need = 0;
+            }
+            int x = left;
+            for (int i = 0; i < n; i++)
+            {
+                Control c = row[i];
+                if (!_forkGapOrig.ContainsKey(c)) _forkGapOrig[c] = c.Bounds;
+                int newLeft = x; // placed one after the other: with a shift the row ends that much further right
+                if (newLeft != c.Left)
+                    foreach (Control l in parent.Controls) // the label over a moved control keeps its place over it
+                        if (l is Label && l.Bottom <= c.Top + HighDpi.Px(2) && c.Top - l.Bottom <= HighDpi.Px(8) &&
+                            Math.Min(l.Right, c.Right) - Math.Max(l.Left, c.Left) > l.Width / 2)
+                        {
+                            if (!_forkGapOrig.ContainsKey(l)) _forkGapOrig[l] = l.Bounds;
+                            int want = newLeft + (_forkGapOrig[l].Left - _forkGapOrig[c].Left);
+                            if (l.Left != want) l.Left = want;
+                        }
+                bool resized = c.Width != w[i];
+                if (c.Left != newLeft || resized) c.SetBounds(newLeft, c.Top, w[i], c.Height);
+                if (resized) { Skin.ForkFit.Add(c); Skin.ForkRefit(c); } // its pictures cut to the new width (Skin.cs)
+                x = newLeft + w[i] + gap;
+            }
+            HighDpi.Log("gaps: " + string.Join(" | ", row.ConvertAll(c => c.Name + " " + c.Width)) + (shift > 0 ? ", moved " + shift + " px right" : ""));
         }
 
         // the area a panel's buttons take (all of them, shown or not: a hidden page's buttons read as hidden)
@@ -46769,6 +47099,8 @@ namespace Thetis
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "nr2_default") _forkNr2Default = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "memory_simple") _forkMemorySimple = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "bands_together") _forkBandsTogether = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "option" && p[1] == "rx2_zoom" &&
+                        double.TryParse(p[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double z2) && z2 >= 0 && z2 <= 1) _forkRx2Zoom = z2;
                     else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
                     else if (p.Length == 4 && p[0] == "step") _forkBandStep[p[1] + "|" + p[2]] = p[3];
                 }
@@ -46787,6 +47119,7 @@ namespace Thetis
                 sb.Append("option\tnr2_default\t").Append(_forkNr2Default ? "1" : "0").Append("\r\n");
                 sb.Append("option\tmemory_simple\t").Append(_forkMemorySimple ? "1" : "0").Append("\r\n");
                 sb.Append("option\tbands_together\t").Append(_forkBandsTogether ? "1" : "0").Append("\r\n");
+                if (!double.IsNaN(_forkRx2Zoom)) sb.Append("option\trx2_zoom\t").Append(_forkRx2Zoom.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append("\r\n");
                 foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
                     sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
                 foreach (KeyValuePair<string, string> kv in _forkBandStep)
@@ -47724,7 +48057,7 @@ namespace Thetis
             {
                 // store
                 ztb_data_by_band[rx][(int)band].CentreFrequency = centre;
-                ztb_data_by_band[rx][(int)band].ZoomSliderPosition = ptbDisplayZoom.Value;
+                ztb_data_by_band[rx][(int)band].ZoomSliderPosition = rx == 1 ? (int)Math.Round(forkRx2Zoom(exactZoomSlider()) * 230.0 + 10.0) : ptbDisplayZoom.Value; // Jull1ano fork: RX2's own zoom
                 ztb_data_by_band[rx][(int)band].PanSliderPosition = ptbDisplayPan.Value;
                 ztb_data_by_band[rx][(int)band].Initalised = true;
                 return;
@@ -47758,7 +48091,8 @@ namespace Thetis
                     m_bIgnoreLimitsForZTB = true;
 
                     if (Pan != ztb.PanSliderPosition) Pan = ztb.PanSliderPosition;
-                    if (Zoom != ztb.ZoomSliderPosition) Zoom = ztb.ZoomSliderPosition;
+                    if (rx == 1) forkSetRx2Zoom((ztb.ZoomSliderPosition - 10.0) / 230.0, false); // Jull1ano fork: RX2's own zoom
+                    else if (Zoom != ztb.ZoomSliderPosition) Zoom = ztb.ZoomSliderPosition;
 
                     if (rx == 0)
                     {

@@ -25,7 +25,8 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   antennas. The receivers stop too: their DSP channels off as Power off does it (RX1, its sub-receiver, RX2) and the
   audio mixer no longer waits for them, so no audio and no demodulating in the background; the radio keeps streaming,
   so a resume is at once. Resume: the channels back on, the trace glides from the frozen frame to the live one over
-  450 ms (smoothstep), the waterfall goes on under the frozen rows. Power off, MOX and TUNE end a pause. P was
+  450 ms (smoothstep). The waterfall stops too (Display.ForkFrozen: no new rows while paused; it used to repeat
+  its last row, streaks) and goes on under the frozen rows at resume. Power off, MOX and TUNE end a pause. P was
   Thetis' default XIT-down key (Setup > Keyboard can give XIT down another key).
 - The three band / mode groups 12 px apart: the mode buttons move down into the free space under them when needed.
 - Value boxes (tune step, quick memory, band stack) in AetherSDR's value colours (skin xml); the slider knob a vector
@@ -35,14 +36,35 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   and its - / +: as tall as the buttons (or as the text needs), centred on them, the text in the middle. The centring
   is in the window's frame (ForkBoxBorder handles WM_NCCALCSIZE: the room above and below one text line), recalculated
   once the hook attaches (the skin is applied before the console's windows exist).
+- The two-line labels Tune Step, Band Stack and VFO Lock 1 px smaller with no background of their own, the boxes in
+  front of them (`forkThemeLabels`): "Tune Step:" covered the quick memory box's top edge once that box moved up.
+- RX2's own zoom: Ctrl + wheel over RX2's spectrum, Shift + 0.5x / 1x / 2x / 4x, Shift + ZTB (zoom to band and its
+  store / recall) zoom RX2 alone; until RX2 is zoomed on its own it follows the Zoom slider as before. The slider and
+  the buttons without Shift are RX1's (and TX's); the pan stays shared. Zooming RX2 in keeps VFO B in view (CTUN).
+  Saved as `option rx2_zoom` in fork_band_memory.txt.
+- One gap between neighbours (`forkGaps`): buttons, drop-downs and boxes side by side that touch or overlap (Rx Ant |
+  Save | Restore, VFO lock A | B, AGC | ATT, the FM row, RX2's mode rows) get the SPLT | A > B grid's gap, measured
+  from it; the row keeps its outer edges, the px come from the controls with room around their text (one each in
+  turn), else the row ends further right where nothing is in the way (with the label over the moved control). Run
+  after every layout change; rows placed over each other on purpose are left alone. Log lines "gaps: ...".
+  A button made narrower gets its skin pictures cut to its new width (`Skin.ForkRefit`, nine-slice): the rounded
+  ends and side edges kept pixel for pixel, only the middle squeezed (before: the old-size picture drawn centred,
+  its side edges cut off).
 - One edge for every box: Thetis runs without visual styles, so a single-line box (FixedSingle) draws its grey
   #646464 border inside itself; the theme gives the value boxes a 3D border (a window frame) that the fork paints
   as the subtle edge. Number boxes draw a 1 px #abadb3 border in their client area: painted over after they paint.
 - Faster start with a big skin (Skin.cs): every picture was decoded, re-encoded as PNG and hashed at every skin load,
   and resizeImage drew a resized copy it then threw away. The cache key is now the MD5 of the file's bytes, a picture
   is decoded only once, and the wasted draw is gone: AetherSDR Style (1289 pictures at 200 %) 3.4 s -> ~0.7 s.
+- The CPU usage counter (status bar CPU %) made on a worker thread: making it took 4.6 s of every start; the CPU %
+  shows once it is ready.
+- Multicore JIT (Program.cs): each start records the methods it compiles, the next one compiles them on the other cores
+  ahead of use. Profile per exe folder in `%LOCALAPPDATA%\OpenHPSDR\ThetisForkJit`; `THETIS_NO_MCJ=1` switches it off.
+  Start to the main window, no radio, warm: 8.4 -> 7.7 s (both twice). The whole round: 12.8 s -> 7.7 s; left: the
+  Setup window 4.5 s (its controls 1.3 s, applying the saved settings 2.7 s), DSP 1.1 s, radio 0.7 s.
 - Start-up times saved as text: `%TEMP%\thetis-fork-startup.txt` (each step of Thetis' own start-up log, its offset and
-  ms), written when the start finishes, so a slow start can be read afterwards.
+  ms), written when the start finishes, so a slow start can be read afterwards; also the steps up to the finder
+  (PortAudio wait, ASIO page, CPU counter) and, after the start, "Power on" and the "first spectrum frame".
 
 
 Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
