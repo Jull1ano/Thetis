@@ -686,8 +686,7 @@ namespace Thetis
             if (string.IsNullOrEmpty(app_data_path))
             {
                 if (Environment.Is64BitProcess)
-                    app_data_path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-                    + "\\OpenHPSDR\\Thetis-x64\\";
+                    app_data_path = ForkDefaultDataPath(); // Jull1ano fork (aether-ui): its own settings folder
                 else
                     app_data_path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
                         + "\\OpenHPSDR\\Thetis\\";
@@ -1591,8 +1590,7 @@ namespace Thetis
                 app_data_path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
                     + "\\OpenHPSDR\\Thetis\\";
                 if (Environment.Is64BitProcess)
-                    app_data_path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-                    + "\\OpenHPSDR\\Thetis-x64\\";
+                    app_data_path = ForkDefaultDataPath(); // Jull1ano fork (aether-ui): its own settings folder
 
 #if(DEBUG)
                 app_data_path += "Debug\\";
@@ -46721,6 +46719,31 @@ namespace Thetis
                     if (!ForkTheme.BoxBorder.IsEmpty && ForkTheme.Themes(box)) box.BringToFront();
             }
             catch (Exception ex) { HighDpi.Log("theme labels: " + ex.Message); }
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: its own settings folder
+        // aether-ui keeps its settings (and its skins, Setup.forkSkinsDir) in %APPDATA%\OpenHPSDR\Thetis-aether, apart
+        // from the original Thetis' Thetis-x64 (user, 2026-11-15: the original took the fork's skin and colours from
+        // the shared settings). A first start copies Thetis-x64 there once, so it starts with the same settings.
+        // -datapath: still picks any folder.
+        public static string ForkDefaultDataPath()
+        {
+            string root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\OpenHPSDR\\";
+            string mine = root + "Thetis-aether\\";
+            try
+            {
+                string shared = root + "Thetis-x64";
+                if (!System.IO.Directory.Exists(mine) && System.IO.Directory.Exists(shared))
+                {
+                    foreach (string dir in System.IO.Directory.GetDirectories(shared, "*", System.IO.SearchOption.AllDirectories))
+                        System.IO.Directory.CreateDirectory(mine + dir.Substring(shared.Length + 1));
+                    System.IO.Directory.CreateDirectory(mine);
+                    foreach (string file in System.IO.Directory.GetFiles(shared, "*", System.IO.SearchOption.AllDirectories))
+                        System.IO.File.Copy(file, mine + file.Substring(shared.Length + 1), false);
+                }
+            }
+            catch { }
+            return mine;
         }
 
         // ---------------------------------------------------------------- Jull1ano fork: after the start

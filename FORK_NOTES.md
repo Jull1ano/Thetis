@@ -47,7 +47,11 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   ("brbrr", user 2026-11-15). The analyzer's view stays at the span edge; the display shows the rest of the view
   shifted (spectrum, waterfall rows via the frame's pixel reference, the frequency scale and overlays via
   RXDisplayLow/High), without data where the view has none; the DDC re-centres once at the release or when the mouse
-  rests 250 ms. The audio is untouched while dragging; one short soft mute at that re-centre.
+  rests 120 ms. The audio is untouched while dragging; one short soft mute at that re-centre.
+- Its own settings and skins: `%APPDATA%\OpenHPSDR\Thetis-aether` (a first start copies Thetis-x64 there once) with
+  its skins in `Thetis-aether\Skins` (the skin list, export and downloads); the original Thetis keeps Thetis-x64 and the
+  shared Skins folder (user, 2026-11-15: the original took the fork's skin and cyan colours from the shared settings).
+  `-datapath:` still picks any folder. The skin generator writes to `Thetis-aether\Skins\AetherSDR Style`.
 - One gap between neighbours (`forkGaps`): buttons, drop-downs and boxes side by side that touch or overlap (Rx Ant |
   Save | Restore, VFO lock A | B, AGC | ATT, the FM row, RX2's mode rows) get the SPLT | A > B grid's gap, measured
   from it; the row keeps its outer edges, the px come from the controls with room around their text (one each in
@@ -302,8 +306,9 @@ disabled states; AetherSDR's sliders (4 px groove, round light handle); a dark n
 combo boxes and number boxes from the skin's xml. Pictures are drawn at each control's 200 % size (crisp at 4K,
 scaled down at 100 %), opaque (Thetis paints selected buttons' back colour yellow behind them).
 
-    python -I Skins/make-aether-skin.py "%APPDATA%\OpenHPSDR\Skins\AetherSDR Style" "Project Files/Source/Console" "%APPDATA%\OpenHPSDR\Skins"
+    python -I Skins/make-aether-skin.py "%APPDATA%\OpenHPSDR\Thetis-aether\Skins\AetherSDR Style" "Project Files/Source/Console" "%APPDATA%\OpenHPSDR\Skins"
 
+(into aether-ui's own skins folder; the last folder only lends the sizes of controls the designer does not size)
 then Setup > Appearance > General > Skins > AetherSDR Style.
 
 The skin's xml also has a `<ForkTheme>` element, read by `Console/ForkTheme.cs` (other skins have none, so Thetis

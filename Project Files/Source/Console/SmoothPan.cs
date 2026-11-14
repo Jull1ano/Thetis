@@ -33,7 +33,7 @@ namespace Thetis
     {
         private const int PAN_DRAG_THRESHOLD_PX = 3;        // a press that moves less than this is a click
         private const double PAN_RETUNE_PACING_MS = 25.0;   // (not used while dragging since 2026-11-15, see panTowardsTarget)
-        private const double PAN_PAUSE_RETUNE_MS = 250.0;   // the mouse held still this long while dragging: the DDC follows
+        private const double PAN_PAUSE_RETUNE_MS = 120.0;   // the mouse held still this long while dragging: the DDC follows (was 250: slow to fill)
         private const double PAN_INERTIA_DECAY = 0.92;      // velocity factor per timer tick
         private const double PAN_INERTIA_MIN_PX = 0.05;     // inertia stops below this (px per tick)
         private const int PAN_TIMER_MS = 15;

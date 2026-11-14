@@ -1851,13 +1851,23 @@ namespace Thetis
             comboGanymedeCATPort.Items.AddRange(com_ports);
         }
         private string _skinPath = "";
+        // Jull1ano fork (aether-ui): its skins in its own settings folder (Console.ForkDefaultDataPath), so the original
+        // Thetis does not list them; skin downloads and exports go there too
+        private string forkSkinsDir()
+        {
+            string data = console != null ? console.AppDataPath : null;
+            if (string.IsNullOrEmpty(data)) data = Console.ForkDefaultDataPath();
+            return Path.Combine(data, "Skins");
+        }
         private void RefreshSkinList()
         {
             comboAppSkin.Items.Clear();
             btnRemoveSkin.Enabled = false;
 
             string path = ".\\Skins\\";
-            if (Directory.Exists(path))
+            if (Directory.Exists(forkSkinsDir()))
+                path = forkSkinsDir(); // Jull1ano fork (aether-ui): its own skins
+            else if (Directory.Exists(path))
                 path = ".\\Skins\\";
             else
                 path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) +
@@ -13267,7 +13277,9 @@ namespace Thetis
             Cursor.Current = Cursors.WaitCursor;
 
             string path = ".\\Skins\\";
-            if (!Directory.Exists(path + comboAppSkin.Text))
+            if (Directory.Exists(Path.Combine(forkSkinsDir(), comboAppSkin.Text)))
+                path = forkSkinsDir(); // Jull1ano fork (aether-ui): its own skins
+            else if (!Directory.Exists(path + comboAppSkin.Text))
                 path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) +
                         "\\OpenHPSDR\\Skins";
 
@@ -13298,8 +13310,7 @@ namespace Thetis
         private void btnSkinExport_Click(object sender, EventArgs e)
         {
 
-            string path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) +
-                    "\\OpenHPSDR\\Skins\\";
+            string path = forkSkinsDir() + "\\"; // Jull1ano fork (aether-ui): its own skins
 
             if (Directory.Exists(path + comboAppSkin.Text))
                 Skin.Save(comboAppSkin.Text, path, console);
@@ -28656,13 +28667,13 @@ namespace Thetis
                         {
                             if (bUsesFilesInRoot || e.BypassRootFolderCheck)
                             {
-                                sOutputPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\OpenHPSDR\\Skins";
+                                sOutputPath = forkSkinsDir(); // Jull1ano fork (aether-ui)
                                 bExtract = true;
                             }
                             else
                             {
                                 if (bConsoleFolderFoundInRoot || bMeterFolderFoundInRoot)
-                                    sOutputPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\OpenHPSDR\\Skins\\" + sFile;
+                                    sOutputPath = forkSkinsDir() + "\\" + sFile; // Jull1ano fork (aether-ui)
                                 else
                                     sOutputPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\OpenHPSDR";
                                 bExtract = true;
