@@ -800,7 +800,7 @@ static void sm_publish(DP a, int i, double tag_mhz)
 // only frame pixels pv0..pv1 hold valid data. Of those, the ones outside mv0..mv1 are quick fill (sm_quick_fill):
 // they stand in only where the pixel has no real data (av_valid 2 = quick fill), the next quick fill replaces them,
 // and the first real value starts the pixel over (it is not averaged with the coarse one, nor peak-held)
-static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0, int pv1, int mv0, int mv1)
+static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0, int pv1, int mv0, int mv1, int qblend)
 {
 	int j, k, x0, mode = a->av_mode[i];
 	double x, fr, val;
@@ -837,7 +837,7 @@ static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0
 	// short FFTs jump from frame to frame); the first real value where quick fill stood starts it over unsmoothed
 	for (j = 0; j < n; j++)
 	{
-		if (vt[j] == 2 && v[j] == 2)
+		if (qblend && vt[j] == 2 && v[j] == 2)
 		{
 			double sc = a->scale * a->cd[j], prev = sm_db(a, i, j), cur;
 			if (sc > 0.0 && prev > -199.0)
@@ -940,7 +940,7 @@ static void sm_follow_view(DP a, int publish)
 // quick fill: a short FFT of the newest samples (all taken at the newest LO), when the frame's valid part does not
 // cover the view; its power is matched to the main bins' noise floor (narrow carriers show lower until the full
 // window takes over). idx0: buffer index of the window's first sample; fresh: samples since the last LO change.
-static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_frame* fi)
+static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_frame* fi, int mode)
 {
 	int k, i, b, Ls, hs, idx, seg, nseg;
 	double low_rel, hzpp, fs = (double)a->sample_rate, scale, lo_req;
@@ -964,14 +964,26 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	// Welch: Ls the largest power of two that still gives 5 half-overlapping segments of the fresh samples (fewer,
 	// from 4096 points, right after the change), up to 8 averaged; the stand-in should look calm (user, 2026-11-15:
 	// "the lines are too grassy"), its resolution matters less
-	for (k = a->qf_levels - 1; k >= 0; k--)
-		if ((long long)(dQF_MIN << k) * 3 <= fresh)
-			break;
-	if (k < 0)
+	if (mode == 2)
 	{
-		if (fresh < (long long)dQF_MIN)
+		// a band change or a tune (not a pan): nothing until half a window of new samples, then one FFT of half the
+		// window, drawn like the full one (no averaging, no blending): the spectrum in half the time, at half the
+		// resolution, then the full one takes over (user, 2026-11-15: "when changing band, cut the time in half")
+		k = a->qf_levels - 1;
+		if (k < 0 || (long long)(dQF_MIN << k) * 2 < (long long)a->size || (long long)(dQF_MIN << k) > fresh)
 			return;
-		k = 0;
+	}
+	else
+	{
+		for (k = a->qf_levels - 1; k >= 0; k--)
+			if ((long long)(dQF_MIN << k) * 3 <= fresh)
+				break;
+		if (k < 0)
+		{
+			if (fresh < (long long)dQF_MIN)
+				return;
+			k = 0;
+		}
 	}
 	if (!a->qf_plan[k] || !a->qf_win[k])
 		return;
@@ -979,7 +991,7 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	hs = Ls / 2;
 	nseg = 1 + (int)((fresh - (long long)Ls) / (long long)hs);
 	if (nseg > 8) nseg = 8;
-	if (nseg < 1) nseg = 1;
+	if (nseg < 1 || mode == 2) nseg = 1;
 	scale = a->main_E / a->qf_E[k] / (double)nseg;
 	for (i = 0; i < Ls; i++)
 		a->qf_disp[i] = 0.0;
@@ -1005,7 +1017,7 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	a->qf_disp[0] = a->qf_disp[1];
 	a->qf_len = Ls;
 	fi->qf_bws = fs / (double)Ls;
-	fi->qf = 1;
+	fi->qf = mode;
 }
 
 // the short FFTs' plans and windows for this size (in SetAnalyzer, with the workers stopped: FFTW's planner is not
@@ -1118,8 +1130,8 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 		fi->vhi_hz = -Fmax + half;
 		if (fi->vhi_hz - fi->vlo_hz < 0.1 * fs)
 			fi->skip = 1;
-		if (qf_ok)	// a pan's re-centre; after a band change the full spectrum comes at once (user's choice)
-			sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi);
+		// a pan's re-centre (1): fast, calm, coarse; any other change (2, a band change): from half a window
+		sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi, qf_ok == 1 ? 1 : 2);
 	}
 
 	if (nev == 0 || fi->skip)
@@ -1248,7 +1260,7 @@ static void sm_stitch(int disp, sm_frame* fi)
 				sm_realign(a, i, lo_req * 1.0e6 + low_rel, hzpp, n);
 				if (pv0 <= pv1)
 					sm_accumulate(a, i, a->t_pixels[i], n,
-						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1, mv0, mv1);
+						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1, mv0, mv1, fi->qf == 1);
 				sm_publish(a, i, tag);
 			}
 		}
@@ -2162,6 +2174,7 @@ void XCreateAnalyzer(	int disp,
 	a->smooth_on = 0;
 	a->lat_ms = 2.5;
 	a->publish_mask = 1;	// pixel output 0 = panadapter; the waterfall (1) only gets real frames
+	a->qf_arm = 2;			// Jull1ano fork: LO changes use the half-window quick fill unless a pan arms the fast one
 	a->ev_count = 0;
 	a->base_lo = 0.0;
 	a->req_valid = 0;
@@ -2391,7 +2404,7 @@ void SetAnalyzerQuickFill(int disp, int on)
 	if (a == 0)
 		return;
 	EnterCriticalSection(&a->PixelRefSection);
-	a->qf_arm = on ? 1 : 0;
+	a->qf_arm = on ? 1 : 2;
 	LeaveCriticalSection(&a->PixelRefSection);
 }
 

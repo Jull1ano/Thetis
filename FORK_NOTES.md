@@ -58,7 +58,10 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   Calmer since 2026-11-15 01:3x: 5 to 8 Welch segments, and each quick value blended in dB with the pixel's previous
   quick value (70 % kept). Only a pan's re-centre uses it (SetAnalyzerQuickFill armed around panRetune; each LO event
   carries the flag): after a band change the full spectrum comes at once, as before (the user called the morphing
-  coarse spectrum after a band change "weird movement", as in AltSDR rc28).
+  coarse spectrum after a band change "weird movement", as in AltSDR rc28). Since 01:4x: any other LO change (a band
+  change, a tune) shows one FFT of half the window once half a window of new samples is in (0.68 s instead of
+  1.37 s at 262144 / 192 kHz), drawn like the full one (no Welch, no blend), then the full window takes over
+  (user: "when changing band, cut the time in half").
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.
 - Its own settings and skins: `%APPDATA%\OpenHPSDR\Thetis-aether` (a first start copies Thetis-x64 there once) with
