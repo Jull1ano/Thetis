@@ -3589,7 +3589,10 @@ namespace Thetis
             chkLegacyItems_hide_mic_comp_CheckedChanged(this, e);
             chkLegacyItems_hide_avg_peak_CheckedChanged(this, e);
             //
-            chkDiscordEnabled_CheckedChanged(this, e);
+            // Jull1ano fork: with Discord off, its callsign check (the country label on its Setup page) once the console
+            // shows: 289 ms of every start (the callsign regex and the country data)
+            if (chkDiscordEnabled.Checked) chkDiscordEnabled_CheckedChanged(this, e);
+            else console.ForkAfterStart(() => chkDiscordEnabled_CheckedChanged(this, EventArgs.Empty));
             chkDiscordTimeStamp_CheckedChanged(this, e);
 
             // filter item config

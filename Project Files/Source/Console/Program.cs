@@ -23,6 +23,15 @@ namespace Thetis
             Console.RunMain(args);
         }
 
+        // a short key for this exe's folder (the JIT profile, the last skin)
+        public static string ForkExeKey()
+        {
+            string exeDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\').ToLowerInvariant();
+            uint h = 2166136261;
+            foreach (char c in exeDir) { h ^= c; h *= 16777619; }
+            return h.ToString("x8");
+        }
+
         // .NET's multicore JIT: each start records the methods it compiles, and the next start compiles them on the
         // other cores ahead of use instead of one by one on the way (Thetis is a few hundred thousand lines; the Setup
         // window alone has thousands of controls). One profile per exe folder in %LOCALAPPDATA%\OpenHPSDR\ThetisForkJit;
@@ -34,11 +43,8 @@ namespace Thetis
                 if (Environment.GetEnvironmentVariable("THETIS_NO_MCJ") == "1") return;
                 string root = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenHPSDR", "ThetisForkJit");
                 System.IO.Directory.CreateDirectory(root);
-                string exeDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\').ToLowerInvariant();
-                uint h = 2166136261;
-                foreach (char c in exeDir) { h ^= c; h *= 16777619; }
                 System.Runtime.ProfileOptimization.SetProfileRoot(root);
-                System.Runtime.ProfileOptimization.StartProfile("startup-" + h.ToString("x8") + ".jitprofile");
+                System.Runtime.ProfileOptimization.StartProfile("startup-" + ForkExeKey() + ".jitprofile");
             }
             catch { }
         }

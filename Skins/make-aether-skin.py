@@ -79,7 +79,11 @@ for m in re.finditer(r'this\.(\w+)\.ForeColor = System\.Drawing\.(?:Color|System
     fore[m.group(1)] = m.group(2)
 
 skin_pngs = {}  # name -> size of an installed skin's picture (for controls the designer does not size)
+# not this skin's own pictures: they are at 200 %, read as 100 % sizes they doubled at every run (2026-11-14: 64 x,
+# 10240 x 2944 px pictures, 7.3 GB of pixels decoded at every Thetis start)
 for s in sorted(os.listdir(SKINS)):
+    if os.path.normcase(os.path.abspath(os.path.join(SKINS, s))) == os.path.normcase(os.path.abspath(OUT)) or s == 'AetherSDR Style':
+        continue
     for sub in ('Console', 'console'):
         d = os.path.join(SKINS, s, sub)
         if os.path.isdir(d):

@@ -62,6 +62,18 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   ahead of use. Profile per exe folder in `%LOCALAPPDATA%\OpenHPSDR\ThetisForkJit`; `THETIS_NO_MCJ=1` switches it off.
   Start to the main window, no radio, warm: 8.4 -> 7.7 s (both twice). The whole round: 12.8 s -> 7.7 s; left: the
   Setup window 4.5 s (its controls 1.3 s, applying the saved settings 2.7 s), DSP 1.1 s, radio 0.7 s.
+- The skin load at start (1.33 s for AetherSDR Style, the biggest part of applying the saved settings): 97 of its
+  1289 pictures were 10240 x 2944 / 6400 x 2944 px (7.3 GB of pixels decoded at every start): make-aether-skin.py read
+  the sizes of controls the designer does not size from the installed skins, its own output first, so they doubled
+  at every run. The generator skips its own skin now; regenerated: 35 MB of pixels. The skin folder is also listed
+  once per load (it checked each picture's file on disk: 3930 checks, 148 ms). A picture file changed since the last
+  load maps to its new contents (upstream kept the first hash it saw for a path). Decoding the pictures on other
+  threads was tried and dropped: GDI+ decodes under one lock (many threads at the load: +4.7 s; one thread from the
+  start: +2.6 s).
+- With Discord off, its callsign check (the country label on its Setup page) runs once the console shows (289 ms).
+- Start to the main window, no radio, warm, after all of the above: 6.5 s (twice); applying the saved settings
+  2.6 -> 1.4 s. Left: the Setup window's controls 1.3 s, the radio list 0.27 s, the display engine 0.2 s, 22 VAC
+  settings 0.24 s (each `Sleep(10)` in WDSP rmatch.c, waiting for audio that does not run yet), DSP 1.1 s, radio 0.7 s.
 - Start-up times saved as text: `%TEMP%\thetis-fork-startup.txt` (each step of Thetis' own start-up log, its offset and
   ms), written when the start finishes, so a slow start can be read afterwards; also the steps up to the finder
   (PortAudio wait, ASIO page, CPU counter) and, after the start, "Power on" and the "first spectrum frame".

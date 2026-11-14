@@ -134,9 +134,10 @@ namespace Thetis
         public static bool Restore(string name, string p, Form f)
         {
             path = p + "\\" + name;
+            forkListSkin(f.Name); // Jull1ano fork: the skin folder listed once, its pictures decoded on all cores
             Skin.name = name;
 
-            if (File.Exists(path + "\\" + f.Name + "\\" + f.Name + pic_file_ext))
+            if (skinFileExists(path + "\\" + f.Name + "\\" + f.Name + pic_file_ext))
             {
                 if (!(f is Console))
                 {
@@ -147,7 +148,7 @@ namespace Thetis
                     m_objConsole.CachedBackgroundImage = loadImage(path + "\\" + f.Name + "\\" + f.Name + pic_file_ext);
                 }
             }
-            else if (File.Exists(path + "\\" + "Console" + "\\" + "Console" + pic_file_ext))
+            else if (skinFileExists(path + "\\" + "Console" + "\\" + "Console" + pic_file_ext))
             {
                 if (!(f is Console))
                 {
@@ -173,7 +174,7 @@ namespace Thetis
             foreach (Control c in f.Controls) // load in images
                 ReadImages(c);
 
-            if (!File.Exists(path + "\\" + name + ".xml"))
+            if (!skinFileExists(path + "\\" + name + ".xml"))
             {
                 /*TextWriter writer = new StreamWriter(app_data_path + "\\xml_error.log", true);
                writer.WriteLine(DateTime.Now.ToShortDateString() + " " + DateTime.Now.ToShortTimeString() + " " +
@@ -747,14 +748,14 @@ namespace Thetis
 
                 for (int i = 0; i < 8; i++)
                 {
-                    if (File.Exists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
+                    if (skinFileExists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
                     {
                         Image img = loadImage(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext);
                         if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), forkCrispArrow(img, b, ii, ref tri));
                     }
                     else
                     {
-                        if (File.Exists(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
+                        if (skinFileExists(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
                         {
                             Image img = loadImage(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext);
                             if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), forkCrispArrow(img, b, ii, ref tri));
@@ -811,9 +812,9 @@ namespace Thetis
             for (int i = 0; i < 8; i++)
             {
                 string spath = path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + i.ToString() + pic_file_ext;
-                if(!File.Exists(spath))
+                if(!skinFileExists(spath))
                     spath = path + "\\" + "Console" + "\\" + ctrl.Name + "-" + i.ToString() + pic_file_ext;
-                if (File.Exists(spath))
+                if (skinFileExists(spath))
                 {
                     Image img = loadImage(spath); // load to cache it                
                     if (_image_cache_map.ContainsKey(spath))
@@ -1024,9 +1025,9 @@ namespace Thetis
             for (int i=0; i<8; i++)
             {
                 string spath = path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + i.ToString() + pic_file_ext;
-                if (!File.Exists(spath))
+                if (!skinFileExists(spath))
                     spath = path + "\\" + "Console" + "\\" + ctrl.Name + "-" + i.ToString() + pic_file_ext;
-                if (File.Exists(spath))
+                if (skinFileExists(spath))
                 {
                     Image img = loadImage(spath); // load to cache it
                     if (_image_cache_map.ContainsKey(spath))
@@ -1118,14 +1119,14 @@ namespace Thetis
 
                 for (int i = 0; i < 8; i++)
                 {
-                    if (File.Exists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
+                    if (skinFileExists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
                     {
                         Image img = loadImage(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext);
                         if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), img);
                     }
                     else
                     {
-                        if (File.Exists(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
+                        if (skinFileExists(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext))
                         {
                             Image img = loadImage(path + "\\" + "Console" + "\\" + ctrl.Name + sBut + "-" + i.ToString() + pic_file_ext);
                             if(img != null) b.ImageList.Images.Add(((ImageState)i).ToString(), img);
@@ -1541,9 +1542,9 @@ namespace Thetis
             for (int i = 0; i < 8; i++)
             {
                 string spath = path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + i.ToString() + pic_file_ext;
-                if (!File.Exists(spath))
+                if (!skinFileExists(spath))
                     spath = path + "\\" + "Console" + "\\" + ctrl.Name + "-" + i.ToString() + pic_file_ext;
-                if (File.Exists(spath))
+                if (skinFileExists(spath))
                 {
                     Image img = loadImage(spath); // load to cache it
                     if (_image_cache_map.ContainsKey(spath))
@@ -1762,31 +1763,31 @@ namespace Thetis
             // load images
            // string s = path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-";
 
-            if (File.Exists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + "back" + pic_file_ext))
+            if (skinFileExists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + "back" + pic_file_ext))
             {
                 ctrl.BackgroundImage = loadImage(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + "back" + pic_file_ext);
             }
-            else if (File.Exists(path + "\\" + "Console" + "\\" + ctrl.Name + "-" + "back" + pic_file_ext))
+            else if (skinFileExists(path + "\\" + "Console" + "\\" + ctrl.Name + "-" + "back" + pic_file_ext))
             {
                 ctrl.BackgroundImage = loadImage(path + "\\" + "Console" + "\\" + ctrl.Name + "-" + "back" + pic_file_ext);
             }
             else ctrl.BackgroundImage = null;
 
-            //             if (File.Exists(s + "back" + pic_file_ext))
+            //             if (skinFileExists(s + "back" + pic_file_ext))
             //                 ctrl.BackgroundImage = /*Image.FromFile*/loadImage(s + "back" + pic_file_ext);
             //             else ctrl.BackgroundImage = null;
 
-            if (File.Exists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + "head" + pic_file_ext))
+            if (skinFileExists(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + "head" + pic_file_ext))
             {
                 ctrl.HeadImage = loadImage(path + "\\" + ctrl.TopLevelControl.Name + "\\" + ctrl.Name + "-" + "head" + pic_file_ext);
             }
-            else if (File.Exists(path + "\\" + "Console" + "\\" + ctrl.Name + "-" + "head" + pic_file_ext))
+            else if (skinFileExists(path + "\\" + "Console" + "\\" + ctrl.Name + "-" + "head" + pic_file_ext))
             {             
                 ctrl.HeadImage = loadImage(path + "\\" + "Console" + "\\" + ctrl.Name + "-" + "head" + pic_file_ext);
             }
             else ctrl.HeadImage = null;
 
-           // ctrl.HeadImage = File.Exists(s + "head" + pic_file_ext) ? /*Image.FromFile*/loadImage(s + "head" + pic_file_ext) : null;
+           // ctrl.HeadImage = skinFileExists(s + "head" + pic_file_ext) ? /*Image.FromFile*/loadImage(s + "head" + pic_file_ext) : null;
 
             ctrl.Invalidate();
         }
@@ -1917,9 +1918,9 @@ namespace Thetis
 
             string ctrl_name = c.Name;            
 
-            if (File.Exists(path + "\\" + c.TopLevelControl.Name + "\\" + ctrl_name + pic_file_ext))
+            if (skinFileExists(path + "\\" + c.TopLevelControl.Name + "\\" + ctrl_name + pic_file_ext))
                 objImg = loadImage(path + "\\" + c.TopLevelControl.Name + "\\" + ctrl_name + pic_file_ext);
-            else if (File.Exists(path + "\\" + "Console" + "\\" + ctrl_name + pic_file_ext))
+            else if (skinFileExists(path + "\\" + "Console" + "\\" + ctrl_name + pic_file_ext))
                 objImg = loadImage(path + "\\" + "Console" + "\\" + ctrl_name + pic_file_ext);
             else objImg = null;
 
@@ -1930,9 +1931,9 @@ namespace Thetis
                 // look for image called picDisplay instead, as we have moved from picDisplay to pnlDisplay
                 ctrl_name = "picDisplay";
 
-                if (File.Exists(path + "\\" + c.TopLevelControl.Name + "\\" + ctrl_name + pic_file_ext))
+                if (skinFileExists(path + "\\" + c.TopLevelControl.Name + "\\" + ctrl_name + pic_file_ext))
                     objImg = loadImage(path + "\\" + c.TopLevelControl.Name + "\\" + ctrl_name + pic_file_ext);
-                else if (File.Exists(path + "\\" + "Console" + "\\" + ctrl_name + pic_file_ext))
+                else if (skinFileExists(path + "\\" + "Console" + "\\" + ctrl_name + pic_file_ext))
                     objImg = loadImage(path + "\\" + "Console" + "\\" + ctrl_name + pic_file_ext);
                 else objImg = null;
             }
@@ -1970,7 +1971,7 @@ namespace Thetis
 
                 if (_image_cache.TryGetValue(hash, out img))
                 {
-                    if (!_image_cache_map.TryGetValue(path, out _)) _image_cache_map[path] = hash;
+                    _image_cache_map[path] = hash;
                     return img;
                 }
 
@@ -1978,7 +1979,7 @@ namespace Thetis
                 using (Image imgFile = Image.FromStream(ms))
                     img = new Bitmap(imgFile);
                 _image_cache[hash] = img;
-                if (!_image_cache_map.TryGetValue(path, out _)) _image_cache_map[path] = hash;
+                _image_cache_map[path] = hash;
             }
             catch (Exception)
             {
@@ -1986,6 +1987,45 @@ namespace Thetis
             }
             return img;
         }
+        // Jull1ano fork: a skin load checked each picture's file on disk (3930 checks, 148 ms for AetherSDR Style at
+        // start); now the skin folder is listed once per load and other paths are checked on disk as before.
+        // (Decoding the pictures on other threads was tried: GDI+ decodes under one lock, and many threads at the load
+        // or one thread from the start made the start 2.6 to 4.7 s slower.)
+        private static HashSet<string> _skinFiles;  // full paths in this load's skin folder
+        private static string _skinFilesRoot = "";
+
+        private static string forkFull(string p)
+        {
+            try { return Path.GetFullPath(p); } catch { return p; }
+        }
+
+        private static bool skinFileExists(string p)
+        {
+            if (_skinFiles != null && !string.IsNullOrEmpty(p))
+            {
+                string full = forkFull(p);
+                if (full.StartsWith(_skinFilesRoot, StringComparison.OrdinalIgnoreCase)) return _skinFiles.Contains(full);
+            }
+            return File.Exists(p);
+        }
+
+        private static void forkListSkin(string formName)
+        {
+            _skinFiles = null;
+            try
+            {
+                string root = forkFull(path).TrimEnd('\\');
+                if (!Directory.Exists(root)) return;
+                _skinFilesRoot = root + "\\";
+                _skinFiles = new HashSet<string>(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception ex)
+            {
+                _skinFiles = null;
+                HighDpi.Log("skin list: " + ex.Message);
+            }
+        }
+
         private static Image getImageFromFilePath(string path)
         {
             if (!_image_cache_map.ContainsKey(path)) return null;

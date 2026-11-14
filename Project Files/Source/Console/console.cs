@@ -1168,6 +1168,7 @@ namespace Thetis
 
             LogTool.Completed("THET");
             LogTool.Finish();
+            forkRunAfterStart(); // Jull1ano fork: work that can wait until the console shows
 
 
             //_spectrumProcessor = new clsSpectrumProcessor(this);
@@ -46707,6 +46708,28 @@ namespace Thetis
                     if (!ForkTheme.BoxBorder.IsEmpty && ForkTheme.Themes(box)) box.BringToFront();
             }
             catch (Exception ex) { HighDpi.Log("theme labels: " + ex.Message); }
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: after the start
+        // Work the start does not need (Setup.ForceAllEvents hands it here): run once the console shows and its message
+        // loop runs; at once when the start is over (a later ForceAllEvents, e.g. a database import).
+        private readonly List<Action> _forkAfterStart = new List<Action>();
+        private bool _forkStarted;
+        public void ForkAfterStart(Action a)
+        {
+            if (a == null) return;
+            if (_forkStarted) { a(); return; }
+            _forkAfterStart.Add(a);
+        }
+        private void forkRunAfterStart()
+        {
+            _forkStarted = true;
+            if (_forkAfterStart.Count == 0) return;
+            Action[] list = _forkAfterStart.ToArray();
+            _forkAfterStart.Clear();
+            MethodInvoker run = () => { foreach (Action a in list) { try { a(); } catch (Exception ex) { HighDpi.Log("after start: " + ex.Message); } } };
+            try { if (IsHandleCreated) BeginInvoke(run); else run(); }
+            catch { run(); }
         }
 
         // ---------------------------------------------------------------- Jull1ano fork: RX2's own zoom
