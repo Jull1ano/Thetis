@@ -320,8 +320,10 @@ for n, t in sorted(types.items()):
     elif t in ('NumericUpDownTS', 'NumericUpDown'):
         lines.append('    <%s><BackColor>%s</BackColor><ForeColor>%s</ForeColor></%s>' % (n, hexcol((20, 28, 40, 220)), hexcol('#c8d8e8'), n))
     elif t in ('TextBoxTS', 'TextBox') and n not in VFO_BOXES:
-        # value boxes (tune step, quick memory, band stack): AetherSDR's value field (BandBar kValueStyle)
-        lines.append('    <%s><BackColor>%s</BackColor><ForeColor>%s</ForeColor></%s>' % (n, hexcol((20, 28, 40, 220)), hexcol('#c8d8e8'), n))
+        # value boxes (tune step, quick memory, band stack): AetherSDR's value field (BandBar kValueStyle); a 3D border
+        # (a frame round the window, which the fork draws as the theme's subtle edge - a single line edit box draws its
+        # border inside itself, grey, where it cannot be reached)
+        lines.append('    <%s><BackColor>%s</BackColor><BorderStyle>Fixed3D</BorderStyle><ForeColor>%s</ForeColor></%s>' % (n, hexcol((20, 28, 40, 220)), hexcol('#c8d8e8'), n))
 for n in ('chkForkNR2', 'chkForkNR3', 'chkForkNR4', 'chkForkNNR'):  # the fork's NR buttons (drawn with chkNR's pictures)
     lines.append('    <%s><ForeColor>%s</ForeColor></%s>' % (n, hexcol(STYLES['dsp']['text']), n))
 lines += ['  </Controls>',

@@ -124,7 +124,7 @@ namespace Thetis
                 if (c is ComboBox cb) ForkComboPainter.Attach(cb);
                 else if ((c is TextBoxBase tb && tb.BorderStyle != BorderStyle.None) || (c is PictureBox pb && pb.BorderStyle != BorderStyle.None))
                     ForkBoxBorder.Attach(c);
-                else if (c is UpDownBase ud) ForkUpDownBorder.Attach(ud);
+                else if (c is UpDownBase ud) { ForkUpDownBorder.Attach(ud); ForkBoxBorder.Attach(ud); }
                 if (c.HasChildren && !(c is UpDownBase) && !(c is ComboBox)) walk(c);
             }
         }
@@ -133,7 +133,7 @@ namespace Thetis
         {
             foreach (Control c in p.Controls)
             {
-                if ((c is TextBoxBase tb && tb.BorderStyle != BorderStyle.None) || (c is PictureBox pb && pb.BorderStyle != BorderStyle.None)) yield return c;
+                if ((c is TextBoxBase tb && tb.BorderStyle != BorderStyle.None) || (c is PictureBox pb && pb.BorderStyle != BorderStyle.None) || c is UpDownBase) yield return c;
                 if (c.HasChildren) foreach (Control k in allBoxes(c)) yield return k;
             }
         }
@@ -176,7 +176,7 @@ namespace Thetis
 
         // ---------------------------------------------------------------- Win32
         internal const int WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_NCPAINT = 0x0085, WM_ENABLE = 0x000A;
-        internal const int WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PRINTCLIENT = 0x0318;
+        internal const int WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PRINTCLIENT = 0x0318, WM_NCCALCSIZE = 0x0083;
 
         [StructLayout(LayoutKind.Sequential)] internal struct RECT { public int Left, Top, Right, Bottom; }
         [StructLayout(LayoutKind.Sequential)] internal struct POINT { public int X, Y; }
@@ -203,6 +203,7 @@ namespace Thetis
         [DllImport("user32.dll")] internal static extern bool RedrawWindow(IntPtr h, IntPtr r, IntPtr rgn, uint flags);
         [DllImport("user32.dll", EntryPoint = "SendMessage")] internal static extern IntPtr SendMessageRect(IntPtr h, int msg, IntPtr w, ref RECT r);
         internal const int EM_SETRECT = 0x00B3;
+        [DllImport("user32.dll")] internal static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
         internal const uint RDW_INVALIDATE = 0x1, RDW_FRAME = 0x400, RDW_UPDATENOW = 0x100;
     }
 
@@ -223,6 +224,8 @@ namespace Thetis
         {
             if (Handle != IntPtr.Zero) ReleaseHandle();
             AssignHandle(_c.Handle);
+            // the window's frame was worked out while it was being made, before this hook: again, now
+            if (Centre.Contains(_c)) _c.BeginInvoke(new MethodInvoker(() => RecalcFrame(_c)));
         }
 
         public static void Attach(Control c)
@@ -232,6 +235,16 @@ namespace Thetis
             new ForkBoxBorder(c);
         }
 
+        // single-line text boxes taller than their text: the room above and below it framed (in the window's frame), so
+        // the text sits in the middle
+        internal static readonly HashSet<Control> Centre = new HashSet<Control>();
+
+        public static void RecalcFrame(Control c)
+        {
+            if (c != null && c.IsHandleCreated)
+                ForkTheme.SetWindowPos(c.Handle, IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020); // NOSIZE NOMOVE NOZORDER NOACTIVATE FRAMECHANGED
+        }
+
         public static void RedrawFrame(Control c)
         {
             if (c.IsHandleCreated) ForkTheme.RedrawWindow(c.Handle, IntPtr.Zero, IntPtr.Zero, ForkTheme.RDW_INVALIDATE | ForkTheme.RDW_FRAME);
@@ -239,10 +252,53 @@ namespace Thetis
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == ForkTheme.WM_NCCALCSIZE)
+            {
+                ForkTheme.RECT w = m.LParam != IntPtr.Zero ? (ForkTheme.RECT)Marshal.PtrToStructure(m.LParam, typeof(ForkTheme.RECT)) : new ForkTheme.RECT();
+                base.WndProc(ref m);
+                if (!ForkTheme.BoxBorder.IsEmpty && Centre.Contains(_c) && _c is TextBoxBase tb && !tb.Multiline && m.LParam != IntPtr.Zero)
+                {
+                    // the proposed client area (the first RECT of NCCALCSIZE_PARAMS, or the RECT): as tall as the box's
+                    // own client at its natural size (PreferredHeight less its frame), centred
+                    ForkTheme.RECT r = (ForkTheme.RECT)Marshal.PtrToStructure(m.LParam, typeof(ForkTheme.RECT));
+                    int frame = (w.Bottom - w.Top) - (r.Bottom - r.Top);
+                    int lineH = Math.Max(tb.Font.Height, tb.PreferredHeight - Math.Max(0, frame));
+                    int ch = r.Bottom - r.Top;
+                    if (ch > lineH)
+                    {
+                        int pad = (ch - lineH) / 2;
+                        r.Top += pad;
+                        r.Bottom = r.Top + lineH;
+                        Marshal.StructureToPtr(r, m.LParam, false);
+                    }
+                }
+                return;
+            }
             base.WndProc(ref m);
             if (ForkTheme.BoxBorder.IsEmpty) return;
+            if (_c is UpDownBase)
+            {
+                if (m.Msg == ForkTheme.WM_PAINT && ForkTheme.Themes(_c)) paintClientFrame();
+                return;
+            }
             if (m.Msg == ForkTheme.WM_NCPAINT || m.Msg == ForkTheme.WM_SETFOCUS || m.Msg == ForkTheme.WM_KILLFOCUS || m.Msg == ForkTheme.WM_ENABLE)
                 paintFrame();
+        }
+
+        // a number box: its edge ring in the client area (the children, edit and buttons, are clipped out)
+        private void paintClientFrame()
+        {
+            IntPtr h = Handle;
+            if (h == IntPtr.Zero) return;
+            IntPtr dc = ForkTheme.GetDC(h);
+            if (dc == IntPtr.Zero) return;
+            try
+            {
+                using (Graphics g = Graphics.FromHdc(dc))
+                    ForkTheme.PaintFrame(g, _c.ClientRectangle, ForkTheme.BehindColor(_c), _c.BackColor, ForkTheme.BoxBorder, ForkTheme.BoxRadius);
+            }
+            catch { }
+            finally { ForkTheme.ReleaseDC(h, dc); }
         }
 
         private void paintFrame()
@@ -281,20 +337,6 @@ namespace Thetis
         {
             if (_attached.Contains(u)) return;
             _attached.Add(u);
-            u.Paint += (s, e) =>
-            {
-                if (ForkTheme.BoxBorder.IsEmpty || u.BorderStyle == BorderStyle.None) return;
-                Rectangle r = u.ClientRectangle;
-                int lw = Math.Max(1, HighDpi.Px(1));
-                using (Region keep = new Region(r))
-                {
-                    keep.Exclude(Rectangle.Inflate(r, -2 * lw, -2 * lw)); // only the edge ring: the edit and buttons are children
-                    Region old = e.Graphics.Clip;
-                    e.Graphics.Clip = keep;
-                    ForkTheme.PaintFrame(e.Graphics, r, ForkTheme.BehindColor(u), u.BackColor, ForkTheme.BoxBorder, ForkTheme.BoxRadius);
-                    e.Graphics.Clip = old;
-                }
-            };
             // the up / down buttons (a child control Windows draws light): drawn over as the drop-downs' arrow - the
             // box's face, two small arrows, the one under the mouse lit, a pressed one on the theme's blue
             foreach (Control b in u.Controls)

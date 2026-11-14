@@ -29,6 +29,13 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
 - Value boxes (tune step, quick memory, band stack) in AetherSDR's value colours (skin xml); the slider knob a vector
   circle (14 px, lighter under the mouse; ForkTheme <Slider>); the console's number boxes' up / down buttons drawn as
   the drop-downs' arrow (Setup's untouched); the band text under each VFO as tall as its TX button, text centred.
+- Boxes in line: the band text and its TX button, the quick memory box and the VFO lock buttons, the tune step box
+  and its - / +: as tall as the buttons (or as the text needs), centred on them, the text in the middle. The centring
+  is in the window's frame (ForkBoxBorder handles WM_NCCALCSIZE: the room above and below one text line), recalculated
+  once the hook attaches (the skin is applied before the console's windows exist).
+- One edge for every box: Thetis runs without visual styles, so a single-line box (FixedSingle) draws its grey
+  #646464 border inside itself; the theme gives the value boxes a 3D border (a window frame) that the fork paints
+  as the subtle edge. Number boxes draw a 1 px #abadb3 border in their client area: painted over after they paint.
 
 
 Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:

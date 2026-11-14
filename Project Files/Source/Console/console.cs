@@ -764,9 +764,11 @@ namespace Thetis
             forkTieAtt(udRX1StepAttData, comboPreamp);    // Jull1ano fork: the S-ATT box exactly over the ATT drop-down
             forkTieAtt(udRX2StepAttData, comboRX2Preamp);
             forkCreatePause();                 // Jull1ano fork: pause (P) above Power
-            forkTieBandBox(txtVFOABand, chkVFOATX); // Jull1ano fork: band text as tall as its TX button (themed)
-            forkTieBandBox(txtVFOBBand, chkVFOBTX);
-            ForkTheme.Applied += (root) => { if (root == this) { forkAlignBandBox(txtVFOABand, chkVFOATX); forkAlignBandBox(txtVFOBBand, chkVFOBTX); } };
+            forkTieBox(txtVFOABand, chkVFOATX); // Jull1ano fork: (themed) band text as tall as its TX button,
+            forkTieBox(txtVFOBBand, chkVFOBTX); // the quick memory box as the VFO lock buttons, the tune step box as its - / +
+            forkTieBox(txtMemoryQuick, chkVFOLock);
+            forkTieBox(txtWheelTune, btnTuneStepChangeSmaller);
+            ForkTheme.Applied += (root) => { if (root == this) foreach (KeyValuePair<TextBox, Control> kv in _forkBoxRefs) forkAlignBox(kv.Key, kv.Value); };
             _forkModeBaseTop = panelMode.Top;
             panelMode.LocationChanged += (s, e) => { if (!_forkMovingMode) _forkModeBaseTop = panelMode.Top; }; // the layout's place
             forkLoadDisplayOptions(app_data_path); // and the two-colour fill
@@ -46541,55 +46543,53 @@ namespace Thetis
             _forkPause.BringToFront();
         }
 
-        // ---------------------------------------------------------------- Jull1ano fork: band boxes in line
-        // With a themed console (ForkTheme): the band text under each VFO as tall as the TX button beside it, their edges
-        // in line, the text centred in it. With any other skin back to Thetis' size.
-        private readonly Dictionary<TextBox, Rectangle> _forkBandBoxOrig = new Dictionary<TextBox, Rectangle>();
+        // ---------------------------------------------------------------- Jull1ano fork: boxes in line
+        // With a themed console (ForkTheme): a value box as tall as the buttons beside it, their edges in line (the band
+        // text under each VFO and its TX button, the quick memory box and the VFO lock buttons, the tune step box and its
+        // - / +), the text in the middle (ForkBoxBorder frames the room above and below it). Thetis' size with any other skin.
+        private readonly Dictionary<TextBox, Control> _forkBoxRefs = new Dictionary<TextBox, Control>();
+        private readonly Dictionary<TextBox, Rectangle> _forkBoxOrig = new Dictionary<TextBox, Rectangle>();
         private bool _forkAligning;
-        private void forkTieBandBox(TextBox box, Control tx)
+        private void forkTieBox(TextBox box, Control reference)
         {
-            EventHandler h = (s, e) => forkAlignBandBox(box, tx);
-            tx.SizeChanged += h;
-            tx.LocationChanged += h;
+            if (box == null || reference == null) return;
+            _forkBoxRefs[box] = reference;
+            EventHandler h = (s, e) => forkAlignBox(box, reference);
+            reference.SizeChanged += h;
+            reference.LocationChanged += h;
             box.LocationChanged += h;
             box.SizeChanged += h;
-            box.HandleCreated += (s, e) => forkCentreText(box);
+            box.FontChanged += (s, e) => ForkBoxBorder.RecalcFrame(box);
         }
 
-        private void forkAlignBandBox(TextBox box, Control tx)
+        private void forkAlignBox(TextBox box, Control reference)
         {
-            if (_forkAligning || box.Parent != tx.Parent) return;
+            if (_forkAligning || box.Parent != reference.Parent) return;
             bool themed = !ForkTheme.BoxBorder.IsEmpty && ForkTheme.Themes(box);
             _forkAligning = true;
             try
             {
                 if (themed)
                 {
-                    if (!_forkBandBoxOrig.ContainsKey(box)) _forkBandBoxOrig[box] = box.Bounds;
-                    if (!box.Multiline) { box.WordWrap = false; box.Multiline = true; }
-                    if (box.Top != tx.Top || box.Height != tx.Height) box.SetBounds(box.Left, tx.Top, box.Width, tx.Height);
-                    forkCentreText(box);
+                    if (!_forkBoxOrig.ContainsKey(box)) _forkBoxOrig[box] = box.Bounds;
+                    if (box.Multiline) box.Multiline = false;
+                    box.AutoSize = false;
+                    bool centre = ForkBoxBorder.Centre.Add(box);
+                    // as tall as the buttons, or as its text needs if more, centred on them
+                    int h = Math.Max(reference.Height, box.PreferredHeight), top = reference.Top - (h - reference.Height) / 2;
+                    if (box.Top != top || box.Height != h) box.SetBounds(box.Left, top, box.Width, h);
+                    else if (centre) ForkBoxBorder.RecalcFrame(box);
                 }
-                else if (_forkBandBoxOrig.TryGetValue(box, out Rectangle o))
+                else if (_forkBoxOrig.TryGetValue(box, out Rectangle o))
                 {
-                    _forkBandBoxOrig.Remove(box);
-                    box.Multiline = false;
+                    _forkBoxOrig.Remove(box);
+                    ForkBoxBorder.Centre.Remove(box);
                     box.SetBounds(box.Left, o.Top, box.Width, o.Height);
+                    box.AutoSize = true;
+                    ForkBoxBorder.RecalcFrame(box);
                 }
             }
             finally { _forkAligning = false; }
-        }
-
-        // a multi-line box's text area: one line high, in the middle
-        private static void forkCentreText(TextBox box)
-        {
-            if (!box.Multiline || !box.IsHandleCreated) return;
-            int lineH = TextRenderer.MeasureText("Ag", box.Font).Height;
-            Size c = box.ClientSize;
-            int top = Math.Max(0, (c.Height - lineH) / 2);
-            ForkTheme.RECT r = new ForkTheme.RECT { Left = HighDpi.Px(2), Top = top, Right = Math.Max(HighDpi.Px(3), c.Width - HighDpi.Px(2)), Bottom = top + lineH };
-            ForkTheme.SendMessageRect(box.Handle, ForkTheme.EM_SETRECT, IntPtr.Zero, ref r);
-            box.Invalidate();
         }
 
         // the area a panel's buttons take (all of them, shown or not: a hidden page's buttons read as hidden)
