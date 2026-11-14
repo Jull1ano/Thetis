@@ -7559,6 +7559,49 @@ namespace Thetis
         private int m_nLowOutRX2;
         private int m_nHighOutRX2;
 
+        // Jull1ano fork: the FM receive filter set by hand (an edge dragged on the spectrum, mirrored as in AM; the Width
+        // slider), kept centred on the carrier. A request of exactly deviation + RX high cut (the 2.5k / 5.0k buttons,
+        // Setup's high cut) puts it back there. Kept across mode changes until then; a start begins at that width.
+        private readonly int[] _forkFmHalf = new int[3]; // [1] RX1, [2] RX2; 0: deviation + high cut
+        private int forkFmHalf(int rx, int low, int high, int curLow, int curHigh, int defHalf)
+        {
+            int half;
+            if (low == -high) half = high;
+            else if (low != curLow && high == curHigh) half = -low;
+            else if (high != curHigh && low == curLow) half = high;
+            else half = Math.Max(Math.Abs(curLow), Math.Abs(curHigh)); // the whole filter moved: FM stays centred
+            half = Math.Max(500, Math.Min(MaxFilterWidth, Math.Abs(half)));
+            _forkFmHalf[rx] = half == defHalf ? 0 : half;
+            return half;
+        }
+        private int ForkFmHalfOr(int rx, int defHalf) { return _forkFmHalf[rx] > 0 ? _forkFmHalf[rx] : defHalf; }
+
+        // the Width slider in FM: the same scale as in the other modes, half the width each side of the carrier
+        private void forkFmWidthScroll(EventArgs e)
+        {
+            MouseEventArgs mouseEvent = e as MouseEventArgs;
+            bool bScrollUp = mouseEvent != null ? mouseEvent.Delta >= 0 : false;
+            int range = ptbFilterWidth.Maximum - ptbFilterWidth.Minimum;
+            if (range <= 0) return;
+            double tmp = 0;
+            switch (current_filter_width_mode)
+            {
+                case FilterWidthMode.Linear:
+                    tmp = (float)(ptbFilterWidth.Value - ptbFilterWidth.Minimum) / range * _max_filter_width;
+                    break;
+                case FilterWidthMode.Log:
+                    tmp = (Math.Log(ptbFilterWidth.Maximum) - Math.Log(Math.Max(ptbFilterWidth.Maximum - ptbFilterWidth.Value, 1.0))) / Math.Log(ptbFilterWidth.Maximum) * _max_filter_width;
+                    break;
+                case FilterWidthMode.Log10:
+                    tmp = (Math.Log10(ptbFilterWidth.Maximum) - Math.Log10(Math.Max(ptbFilterWidth.Maximum - ptbFilterWidth.Value, 1.0))) / Math.Log10(ptbFilterWidth.Maximum) * _max_filter_width;
+                    break;
+            }
+            int half = (int)(bScrollUp ? Math.Ceiling(tmp + 0.5f) : Math.Ceiling(tmp - 0.5));
+            half = Math.Max(500, half);
+            if (half == -Display.RX1FilterLow && half == Display.RX1FilterHigh) return;
+            UpdateRX1Filters(-half, half);
+        }
+
         public void UpdateRX1Filters(int low, int high, bool force = false, bool from_change_event = false)
         {
             if (_ignore_rx1_filter_update) return;
@@ -7601,7 +7644,8 @@ namespace Thetis
                     }
                     break;
                 case DSPMode.FM:
-                    int halfBw = (int)(radio.GetDSPRX(0, 0).RXFMDeviation + radio.GetDSPRX(0, 0).RXFMHighCut);  //[2.10.3.4]MW0LGE
+                    int halfBw = forkFmHalf(1, low, high, Display.RX1FilterLow, Display.RX1FilterHigh,
+                        (int)(radio.GetDSPRX(0, 0).RXFMDeviation + radio.GetDSPRX(0, 0).RXFMHighCut));  //[2.10.3.4]MW0LGE // Jull1ano fork: by hand too
                     int bw = ((halfBw * 2) / 1000);
                     low = -halfBw;
                     high = halfBw;
@@ -7609,7 +7653,7 @@ namespace Thetis
                     break;
             }
 
-            clampFilterMinMax(1, _rx1_dsp_mode == DSPMode.FM, low, high); // FM clamp the filter ud boxes etc to this new size
+            clampFilterMinMax(1); // Jull1ano fork: FM no longer locked to deviation + high cut // FM clamp the filter ud boxes etc to this new size
 
             //MW0LGE_21k9
             ConstrainFilter(ref low, ref high, 1);
@@ -7723,13 +7767,14 @@ namespace Thetis
                     }
                     break;
                 case DSPMode.FM:
-                    int halfBw = (int)(radio.GetDSPRX(1, 0).RXFMDeviation + radio.GetDSPRX(1, 0).RXFMHighCut);  //[2.10.3.4]MW0LGE
+                    int halfBw = forkFmHalf(2, low, high, Display.RX2FilterLow, Display.RX2FilterHigh,
+                        (int)(radio.GetDSPRX(1, 0).RXFMDeviation + radio.GetDSPRX(1, 0).RXFMHighCut));  //[2.10.3.4]MW0LGE // Jull1ano fork: by hand too
                     low = -halfBw;
                     high = halfBw;
                     break;
             }
 
-            clampFilterMinMax(2, _rx2_dsp_mode == DSPMode.FM, low, high); // FM clamp the filter ud boxes etc to this new size
+            clampFilterMinMax(2); // Jull1ano fork: FM no longer locked to deviation + high cut // FM clamp the filter ud boxes etc to this new size
 
             //MW0LGE_21k9
             ConstrainFilter(ref low, ref high, 2);
@@ -30571,6 +30616,7 @@ namespace Thetis
                 if (old_gen != _bands_GEN_selected || old_hf != _bands_HF_selected || old_vhf != _bands_VHF_selected)
                     BandPanelChangeHandlers?.Invoke(1, _bands_GEN_selected, _bands_HF_selected, _bands_VHF_selected);
             }
+            forkPlaceBandPanels(); // Jull1ano fork: ham and SWL bands together where there is room
         }
         private void btnBandVHF_Click(object sender, System.EventArgs e)
         {
@@ -34582,7 +34628,7 @@ namespace Thetis
 
                 if (_rx1_dsp_mode == DSPMode.FM)
                 {
-                    int halfBw = (int)(radio.GetDSPRX(0, 0).RXFMDeviation + radio.GetDSPRX(0, 0).RXFMHighCut); //[2.10.3.4]MW0LGE
+                    int halfBw = ForkFmHalfOr(1, (int)(radio.GetDSPRX(0, 0).RXFMDeviation + radio.GetDSPRX(0, 0).RXFMHighCut)); //[2.10.3.4]MW0LGE // Jull1ano fork: the width set by hand
                     UpdateRX1Filters(-halfBw, halfBw);
                 }
             }
@@ -35393,6 +35439,7 @@ namespace Thetis
 
         private void ptbFilterWidth_Scroll(object sender, System.EventArgs e)
         {
+            if (_rx1_dsp_mode == DSPMode.FM) { forkFmWidthScroll(e); return; } // Jull1ano fork: FM's width by the slider too
             if (_rx1_dsp_mode == DSPMode.DRM || _rx1_dsp_mode == DSPMode.SPEC || _rx1_dsp_mode == DSPMode.FM) return; // unable to shift in these modes
 
             MouseEventArgs mouseEvent = e as MouseEventArgs;
@@ -37100,6 +37147,7 @@ namespace Thetis
             }
 
             setPAProfileLabelPos();  //[2.10.1.0] MW0LGE
+            forkPlaceBandPanels(); // Jull1ano fork: ham and SWL bands together where there is room
 
             ResumeDrawing(this); //MW0LGE
         }
@@ -38156,7 +38204,7 @@ namespace Thetis
 
                 if (_rx2_dsp_mode == DSPMode.FM)
                 {
-                    int halfBw = (int)(radio.GetDSPRX(1, 0).RXFMDeviation + radio.GetDSPRX(1, 0).RXFMHighCut); //[2.10.3.4]MW0LGE
+                    int halfBw = ForkFmHalfOr(2, (int)(radio.GetDSPRX(1, 0).RXFMDeviation + radio.GetDSPRX(1, 0).RXFMHighCut)); //[2.10.3.4]MW0LGE // Jull1ano fork: the width set by hand
                     UpdateRX2Filters(-halfBw, halfBw);
                 }
             }
@@ -41564,6 +41612,7 @@ namespace Thetis
             // its collapsed place, so it landed in the middle, over the NR row; once the layout has settled it goes
             // left of ZTB again and the NR row looks at its area again
             BeginInvoke(new MethodInvoker(forkPlaceZoomAfterExpand));
+            BeginInvoke(new MethodInvoker(forkPlaceBandPanels)); // Jull1ano fork: ham and SWL bands together
         }
 
         private void forkPlaceZoomAfterExpand()
@@ -45017,6 +45066,32 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "fmtest")
+                {
+                    // fmtest: FM, then its filter set by hand (an edge, as a drag; the width, as the slider), USB and back
+                    // to FM (kept), the 2.5k / 5.0k buttons (back to deviation + high cut); the filter logged after each
+                    int step = 0;
+                    System.Windows.Forms.Timer tf = new System.Windows.Forms.Timer();
+                    tf.Interval = 1200;
+                    Action<string> log = (what) => HighDpi.Log("fmtest " + what + ": mode " + RX1DSPMode + " filter " + Display.RX1FilterLow + " .. " +
+                        Display.RX1FilterHigh + " label " + lblFilterLabel.Text + " width slider " + ptbFilterWidth.Value + " [" + ptbFilterWidth.Minimum + ".." + ptbFilterWidth.Maximum + "]");
+                    tf.Tick += (s9, e9) =>
+                    {
+                        switch (step++)
+                        {
+                            case 0: radModeFMN.Checked = true; log("FM"); break;
+                            case 1: UpdateRX1Filters(-6000, Display.RX1FilterHigh); log("low edge to -6000"); break;
+                            case 2: UpdateRX1Filters(Display.RX1FilterLow, 4000); log("high edge to 4000"); break;
+                            case 3: UpdateRX1Filters(Display.RX1FilterLow + 1000, Display.RX1FilterHigh + 1000); log("whole filter moved (stays centred)"); break;
+                            case 4: radModeUSB.Checked = true; log("USB"); break;
+                            case 5: radModeFMN.Checked = true; log("FM again (kept)"); break;
+                            case 6: radFMDeviation2kHz.Checked = true; log("2.5k"); break;
+                            case 7: radFMDeviation5kHz.Checked = true; log("5.0k"); break;
+                            default: tf.Stop(); break;
+                        }
+                    };
+                    tf.Start();
+                }
                 else if (parts[0] == "memnav")
                 {
                     // memnav:<row>:<action>,<action>...: the Memory window open, that row tuned, then one action a
@@ -46263,6 +46338,86 @@ namespace Thetis
             return snr <= -998 ? double.NaN : snr - snrMargin;
         }
 
+        // Jull1ano fork: the ham bands and the SWL (broadcast) bands both shown, the SWL ones under the ham ones, as the
+        // two groups of AetherSDR's band bar (Setup > Appearance > General > Receive (fork)). Only where the room under
+        // the ham bands holds them (else one page at a time, as Thetis), never on the VHF page or in the collapsed view.
+        private bool _forkBandsTogether = true;
+        public bool BandsTogether
+        {
+            get { return _forkBandsTogether; }
+            set
+            {
+                _forkBandsTogether = value;
+                forkSaveBandMemory();
+                if (value) forkPlaceBandPanels();
+                else setBandPanelVisible(_bands_GEN_selected, _bands_HF_selected, _bands_VHF_selected, true);
+            }
+        }
+
+        private void forkPlaceBandPanels()
+        {
+            if (!_forkBandsTogether || collapsedDisplay || LegacyItemController.HideBands) return;
+            if (_bands_VHF_selected || !(_bands_HF_selected || _bands_GEN_selected)) return;
+            if (panelBandGEN.Parent != panelBandHF.Parent) return;
+            // by the buttons, not the panels (they have empty margins): the SWL buttons a row gap and a half under the
+            // ham buttons, their panel cut to its buttons so its margin never covers what is below
+            Rectangle hf = forkContent(panelBandHF), gen = forkContent(panelBandGEN);
+            if (hf.IsEmpty || gen.IsEmpty) return;
+            int hfBottom = panelBandHF.Top + hf.Bottom;
+            int left = panelBandHF.Left + Math.Min(hf.Left, gen.Left), right = panelBandHF.Left + Math.Max(hf.Right, gen.Right);
+            // the room: down to the first thing under the ham buttons in their column (the mode buttons), or the window's end
+            int limit = panelBandHF.Parent.ClientSize.Height;
+            Control block = null;
+            foreach (Control c in panelBandHF.Parent.Controls)
+            {
+                if (c == panelBandGEN || c == panelBandHF || c == panelBandVHF || !c.Visible) continue;
+                Rectangle r = c.Bounds;
+                if (c is Panel || c is GroupBox)
+                {
+                    Rectangle k = forkContent(c, true); // what shows (the mode panel has a hidden control over its buttons)
+                    if (k.IsEmpty) continue;
+                    r = new Rectangle(c.Left + k.Left, c.Top + k.Top, k.Width, k.Height);
+                }
+                if (r.Right <= left || r.Left >= right || r.Bottom <= panelBandHF.Top + hf.Top) continue; // beside or above
+                if (r.Top < limit) { limit = r.Top; block = c; }
+            }
+            int spare = limit - hfBottom - gen.Height;
+            int gap = Math.Min(HighDpi.Px(12), spare / 2); // as much space between the groups as there is, up to 12 px
+            int y = hfBottom + gap - gen.Top;
+            if (gap < HighDpi.Px(1)) // (the amber SWL buttons set the groups apart even when close)
+            {
+                // no room: one page at a time, both in the HF page's place (as Thetis)
+                if (panelBandGEN.Top != panelBandHF.Top)
+                {
+                    panelBandGEN.Location = panelBandHF.Location;
+                    panelBandGEN.Visible = _bands_GEN_selected;
+                    panelBandHF.Visible = _bands_HF_selected;
+                }
+                HighDpi.Log("bands together: no room under the ham bands" + (block != null ? " (" + block.Name + " " + block.Bounds + ")" : "") +
+                    ": ham buttons end at " + hfBottom + ", room to " + limit + ", SWL buttons " + gen + ", ham buttons " + hf + " in " + panelBandHF.Bounds);
+                return;
+            }
+            panelBandHF.Height = hf.Bottom + Math.Max(1, gap / 2); // its empty bottom margin would cover the SWL buttons' top
+            panelBandGEN.Location = new Point(panelBandHF.Left, y);
+            panelBandGEN.Height = gen.Bottom + Math.Max(1, gap / 2);
+            panelBandHF.Visible = true;
+            panelBandGEN.Visible = true;
+            // the panels' empty margins overlap their neighbours: the ham panel on top (its margin under the SWL
+            // panel's empty top), then the SWL panel over the mode panel's empty top
+            panelBandGEN.BringToFront();
+            panelBandHF.BringToFront();
+            HighDpi.Log("bands together: SWL at " + panelBandGEN.Bounds + ", ham " + panelBandHF.Bounds);
+        }
+
+        // the area a panel's buttons take (all of them, shown or not: a hidden page's buttons read as hidden)
+        private static Rectangle forkContent(Control p, bool shownOnly = false)
+        {
+            Rectangle u = Rectangle.Empty;
+            foreach (Control c in p.Controls)
+                if (!shownOnly || c.Visible) u = u.IsEmpty ? c.Bounds : Rectangle.Union(u, c.Bounds);
+            return u;
+        }
+
         public bool KeepCtunOn
         {
             get { return _forkKeepCtun; }
@@ -46394,6 +46549,7 @@ namespace Thetis
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "keep_ctun") _forkKeepCtun = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "nr2_default") _forkNr2Default = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "memory_simple") _forkMemorySimple = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "option" && p[1] == "bands_together") _forkBandsTogether = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
                     else if (p.Length == 4 && p[0] == "step") _forkBandStep[p[1] + "|" + p[2]] = p[3];
                 }
@@ -46411,6 +46567,7 @@ namespace Thetis
                 sb.Append("option\tkeep_ctun\t").Append(_forkKeepCtun ? "1" : "0").Append("\r\n");
                 sb.Append("option\tnr2_default\t").Append(_forkNr2Default ? "1" : "0").Append("\r\n");
                 sb.Append("option\tmemory_simple\t").Append(_forkMemorySimple ? "1" : "0").Append("\r\n");
+                sb.Append("option\tbands_together\t").Append(_forkBandsTogether ? "1" : "0").Append("\r\n");
                 foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
                     sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
                 foreach (KeyValuePair<string, string> kv in _forkBandStep)
@@ -51548,8 +51705,8 @@ namespace Thetis
                                 break;
                         }
 
-                        bool bOkToChangeRX1 = bOverRX1 && rx1_enabled && !rx1_click_tune_drag && !rx1_spectrum_drag && (_rx1_dsp_mode != DSPMode.DRM && _rx1_dsp_mode != DSPMode.SPEC && _rx1_dsp_mode != DSPMode.FM) && !(_mox && (VFOATX || (RX2Enabled && VFOSplit))); //[2.10.1.0] MW0LGE prevent highlight when MOX
-                        bool bOkToChangeRX2 = bOverRX2 && rx2_enabled && !rx2_click_tune_drag && !rx2_spectrum_drag && (_rx2_dsp_mode != DSPMode.DRM && _rx2_dsp_mode != DSPMode.SPEC && _rx2_dsp_mode != DSPMode.FM) && !(_mox && RX2Enabled && VFOBTX);
+                        bool bOkToChangeRX1 = bOverRX1 && rx1_enabled && !rx1_click_tune_drag && !rx1_spectrum_drag && (_rx1_dsp_mode != DSPMode.DRM && _rx1_dsp_mode != DSPMode.SPEC) && !(_mox && (VFOATX || (RX2Enabled && VFOSplit))); //[2.10.1.0] MW0LGE prevent highlight when MOX
+                        bool bOkToChangeRX2 = bOverRX2 && rx2_enabled && !rx2_click_tune_drag && !rx2_spectrum_drag && (_rx2_dsp_mode != DSPMode.DRM && _rx2_dsp_mode != DSPMode.SPEC) && !(_mox && RX2Enabled && VFOBTX);
 
                         if (bOkToChangeRX1 || bOkToChangeRX2)
                         {
@@ -51633,14 +51790,14 @@ namespace Thetis
                                 else
                                     new_low = radio.GetDSPRX(0, 0).RXFilterLow;
 
-                                SelectRX1VarFilter(false, true);
+                                if (_rx1_dsp_mode != DSPMode.FM) SelectRX1VarFilter(false, true); // Jull1ano fork: FM has no Var filter
 
                                 UpdateRX1Filters(new_low, new_high);
 
                                 //update VAR1 low to be current low
-                                rx1_filters[(int)_rx1_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX1);
+                                if (_rx1_dsp_mode != DSPMode.FM) rx1_filters[(int)_rx1_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX1);
                                 //update VAR1 high to be new high
-                                rx1_filters[(int)_rx1_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX1);
+                                if (_rx1_dsp_mode != DSPMode.FM) rx1_filters[(int)_rx1_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX1);
 
                                 Display.OtherData2CursorDisplay = radio.GetDSPRX(0, 0).RXFilterHigh.ToString();
                             }
@@ -51663,18 +51820,18 @@ namespace Thetis
                                 else
                                     new_high = radio.GetDSPRX(0, 0).RXFilterHigh;
 
-                                SelectRX1VarFilter(false, true);
+                                if (_rx1_dsp_mode != DSPMode.FM) SelectRX1VarFilter(false, true); // Jull1ano fork: FM has no Var filter
 
                                 UpdateRX1Filters(new_low, new_high);
 
                                 //update VAR1 low to be new low
-                                rx1_filters[(int)_rx1_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX1);
+                                if (_rx1_dsp_mode != DSPMode.FM) rx1_filters[(int)_rx1_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX1);
                                 //update VAR1 high to be current high
-                                rx1_filters[(int)_rx1_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX1);
+                                if (_rx1_dsp_mode != DSPMode.FM) rx1_filters[(int)_rx1_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX1);
 
                                 Display.OtherData2CursorDisplay = radio.GetDSPRX(0, 0).RXFilterLow.ToString();
                             }
-                            else if (rx1_whole_filter_drag)
+                            else if (rx1_whole_filter_drag && _rx1_dsp_mode != DSPMode.FM) // Jull1ano fork: FM stays centred
                             {
                                 SelectRX1VarFilter(false, true);
                                 int diff = (int)(PixelToHz(e.X) - PixelToHz(whole_filter_start_x));
@@ -51709,14 +51866,14 @@ namespace Thetis
                                 else
                                     new_low = radio.GetDSPRX(1, 0).RXFilterLow;
 
-                                SelectRX2VarFilter(false, true);
+                                if (_rx2_dsp_mode != DSPMode.FM) SelectRX2VarFilter(false, true); // Jull1ano fork: FM has no Var filter
 
                                 UpdateRX2Filters(new_low, new_high);
 
                                 //update VAR1 low to be current low
-                                rx2_filters[(int)_rx2_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX2);
+                                if (_rx2_dsp_mode != DSPMode.FM) rx2_filters[(int)_rx2_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX2);
                                 //update VAR1 high to be new high
-                                rx2_filters[(int)_rx2_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX2);
+                                if (_rx2_dsp_mode != DSPMode.FM) rx2_filters[(int)_rx2_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX2);
 
                                 Display.OtherData2CursorDisplay = radio.GetDSPRX(1, 0).RXFilterHigh.ToString();
                             }
@@ -51739,18 +51896,18 @@ namespace Thetis
                                 else
                                     new_high = radio.GetDSPRX(1, 0).RXFilterHigh;
 
-                                SelectRX2VarFilter(false, true);
+                                if (_rx2_dsp_mode != DSPMode.FM) SelectRX2VarFilter(false, true); // Jull1ano fork: FM has no Var filter
 
                                 UpdateRX2Filters(new_low, new_high);
 
                                 //update VAR1 low to be new low
-                                rx2_filters[(int)_rx2_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX2);
+                                if (_rx2_dsp_mode != DSPMode.FM) rx2_filters[(int)_rx2_dsp_mode].SetLow(Filter.VAR1, m_nLowOutRX2);
                                 //update VAR1 high to be current high
-                                rx2_filters[(int)_rx2_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX2);
+                                if (_rx2_dsp_mode != DSPMode.FM) rx2_filters[(int)_rx2_dsp_mode].SetHigh(Filter.VAR1, m_nHighOutRX2);
 
                                 Display.OtherData2CursorDisplay = radio.GetDSPRX(1, 0).RXFilterLow.ToString();
                             }
-                            else if (rx2_whole_filter_drag)
+                            else if (rx2_whole_filter_drag && _rx2_dsp_mode != DSPMode.FM)
                             {
                                 SelectRX2VarFilter(false, true);
                                 int diff = (int)(PixelToHz(e.X, 2) - PixelToHz(whole_filter_start_x, 2));

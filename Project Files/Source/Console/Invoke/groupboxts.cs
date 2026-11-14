@@ -968,7 +968,7 @@ namespace System.Windows.Forms
 		// title is drawn, where the frame would have it; with any other skin the frame is drawn as before
 		protected override void OnPaint(PaintEventArgs e)
 		{
-			if (!Thetis.ForkTheme.GroupBorderHidden || FlatStyle == FlatStyle.System)
+			if (!Thetis.ForkTheme.HidesBorderOf(this) || FlatStyle == FlatStyle.System) // the skinned windows only, not Setup
 			{
 				base.OnPaint(e);
 				return;

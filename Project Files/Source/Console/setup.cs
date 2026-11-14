@@ -579,7 +579,19 @@ namespace Thetis
             grp.Name = "grpForkTuning";
             grp.Text = "Receive (fork)";
             grp.Location = new Point(anchor.Left, anchor.Bottom + HighDpi.Px(8));
-            grp.Size = new Size(anchor.Width, HighDpi.Px(112));
+            grp.Size = new Size(anchor.Width, HighDpi.Px(134));
+            CheckBox chkBands = new CheckBox();
+            chkBands.Name = "chkForkBandsTogether";
+            chkBands.Text = "Ham + SWL bands together";
+            chkBands.AutoSize = false;
+            chkBands.Size = new Size(grp.Width - HighDpi.Px(16), HighDpi.Px(20));
+            chkBands.Location = new Point(HighDpi.Px(8), HighDpi.Px(108));
+            chkBands.Checked = console == null || console.BandsTogether;
+            chkBands.CheckedChanged += (s, e) => { if (console != null) console.BandsTogether = chkBands.Checked; };
+            toolTip1.SetToolTip(chkBands, "The ham bands and the SWL (broadcast) bands both shown, the SWL ones under the ham ones,\r\n" +
+                "as the two groups of AetherSDR's band bar. Where there is no room for both (a small window, the collapsed\r\n" +
+                "view) one page at a time, as before; VHF+ still shows its own page.");
+            grp.Controls.Add(chkBands);
             CheckBox chkMem = new CheckBox();
             chkMem.Name = "chkForkMemorySimple";
             chkMem.Text = "Memory: freq + mode";

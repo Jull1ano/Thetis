@@ -704,7 +704,9 @@ namespace Thetis
         {
             System.Windows.Forms.ComboBox cb = sender as System.Windows.Forms.ComboBox;
             if (cb == null) return;
-            bool modern = Thetis.ForkTheme.ComboModern; // a skin's modern drop-downs (ForkTheme.cs): its list colours
+            // a skin's modern drop-downs (ForkTheme.cs): their list in its colours; only the console's (the skinned
+            // window's) drop-downs - Setup's and the other windows' keep the classic look
+            bool modern = Thetis.ForkTheme.ComboModern && Thetis.ForkComboPainter.IsThemed(cb);
             bool selItem = (e.State & System.Windows.Forms.DrawItemState.Selected) != 0;
             if (modern)
                 using (System.Drawing.SolidBrush bb = new System.Drawing.SolidBrush(selItem ? Thetis.ForkTheme.ComboListSelect : Thetis.ForkTheme.ComboListBack))
@@ -1785,6 +1787,9 @@ namespace Thetis
 
         private static bool isButton(System.Windows.Forms.Control c)
         {
+            // a skin with its own mouse-over picture for this button (AetherSDR Style): that is its hover
+            System.Windows.Forms.ImageList il = (c as System.Windows.Forms.ButtonBase)?.ImageList;
+            if (il != null && il.Images.IndexOfKey("MouseOverUp") >= 0) return false;
             if (c is System.Windows.Forms.CheckBox cb)
                 return cb.Appearance == System.Windows.Forms.Appearance.Button && cb.FlatStyle != System.Windows.Forms.FlatStyle.System;
             if (c is System.Windows.Forms.RadioButton rb)

@@ -36,6 +36,15 @@ namespace Thetis
 
         public static bool GroupBorderHidden { get { return !GroupBorder.IsEmpty && GroupBorder.A == 0; } }
 
+        // the windows the skin themes (the console, Andromeda's pop-ups): Setup and the other windows keep their look
+        private static readonly HashSet<Form> _themed = new HashSet<Form>();
+        public static bool Themes(Control c)
+        {
+            Form f = c == null ? null : c.FindForm();
+            return f != null && _themed.Contains(f);
+        }
+        public static bool HidesBorderOf(Control groupBox) { return GroupBorderHidden && Themes(groupBox); }
+
         private static Color parse(XmlNode n, string name, Color fallback)
         {
             XmlNode c = n == null ? null : n.SelectSingleNode(name);
@@ -88,6 +97,7 @@ namespace Thetis
         public static void Apply(Control root)
         {
             if (root == null) return;
+            if (root is Form f) _themed.Add(f);
             walk(root);
             root.Invalidate(true);
             foreach (Control c in allBoxes(root)) ForkBoxBorder.RedrawFrame(c);
@@ -297,6 +307,8 @@ namespace Thetis
             c.GotFocus += (s, e) => _c.Invalidate();
             c.LostFocus += (s, e) => _c.Invalidate();
         }
+
+        public static bool IsThemed(ComboBox c) { return c != null && _attached.Contains(c); }
 
         public static void Attach(ComboBox c)
         {

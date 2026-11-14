@@ -1,5 +1,27 @@
 # Jull1ano fork of Thetis
 
+Branch `aether-ui` (from `native-scaling`, 2026-11-14): the AetherSDR look and the updates after it, built as its own
+app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scaling` stays as it was.
+
+## aether-ui changes
+
+- One button style for every group (the ham bands' way): the bar face with its subtle #304050 edge, AetherSDR's
+  blue hover and pressed; on: green for the noise reduction / DSP buttons, blue for the others, red for MOX / TUNE.
+  Buttons with the skin's own mouse-over picture no longer get the fork's 10 % white hover on top.
+- Setup and the other windows keep their classic look: the theme's drop-down list colours and frame-less group
+  boxes apply to the skinned windows only (the console, Andromeda's pop-ups).
+- Ham + SWL bands together (Setup > Appearance > General > Receive (fork), on by default): the SWL (broadcast) bands
+  under the ham bands, as the two groups of AetherSDR's band bar, with as much space between the groups as the
+  room under the ham buttons allows (up to 12 px); where the SWL buttons do not fit above the mode buttons, one page
+  at a time as before. VHF+ shows its own page; the collapsed view is unchanged. Placed by `forkPlaceBandPanels`
+  after every layout and band page change, by the buttons (the panels have empty margins; the mode panel has a
+  hidden control over its buttons).
+- FM filter by hand: an edge dragged on the spectrum (mirrored, as in AM) or the Width slider sets it, kept centred;
+  2.5k / 5.0k (and Setup's FM RX high cut) put it back to deviation + high cut. Kept across mode changes; a start
+  begins at the deviation's width. Before: locked to deviation + high cut. Test hook `THETIS_HIDPI_OPEN=fmtest`.
+- Memory window: never narrower than the fields under the grid (a saved 853 px window cut Name and Comments off).
+
+
 Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
 - `smooth-pan-drag`: AltSDR-style spectrum handling (pan, zoom, retunes).
 - `native-scaling`: `smooth-pan-drag` + native high-DPI (crisp at 200 % on a 4K monitor).

@@ -31,17 +31,18 @@ STYLES = {
                   cface=(160, 110, 0, 210), cborder='#ffc030', text='#ffcc66', dborder='#3a3226', radius=2),
     'mode':  dict(face=BAR_FACE, border='#2c5048', hface=(0, 140, 110, 180), hborder='#20c090',
                   cface=(0, 140, 110, 210), cborder='#40e0b0', text='#a8e8d0', dborder='#243a36', radius=2),
-    # applet buttons (kButtonBase): #1a2a3a, border #203040, hover #243848; on: green (DSP) or blue
-    'dsp':   dict(face='#1a2a3a', border='#203040', hface='#243848', hborder='#2c4458',
-                  cface='#006040', cborder='#00a060', text='#c8d8e8', dborder='#1a2836', radius=3),
-    'toggle': dict(face='#1a2a3a', border='#203040', hface='#243848', hborder='#2c4458',
-                   cface='#0070c0', cborder='#0090e0', text='#c8d8e8', dborder='#1a2836', radius=3),
+    # every other button the ham buttons' way (the user: "one class, the same everywhere"): the bar face with its
+    # subtle edge, the blue hover; on: green for the noise reduction / DSP ones (AetherSDR's NR2), else blue
+    'dsp':   dict(face=BAR_FACE, border='#304050', hface=(0, 112, 192, 180), hborder='#0090e0',
+                  cface=(0, 128, 72, 215), cborder='#00b070', text='#c8d8e8', dborder='#263442', radius=2),
+    'toggle': dict(face=BAR_FACE, border='#304050', hface=(0, 112, 192, 180), hborder='#0090e0',
+                   cface=(0, 112, 192, 210), cborder='#30b0ff', text='#c8d8e8', dborder='#263442', radius=2),
     # MOX / TUNE: AetherSDR's TX colours (amber edge, #f0c890 text), on = red
-    'tx':    dict(face='#2a2214', border='#d08020', hface='#3a2c14', hborder='#e09030',
-                  cface='#a01c1c', cborder='#ff4d4d', text='#f0c890', dborder='#3a3020', radius=3),
-    # plain buttons: pressed = the accent
-    'button': dict(face='#1a2a3a', border='#203040', hface='#243848', hborder='#2c4458',
-                   cface='#0070c0', cborder='#0090e0', text='#c8d8e8', dborder='#1a2836', radius=3),
+    'tx':    dict(face=BAR_FACE, border='#d08020', hface=(160, 90, 0, 180), hborder='#e09030',
+                  cface=(160, 28, 28, 220), cborder='#ff4d4d', text='#f0c890', dborder='#3a3020', radius=2),
+    # plain buttons: pressed = the ham buttons' "on"
+    'button': dict(face=BAR_FACE, border='#304050', hface=(0, 112, 192, 180), hborder='#0090e0',
+                   cface=(0, 112, 192, 230), cborder='#30b0ff', text='#c8d8e8', dborder='#263442', radius=2),
 }
 
 

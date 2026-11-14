@@ -105,6 +105,29 @@ namespace Thetis
             dataGridView1.DataBindingComplete += (s, e) => forkUpdateCount();
             forkLayoutBar();
             forkUpdateButtons();
+            this.Shown += (s, e) => BeginInvoke(new MethodInvoker(forkFitWidth));
+            this.VisibleChanged += (s, e) => { if (Visible && IsHandleCreated) BeginInvoke(new MethodInvoker(forkFitWidth)); };
+        }
+
+        // The fields under the grid (frequency, group, name, comments, the help text) stay at their places on the left;
+        // a saved window narrower than them cut the right ones off (the user: "I cannot see all info in the right side").
+        // The window is at least as wide as they need, and cannot be made narrower.
+        private void forkFitWidth()
+        {
+            int right = 0;
+            foreach (Control c in Controls)
+                if (c != dataGridView1 && c != _forkBar && c.Visible) right = Math.Max(right, c.Right);
+            if (right <= 0) return;
+            int need = right + HighDpi.Px(12);
+            int extra = Width - ClientSize.Width; // the frame
+            MinimumSize = new Size(need + extra, MinimumSize.Height);
+            if (ClientSize.Width < need)
+            {
+                Rectangle wa = Screen.FromControl(this).WorkingArea;
+                Width = Math.Min(need + extra, wa.Width);
+                if (Right > wa.Right) Left = Math.Max(wa.Left, wa.Right - Width);
+                HighDpi.Log("memory window widened to " + Width + " (fields end at " + right + ")");
+            }
         }
 
         // SLOW, saved in the data folder (fork_memory_bar.txt: "seek_slow 1")
