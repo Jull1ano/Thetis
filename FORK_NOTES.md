@@ -48,6 +48,15 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   shifted (spectrum, waterfall rows via the frame's pixel reference, the frequency scale and overlays via
   RXDisplayLow/High), without data where the view has none; the DDC re-centres once at the release or when the mouse
   rests 120 ms. The audio is untouched while dragging; one short soft mute at that re-centre.
+- Quick fill after a re-centre (WDSP analyzer.c, `sm_quick_fill`): a frame whose window still holds samples from the
+  old LO only covers the old span; the rest waited for a whole window of new samples (262144 points = 1.37 s at
+  192 kHz). Those frequencies now come from a short FFT over the newest samples (4096 points and up, the largest
+  power of two that fits, 1-3 half-overlapping segments averaged; 10 ms after the marked change skipped), its power
+  matched to the main bins' noise floor (narrow carriers read lower and wider until the full window takes over).
+  Only pixels without real data get it (av_valid 2), the next quick spectrum replaces it, and the first real value
+  restarts the pixel (no averaging / peak hold of coarse values). Plans made in SetAnalyzer (FFTW_ESTIMATE).
+  Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
+  fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.
 - Its own settings and skins: `%APPDATA%\OpenHPSDR\Thetis-aether` (a first start copies Thetis-x64 there once) with
   its skins in `Thetis-aether\Skins` (the skin list, export and downloads); the original Thetis keeps Thetis-x64 and the
   shared Skins folder (user, 2026-11-15: the original took the fork's skin and cyan colours from the shared settings).

@@ -28,6 +28,9 @@ warren@wpratt.com
 #define _analyzer_h
 #include "comm.h"
 
+#define dQF_MIN		4096	// quick fill: the shortest FFT (21 ms at 192 kHz)
+#define dQF_LEVELS	8		// 4096 .. 524288 points
+
 typedef struct _dp
 {
 	int max_size;											// maximum fft size to be used
@@ -187,6 +190,18 @@ typedef struct _dp
 	double *sm_tmp2;
 	unsigned char *sm_vtmp;
 	int publish_mask;										// pixel outputs that get a frame at once when the view moves
+	// quick fill (2026-11-15): after a retune, frequencies a frame cannot cover yet (its window still holds samples
+	// from the old LO) come from a short FFT over the newest samples, noise-matched to the main bins, until a full
+	// window of new samples takes over (a 262144-point window is 1.37 s at 192 kHz)
+	fftw_complex *qf_in, *qf_out;							// short FFT buffers, size / 2 points
+	fftw_plan qf_plan[dQF_LEVELS];							// plans for (dQF_MIN << k) points, made in SetAnalyzer
+	double *qf_win[dQF_LEVELS];								// their windows, coherent gain normalised as the main one
+	double qf_E[dQF_LEVELS];								// their window energy (sum of squares)
+	int qf_levels;											// plans made for the current size
+	int qf_bufsize;											// points qf_in / qf_out hold
+	double main_E;											// the main window's energy
+	double *qf_disp;										// the last short spectrum, display order, in main-bin units
+	int qf_len;												// its length
 	// END SMOOTH PAN / RETUNE
 
 }  dp, *DP;

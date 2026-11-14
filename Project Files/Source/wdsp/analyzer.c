@@ -174,6 +174,12 @@ void new_window(int disp, int type, int size, double PiAlpha)
 	a->inherent_power_gain = igsum / (double)size;
 	a->inv_enb = 1.0 / (a->inherent_power_gain * a->inv_coherent_gain * a->inv_coherent_gain);
 	// print_window_gain ("windows.txt", type, a->inv_coherent_gain, a->inherent_power_gain);
+	{	// Jull1ano fork: quick fill noise matching
+		double e = 0.0;
+		for (i = 0; i < size; i++)
+			e += a->window[i] * a->window[i];
+		a->main_E = e;
+	}
 }
 
 // spur elimination, REAL input data
@@ -578,6 +584,8 @@ typedef struct _sm_frame
 	double lo;			// LO the frame is computed for, MHz
 	double vlo_hz;		// valid part of the frame, Hz relative to lo
 	double vhi_hz;
+	int qf;				// a short spectrum of the newest samples is in a->qf_disp for this frame
+	double qf_bws;		// its bin width, Hz
 } sm_frame;
 
 static int sm_geometry(DP a, double* low_rel_hz, double* hzpp)
@@ -789,8 +797,10 @@ static void sm_publish(DP a, int i, double tag_mhz)
 }
 
 // average a fresh frame t (frame pixel p <-> averaging pixel p + d) into pixel output i;
-// only frame pixels pv0..pv1 hold valid data
-static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0, int pv1)
+// only frame pixels pv0..pv1 hold valid data. Of those, the ones outside mv0..mv1 are quick fill (sm_quick_fill):
+// they stand in only where the pixel has no real data (av_valid 2 = quick fill), the next quick fill replaces them,
+// and the first real value starts the pixel over (it is not averaged with the coarse one, nor peak-held)
+static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0, int pv1, int mv0, int mv1)
 {
 	int j, k, x0, mode = a->av_mode[i];
 	double x, fr, val;
@@ -814,8 +824,19 @@ static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0
 		else
 			val = t[x0] * (1.0 - fr) + t[x0 + 1] * fr;
 		ft[j] = val;
-		vt[j] = 1;
+		if (x < (double)mv0 - 1.0e-6 || x > (double)mv1 + 1.0e-6)
+		{
+			if (v[j] == 1)
+				continue;	// real data here: a coarse value does not replace it
+			vt[j] = 2;
+		}
+		else
+			vt[j] = 1;
 	}
+	// quick fill always starts the pixel over, and so does the first real value where quick fill stood
+	for (j = 0; j < n; j++)
+		if (vt[j] == 2 || (vt[j] == 1 && v[j] == 2))
+			v[j] = 0;
 
 	switch (mode)
 	{
@@ -881,6 +902,9 @@ static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0
 			if (vt[j]) { av[j] = ft[j]; v[j] = 1; }
 		break;
 	}
+	for (j = 0; j < n; j++)
+		if (vt[j] == 2)
+			v[j] = 2;
 }
 
 // move all pixel outputs onto the requested view (current LO + current geometry); publish if asked
@@ -901,6 +925,114 @@ static void sm_follow_view(DP a, int publish)
 	}
 }
 
+// quick fill: a short FFT of the newest samples (all taken at the newest LO), when the frame's valid part does not
+// cover the view; its power is matched to the main bins' noise floor (narrow carriers show lower until the full
+// window takes over). idx0: buffer index of the window's first sample; fresh: samples since the last LO change.
+static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_frame* fi)
+{
+	int k, i, b, Ls, hs, idx, seg, nseg;
+	double low_rel, hzpp, fs = (double)a->sample_rate, scale, lo_req;
+	dINREAL* I = a->I_samples[ss][LO];
+	dINREAL* Q = a->Q_samples[ss][LO];
+	if (a->qf_levels <= 0 || fs <= 0.0 || a->main_E <= 0.0)
+		return;
+	// only when the view reaches past the part the frame covers
+	if (!sm_geometry(a, &low_rel, &hzpp))
+		return;
+	EnterCriticalSection(&a->PixelRefSection);
+	lo_req = a->pixel_ref;
+	LeaveCriticalSection(&a->PixelRefSection);
+	{
+		double v0 = (lo_req - fi->lo) * 1.0e6 + low_rel, v1 = v0 + (double)(a->num_pixels - 1) * hzpp;
+		if (!fi->skip && v0 >= fi->vlo_hz && v1 <= fi->vhi_hz)
+			return;
+	}
+	// a margin for the retune latency guess: the first 10 ms after the marked change may still be the old LO
+	fresh -= (long long)(0.010 * fs);
+	for (k = a->qf_levels - 1; k >= 0; k--)
+		if ((long long)(dQF_MIN << k) <= fresh)
+			break;
+	if (k < 0 || !a->qf_plan[k] || !a->qf_win[k])
+		return;
+	Ls = dQF_MIN << k;
+	hs = Ls / 2;
+	// up to 3 half-overlapping segments (Welch): a smoother texture than one short FFT
+	nseg = 1 + (int)((fresh - (long long)Ls) / (long long)hs);
+	if (nseg > 3) nseg = 3;
+	if (nseg < 1) nseg = 1;
+	scale = a->main_E / a->qf_E[k] / (double)nseg;
+	for (i = 0; i < Ls; i++)
+		a->qf_disp[i] = 0.0;
+	for (seg = 0; seg < nseg; seg++)
+	{
+		idx = idx0 + a->size - Ls - seg * hs;
+		while (idx >= a->bsize) idx -= a->bsize;
+		while (idx < 0) idx += a->bsize;
+		for (i = 0; i < Ls; i++)
+		{
+			a->qf_in[i][0] = a->qf_win[k][i] * (double)I[idx];
+			a->qf_in[i][1] = a->qf_win[k][i] * (double)Q[idx];
+			if (++idx >= a->bsize) idx -= a->bsize;
+		}
+		fftw_execute(a->qf_plan[k]);
+		for (i = -hs + 1; i < hs; i++)
+		{
+			b = a->flip[LO] ? -i : i;
+			if (b < 0) b += Ls;
+			a->qf_disp[i + hs] += scale * (a->qf_out[b][0] * a->qf_out[b][0] + a->qf_out[b][1] * a->qf_out[b][1]);
+		}
+	}
+	a->qf_disp[0] = a->qf_disp[1];
+	a->qf_len = Ls;
+	fi->qf_bws = fs / (double)Ls;
+	fi->qf = 1;
+}
+
+// the short FFTs' plans and windows for this size (in SetAnalyzer, with the workers stopped: FFTW's planner is not
+// thread safe)
+static void sm_quick_setup(DP a, int sz)
+{
+	int k, i, Ls;
+	for (k = 0; k < dQF_LEVELS; k++)
+	{
+		if (a->qf_plan[k]) { fftw_destroy_plan(a->qf_plan[k]); a->qf_plan[k] = 0; }
+		if (a->qf_win[k]) { _aligned_free(a->qf_win[k]); a->qf_win[k] = 0; }
+	}
+	a->qf_levels = 0;
+	a->qf_len = 0;
+	if (a->qf_in) { fftw_free(a->qf_in); a->qf_in = 0; }
+	if (a->qf_out) { fftw_free(a->qf_out); a->qf_out = 0; }
+	if (a->qf_disp) { _aligned_free(a->qf_disp); a->qf_disp = 0; }
+	if (sz / 2 < dQF_MIN)
+		return;
+	a->qf_bufsize = sz / 2;
+	a->qf_in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * a->qf_bufsize);
+	a->qf_out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * a->qf_bufsize);
+	a->qf_disp = (double*) malloc0(sizeof(double) * a->qf_bufsize);
+	if (!a->qf_in || !a->qf_out || !a->qf_disp)
+		return;
+	for (k = 0; k < dQF_LEVELS && (dQF_MIN << k) <= sz / 2; k++)
+	{
+		double s = 0.0, e = 0.0, arg;
+		Ls = dQF_MIN << k;
+		a->qf_win[k] = (double*) malloc0(sizeof(double) * Ls);
+		for (i = 0; i < Ls; i++)	// 4-term Blackman-Harris
+		{
+			arg = 6.283185307179586476925286766559 * (double)i / (double)(Ls - 1);
+			a->qf_win[k][i] = 0.35875 - 0.48829 * cos(arg) + 0.14128 * cos(2.0 * arg) - 0.01168 * cos(3.0 * arg);
+			s += a->qf_win[k][i];
+		}
+		for (i = 0; i < Ls; i++)
+		{
+			a->qf_win[k][i] *= (double)Ls / s;		// coherent gain normalised, as the main window
+			e += a->qf_win[k][i] * a->qf_win[k][i];
+		}
+		a->qf_E[k] = e;
+		a->qf_plan[k] = fftw_plan_dft_1d(Ls, a->qf_in, a->qf_out, FFTW_FORWARD, FFTW_ESTIMATE);
+		a->qf_levels = k + 1;
+	}
+}
+
 // copy the window into Cfft_in[ss][LO], rotating samples taken before the last LO change onto the newest LO
 static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 {
@@ -908,6 +1040,7 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 	long long ws = a->win_start[ss][LO];
 	int size = a->size;
 	int i, m, nev = 0, start, end, idx = a->IQO_idx[ss][LO];
+	int idx0 = idx;
 	long long eidx[dMAX_RETUNE_EV];
 	double elo[dMAX_RETUNE_EV];
 	double Fs[dMAX_RETUNE_EV + 1], Gs[dMAX_RETUNE_EV + 1];
@@ -936,6 +1069,7 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 
 	fi->smooth = 1;
 	fi->skip = 0;
+	fi->qf = 0;
 	fi->lo = nev ? elo[nev - 1] : lo0;
 	half = 0.5 * fs * (double)(size - 2 * a->clip) / (double)size;
 	fi->vlo_hz = -1.0e12;
@@ -962,6 +1096,7 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 		fi->vhi_hz = -Fmax + half;
 		if (fi->vhi_hz - fi->vlo_hz < 0.1 * fs)
 			fi->skip = 1;
+		sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi);
 	}
 
 	if (nev == 0 || fi->skip)
@@ -1022,11 +1157,11 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 static void sm_stitch(int disp, sm_frame* fi)
 {
 	DP a = pdisp[disp];
-	int i, j, k, m, n, pv0, pv1;
+	int i, j, k, m, n, pv0, pv1, mv0, mv1;
 	double low_rel, hzpp, lo_req, tag;
 
 	EnterCriticalSection(&a->ResampleSection);
-	if (!fi->skip && sm_geometry(a, &low_rel, &hzpp))
+	if ((!fi->skip || fi->qf) && sm_geometry(a, &low_rel, &hzpp))
 	{
 		n = a->num_pixels;
 		m = a->ss_bins[0] - a->fscL - a->fscH;
@@ -1049,6 +1184,28 @@ static void sm_stitch(int disp, sm_frame* fi)
 				pv1 = (int)p1;
 			}
 
+			// quick fill: the bins the frame cannot cover yet from the short spectrum of the newest samples
+			mv0 = fi->skip ? n : pv0;
+			mv1 = fi->skip ? -1 : pv1;
+			if (fi->qf && a->qf_len > 0)
+			{
+				int q, d, hs = a->qf_len / 2, bins = a->num_stitch * (a->out_size - 1 - 2 * a->clip);
+				double bw = (double)a->sample_rate / (double)a->size, f;
+				double vlo = fi->skip ? 1.0e12 : fi->vlo_hz, vhi = fi->skip ? -1.0e12 : fi->vhi_hz;
+				for (q = 0; q < m; q++)
+				{
+					f = ((double)(a->fscL + q) - 0.5 * (double)(bins - 1)) * bw;
+					if (f >= vlo && f <= vhi)
+						continue;
+					d = (int)floor(f / fi->qf_bws + 0.5);
+					if (d <= -hs || d >= hs)
+						continue;
+					a->pre_av_out[q] = a->qf_disp[d + hs];
+				}
+				pv0 = 0;
+				pv1 = n - 1;
+			}
+
 			for (i = 0; i < a->num_pixout; i++)
 			{
 				j = i - 1;
@@ -1068,7 +1225,7 @@ static void sm_stitch(int disp, sm_frame* fi)
 				sm_realign(a, i, lo_req * 1.0e6 + low_rel, hzpp, n);
 				if (pv0 <= pv1)
 					sm_accumulate(a, i, a->t_pixels[i], n,
-						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1);
+						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1, mv0, mv1);
 				sm_publish(a, i, tag);
 			}
 		}
@@ -1816,6 +1973,7 @@ void SetAnalyzer (	int disp,			// display identifier
 				a->plan[i][j] = fftw_plan_dft_r2c_1d(sz, a->fft_in[i][j], a->fft_out[i][j], FFTW_PATIENT);
 				a->Cplan[i][j] = fftw_plan_dft_1d(sz, a->Cfft_in[i][j], a->fft_out[i][j], FFTW_FORWARD, FFTW_PATIENT);
 			}
+		sm_quick_setup(a, sz);	// Jull1ano fork: quick fill
 
 		// Setup DetectMaxBin for a 'size' change.
 		calc_dmb(disp, sz);
@@ -2097,6 +2255,7 @@ void DestroyAnalyzer(int disp)
 	_aligned_free (a->sm_tmp);
 	_aligned_free (a->sm_tmp2);
 	_aligned_free (a->sm_vtmp);
+	sm_quick_setup(a, 0);	// Jull1ano fork: quick fill
 
 	_aligned_free (a->pre_av_out);
 	for (i = 0; i < a->max_stitch; i++)
