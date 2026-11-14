@@ -61,7 +61,10 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   coarse spectrum after a band change "weird movement", as in AltSDR rc28). Since 01:4x: any other LO change (a band
   change, a tune) shows one FFT of half the window once half a window of new samples is in (0.68 s instead of
   1.37 s at 262144 / 192 kHz), drawn like the full one (no Welch, no blend), then the full window takes over
-  (user: "when changing band, cut the time in half").
+  (user: "when changing band, cut the time in half"). Since 01:4x: from a quarter window (0.34 s), then half (0.68 s),
+  then full (1.37 s). At each stage change (also the first trace after the flat floor line) the panadapter trace
+  glides from what it showed to the new values in 0.3 s (cubic ease-out), as AltSDR's antenna fade; the averaging is
+  untouched (the stages replace, nothing coarse is averaged in); the waterfall gets the frames as they are.
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.
 - Its own settings and skins: `%APPDATA%\OpenHPSDR\Thetis-aether` (a first start copies Thetis-x64 there once) with

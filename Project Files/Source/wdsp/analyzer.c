@@ -758,6 +758,15 @@ static double sm_select(double* v, int n, int kth)	// k-th smallest, reorders v
 }
 
 // publish the averaging state of pixel output i as a new pixel frame
+static double sm_now_ms(void)
+{
+	static LARGE_INTEGER f;
+	LARGE_INTEGER c;
+	if (f.QuadPart == 0) QueryPerformanceFrequency(&f);
+	QueryPerformanceCounter(&c);
+	return (double)c.QuadPart * 1000.0 / (double)f.QuadPart;
+}
+
 static void sm_publish(DP a, int i, double tag_mhz)
 {
 	int j, c = 0, n = a->num_pixels;
@@ -785,6 +794,24 @@ static void sm_publish(DP a, int i, double tag_mhz)
 	if (a->normalize[i])
 		for (j = 0; j < n; j++)
 			out[j] += (dOUTREAL)a->norm_oneHz;
+	if (i == 0)
+	{
+		if (a->ease_len > 0.0)
+		{
+			double tt = (sm_now_ms() - a->ease_t0) / a->ease_len, e;
+			if (tt >= 1.0 || tt < 0.0 || a->ease_n != n || a->ease_low_hz != a->av_low_hz[0] || a->ease_hzpp != a->av_hzpp[0])
+				a->ease_len = 0.0;	// done, or the view moved (a pan / zoom has its own handling)
+			else
+			{
+				e = 1.0 - (1.0 - tt) * (1.0 - tt) * (1.0 - tt);	// cubic ease-out: most of the way in the first 0.1 s
+				for (j = 0; j < n; j++)
+					out[j] = (dOUTREAL)(a->ease_from[j] + ((double)out[j] - a->ease_from[j]) * e);
+			}
+		}
+		a->pub_n = n;
+		a->pub_low_hz = a->av_low_hz[0];
+		a->pub_hzpp = a->av_hzpp[0];
+	}
 
 	EnterCriticalSection(&a->PB_ControlsSection[i]);
 	EnterCriticalSection(&a->PixelRefSection);
@@ -937,6 +964,36 @@ static void sm_follow_view(DP a, int publish)
 	}
 }
 
+// the glide starts from what pixel output 0 shows: the last published trace if it is on the current grid, else the
+// state as sm_publish would show it (pixels without data at the floor)
+static void sm_ease_start(DP a)
+{
+	int j, n = a->num_pixels;
+	double fl;
+	if (!a->ease_from || n < 2 || n != a->av_n[0])
+		return;
+	if (a->pub_n == n && a->pub_low_hz == a->av_low_hz[0] && a->pub_hzpp == a->av_hzpp[0])
+	{
+		dOUTREAL* last = a->pixels[0][a->last_pix_buff[0]];
+		for (j = 0; j < n; j++)
+			a->ease_from[j] = (double)last[j];
+	}
+	else
+	{
+		fl = a->av_floor[0] < 1.0e29 ? a->av_floor[0] : -200.0;
+		for (j = 0; j < n; j++)
+			a->ease_from[j] = a->av_valid[0][j] ? sm_db(a, 0, j) : fl;
+		if (a->normalize[0])
+			for (j = 0; j < n; j++)
+				a->ease_from[j] += a->norm_oneHz;
+	}
+	a->ease_n = n;
+	a->ease_low_hz = a->av_low_hz[0];
+	a->ease_hzpp = a->av_hzpp[0];
+	a->ease_t0 = sm_now_ms();
+	a->ease_len = 300.0;
+}
+
 // quick fill: a short FFT of the newest samples (all taken at the newest LO), when the frame's valid part does not
 // cover the view; its power is matched to the main bins' noise floor (narrow carriers show lower until the full
 // window takes over). idx0: buffer index of the window's first sample; fresh: samples since the last LO change.
@@ -966,11 +1023,14 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	// "the lines are too grassy"), its resolution matters less
 	if (mode == 2)
 	{
-		// a band change or a tune (not a pan): nothing until half a window of new samples, then one FFT of half the
-		// window, drawn like the full one (no averaging, no blending): the spectrum in half the time, at half the
-		// resolution, then the full one takes over (user, 2026-11-15: "when changing band, cut the time in half")
-		k = a->qf_levels - 1;
-		if (k < 0 || (long long)(dQF_MIN << k) * 2 < (long long)a->size || (long long)(dQF_MIN << k) > fresh)
+		// a band change or a tune (not a pan): nothing until a quarter window of new samples, then one FFT of the
+		// longest power of two that fits (a quarter, then half the window), drawn like the full one (no Welch), then the
+		// full window takes over: 0.34 / 0.68 / 1.37 s at 262144 points and 192 kHz (user, 2026-11-15: "when changing
+		// band, cut the time in half", then "even again almost half, 0.4 s")
+		for (k = a->qf_levels - 1; k >= 0; k--)
+			if ((long long)(dQF_MIN << k) <= fresh)
+				break;
+		if (k < 0 || (long long)(dQF_MIN << k) * 4 < (long long)a->size)
 			return;
 	}
 	else
@@ -1258,6 +1318,13 @@ static void sm_stitch(int disp, sm_frame* fi)
 					memcpy(a->t_pixels[i], a->t_pixels[k], n * sizeof(double));
 
 				sm_realign(a, i, lo_req * 1.0e6 + low_rel, hzpp, n);
+				if (i == 0)
+				{
+					int stage = fi->qf ? a->qf_len : 0;
+					if (stage != a->qf_stage)
+						sm_ease_start(a);	// quick fill stage -> next stage / full window: the trace glides
+					a->qf_stage = stage;
+				}
 				if (pv0 <= pv1)
 					sm_accumulate(a, i, a->t_pixels[i], n,
 						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1, mv0, mv1, fi->qf == 1);
@@ -2179,6 +2246,7 @@ void XCreateAnalyzer(	int disp,
 	a->base_lo = 0.0;
 	a->req_valid = 0;
 	a->sm_tmp = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);
+	a->ease_from = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);	// Jull1ano fork: the glide
 	a->sm_tmp2 = (double*) malloc0 (sizeof(double) * dMAX_PIXELS);
 	a->sm_vtmp = (unsigned char*) malloc0 (dMAX_PIXELS);
 	for (i = 0; i < dMAX_PIXOUTS; i++)
@@ -2289,6 +2357,7 @@ void DestroyAnalyzer(int disp)
 		_aligned_free (a->av_valid[i]);
 	}
 	_aligned_free (a->sm_tmp);
+	_aligned_free (a->ease_from);
 	_aligned_free (a->sm_tmp2);
 	_aligned_free (a->sm_vtmp);
 	sm_quick_setup(a, 0);	// Jull1ano fork: quick fill

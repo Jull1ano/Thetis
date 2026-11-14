@@ -204,6 +204,15 @@ typedef struct _dp
 	int qf_len;												// its length
 	int ev_qf[dMAX_RETUNE_EV];								// the LO change may use the quick fill (a pan's re-centre)
 	int qf_arm;												// the next LO change may (SetAnalyzerQuickFill)
+	// the glide (pixel output 0, the panadapter): at each fill stage change the trace eases from what was shown to
+	// the new values in 0.3 s (as AltSDR's antenna fade), so carriers rise and the first trace grows from the floor
+	int qf_stage;											// the last frame's fill: 0 = full window, else the quick FFT length
+	double *ease_from;										// the trace it eases from, as published
+	double ease_t0, ease_len;								// start and length (ms); ease_len 0 = none
+	int ease_n;												// the grid ease_from is on
+	double ease_low_hz, ease_hzpp;
+	int pub_n;												// the grid of the last published output 0
+	double pub_low_hz, pub_hzpp;
 	// END SMOOTH PAN / RETUNE
 
 }  dp, *DP;
