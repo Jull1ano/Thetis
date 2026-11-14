@@ -423,16 +423,25 @@ namespace Thetis
                     s.Update = u;
                 }
                 _align_rx1_osc = true;
+                forkQuickFill(true);    // this re-centre may use the analyzer's quick fill (not band changes)
                 CentreFrequency = centre_mhz;
                 txtVFOAFreq_LostFocus(this, EventArgs.Empty);
+                forkQuickFill(false);
                 _align_rx1_osc = false;
                 applyPanZoomExact(exactZoomSlider(), 0.5, false);
             }
             finally
             {
+                forkQuickFill(false);
                 _align_rx1_osc = false;
                 _pan_applying = false;
             }
+        }
+
+        private static void forkQuickFill(bool on)
+        {
+            try { SpecHPSDRDLL.SetAnalyzerQuickFill(cmaster.inid(0, 0), on ? 1 : 0); }
+            catch { } // an older wdsp.dll without it
         }
 
         private void finishPan()

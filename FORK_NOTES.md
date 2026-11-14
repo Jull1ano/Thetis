@@ -55,6 +55,10 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   matched to the main bins' noise floor (narrow carriers read lower and wider until the full window takes over).
   Only pixels without real data get it (av_valid 2), the next quick spectrum replaces it, and the first real value
   restarts the pixel (no averaging / peak hold of coarse values). Plans made in SetAnalyzer (FFTW_ESTIMATE).
+  Calmer since 2026-11-15 01:3x: 5 to 8 Welch segments, and each quick value blended in dB with the pixel's previous
+  quick value (70 % kept). Only a pan's re-centre uses it (SetAnalyzerQuickFill armed around panRetune; each LO event
+  carries the flag): after a band change the full spectrum comes at once, as before (the user called the morphing
+  coarse spectrum after a band change "weird movement", as in AltSDR rc28).
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.
 - Its own settings and skins: `%APPDATA%\OpenHPSDR\Thetis-aether` (a first start copies Thetis-x64 there once) with

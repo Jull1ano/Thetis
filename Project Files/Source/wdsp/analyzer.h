@@ -202,6 +202,8 @@ typedef struct _dp
 	double main_E;											// the main window's energy
 	double *qf_disp;										// the last short spectrum, display order, in main-bin units
 	int qf_len;												// its length
+	int ev_qf[dMAX_RETUNE_EV];								// the LO change may use the quick fill (a pan's re-centre)
+	int qf_arm;												// the next LO change may (SetAnalyzerQuickFill)
 	// END SMOOTH PAN / RETUNE
 
 }  dp, *DP;
@@ -263,6 +265,9 @@ void SnapSpectrumTimeout(int disp,
 
 extern __declspec(dllexport)
 void SetPixelRef(int disp, double pixel_ref);
+
+extern __declspec(dllexport)
+void SetAnalyzerQuickFill(int disp, int on);
 
 extern __declspec(dllexport)
 void GetPixels(int disp,

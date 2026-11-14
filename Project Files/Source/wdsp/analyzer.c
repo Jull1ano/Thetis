@@ -833,10 +833,22 @@ static void sm_accumulate(DP a, int i, const double* t, int n, double d, int pv0
 		else
 			vt[j] = 1;
 	}
-	// quick fill always starts the pixel over, and so does the first real value where quick fill stood
+	// quick fill always starts the pixel over, smoothed with the pixel's previous quick value (in dB, 70 % kept: the
+	// short FFTs jump from frame to frame); the first real value where quick fill stood starts it over unsmoothed
 	for (j = 0; j < n; j++)
+	{
+		if (vt[j] == 2 && v[j] == 2)
+		{
+			double sc = a->scale * a->cd[j], prev = sm_db(a, i, j), cur;
+			if (sc > 0.0 && prev > -199.0)
+			{
+				cur = 10.0 * mlog10(sc * ft[j] + 1.0e-60);
+				ft[j] = pow(10.0, 0.1 * (0.7 * prev + 0.3 * cur)) / sc;
+			}
+		}
 		if (vt[j] == 2 || (vt[j] == 1 && v[j] == 2))
 			v[j] = 0;
+	}
 
 	switch (mode)
 	{
@@ -949,16 +961,24 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	}
 	// a margin for the retune latency guess: the first 10 ms after the marked change may still be the old LO
 	fresh -= (long long)(0.010 * fs);
+	// Welch: Ls the largest power of two that still gives 5 half-overlapping segments of the fresh samples (fewer,
+	// from 4096 points, right after the change), up to 8 averaged; the stand-in should look calm (user, 2026-11-15:
+	// "the lines are too grassy"), its resolution matters less
 	for (k = a->qf_levels - 1; k >= 0; k--)
-		if ((long long)(dQF_MIN << k) <= fresh)
+		if ((long long)(dQF_MIN << k) * 3 <= fresh)
 			break;
-	if (k < 0 || !a->qf_plan[k] || !a->qf_win[k])
+	if (k < 0)
+	{
+		if (fresh < (long long)dQF_MIN)
+			return;
+		k = 0;
+	}
+	if (!a->qf_plan[k] || !a->qf_win[k])
 		return;
 	Ls = dQF_MIN << k;
 	hs = Ls / 2;
-	// up to 3 half-overlapping segments (Welch): a smoother texture than one short FFT
 	nseg = 1 + (int)((fresh - (long long)Ls) / (long long)hs);
-	if (nseg > 3) nseg = 3;
+	if (nseg > 8) nseg = 8;
 	if (nseg < 1) nseg = 1;
 	scale = a->main_E / a->qf_E[k] / (double)nseg;
 	for (i = 0; i < Ls; i++)
@@ -1040,7 +1060,7 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 	long long ws = a->win_start[ss][LO];
 	int size = a->size;
 	int i, m, nev = 0, start, end, idx = a->IQO_idx[ss][LO];
-	int idx0 = idx;
+	int idx0 = idx, qf_ok = 0;
 	long long eidx[dMAX_RETUNE_EV];
 	double elo[dMAX_RETUNE_EV];
 	double Fs[dMAX_RETUNE_EV + 1], Gs[dMAX_RETUNE_EV + 1];
@@ -1057,12 +1077,14 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 		a->ev_count--;
 		memmove(a->ev_idx, a->ev_idx + 1, a->ev_count * sizeof(long long));
 		memmove(a->ev_lo, a->ev_lo + 1, a->ev_count * sizeof(double));
+		memmove(a->ev_qf, a->ev_qf + 1, a->ev_count * sizeof(int));
 	}
 	lo0 = a->base_lo;
 	for (m = 0; m < a->ev_count && a->ev_idx[m] < ws + size; m++)
 	{
 		eidx[nev] = a->ev_idx[m] - ws;
 		elo[nev] = a->ev_lo[m];
+		qf_ok = a->ev_qf[m];	// the newest change in the window decides
 		nev++;
 	}
 	LeaveCriticalSection(&a->PixelRefSection);
@@ -1096,7 +1118,8 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 		fi->vhi_hz = -Fmax + half;
 		if (fi->vhi_hz - fi->vlo_hz < 0.1 * fs)
 			fi->skip = 1;
-		sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi);
+		if (qf_ok)	// a pan's re-centre; after a band change the full spectrum comes at once (user's choice)
+			sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi);
 	}
 
 	if (nev == 0 || fi->skip)
@@ -2332,7 +2355,9 @@ void SetPixelRef(int disp, double pixel_ref)
 				a->ev_count--;
 				memmove(a->ev_idx, a->ev_idx + 1, a->ev_count * sizeof(long long));
 				memmove(a->ev_lo, a->ev_lo + 1, a->ev_count * sizeof(double));
+				memmove(a->ev_qf, a->ev_qf + 1, a->ev_count * sizeof(int));
 			}
+			a->ev_qf[a->ev_count] = a->qf_arm;
 			a->ev_idx[a->ev_count] = a->in_count[0][0] + llround(a->lat_ms * 1.0e-3 * (double)a->sample_rate);
 			if (a->ev_count > 0 && a->ev_idx[a->ev_count] < a->ev_idx[a->ev_count - 1])
 				a->ev_idx[a->ev_count] = a->ev_idx[a->ev_count - 1];
@@ -2354,6 +2379,20 @@ void SetAnalyzerSmooth(int disp, int enable)
 	if (a == 0)
 		return;
 	a->smooth_enable = enable ? 1 : 0;	// takes effect on the next SetAnalyzer()
+}
+
+// Jull1ano fork: whether the next LO change (SetPixelRef) may use the quick fill: a pan's re-centre does (its new
+// part shows at once, coarse, then sharpens); a band change or a tune does not (the user prefers the full spectrum at
+// once to a coarse one that changes). Thetis arms it around a pan's re-centre only.
+PORT
+void SetAnalyzerQuickFill(int disp, int on)
+{
+	DP a = pdisp[disp];
+	if (a == 0)
+		return;
+	EnterCriticalSection(&a->PixelRefSection);
+	a->qf_arm = on ? 1 : 0;
+	LeaveCriticalSection(&a->PixelRefSection);
 }
 
 PORT
