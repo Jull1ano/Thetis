@@ -17,8 +17,8 @@ COLOURS = {
     # cursor / peak readout
     'clrbtnPeakText': '0.180.216.255', 'clrbtnPeakBackground': '10.16.24.255',
     # spectrum: dark navy, a subtle grid, grey-blue labels, the VFO line and passband in AetherSDR's cyan
-    'clrbtnBackground': '11.14.24.255', 'clrbtnGrid': '26.35.48.255', 'clrbtnGridFine': '20.28.40.255',
-    'clrbtnHGridColor': '26.35.48.255', 'clrbtnText': '142.168.192.255', 'clrbtnZeroLine': '0.180.216.255',
+    'clrbtnBackground': '11.14.24.255', 'clrbtnGrid': '42.58.77.255', 'clrbtnGridFine': '30.42.56.255',
+    'clrbtnHGridColor': '42.58.77.255', 'clrbtnText': '142.168.192.255', 'clrbtnZeroLine': '0.180.216.255',
     'clrbtnFilter': '0.180.216.50', 'clrbtnNoiseFloor': '80.96.112.255', 'clrbtnNoiseFloorText': '142.168.192.255',
     'clrbtnWaterfall_time_label_colour': '200.216.232.255', 'clrbtnBandEdge': '255.122.26.255',
     # multimeter
@@ -27,6 +27,8 @@ COLOURS = {
     'clrbtnMeterEdgeLow': '200.216.232.255', 'clrbtnMeterEdgeHigh': '255.77.77.255',
     # selected buttons without a skin picture
     'clrbtnBtnSel': '0.112.192.255',
+    # the vertical grid shown (Setup > Appearance > RX Display > Panadapter > Display Major Grid)
+    'chkGridControl': 'True',
 }
 
 data = sys.argv[1]

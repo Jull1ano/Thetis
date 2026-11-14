@@ -217,8 +217,31 @@ namespace Thetis
             });
         }
 
+        // Jull1ano fork: the start-up steps with their times also saved as text (%TEMP%\thetis-fork-startup.txt), so a
+        // slow start can be read afterwards without the log window shown
+        private static void forkSaveTimes()
+        {
+            try
+            {
+                List<Entry> list;
+                lock (_sync) { list = new List<Entry>(_entries.Values); }
+                list.Sort((a, b) => a.start_utc.CompareTo(b.start_utc));
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                DateTime now = DateTime.UtcNow;
+                sb.Append("Thetis fork start ").Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).Append(", process start to now ")
+                  .Append((DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalSeconds.ToString("0.0")).Append(" s, log ")
+                  .Append((now - _total_start_utc).TotalSeconds.ToString("0.0")).Append(" s\r\n");
+                foreach (Entry e in list)
+                    sb.Append("+").Append((e.start_utc - _total_start_utc).TotalSeconds.ToString("0.00").PadLeft(6)).Append(" s  ")
+                      .Append(e.completed ? (e.completed_ms + " ms").PadLeft(9) : "   (open)").Append("  ").Append(e.base_text).Append("\r\n");
+                System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "thetis-fork-startup.txt"), sb.ToString());
+            }
+            catch { }
+        }
+
         public static void Finish()
         {
+            forkSaveTimes();
             ensureForm();
             runOnUiThread(delegate
             {

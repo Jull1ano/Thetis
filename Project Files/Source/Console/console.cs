@@ -46483,6 +46483,8 @@ namespace Thetis
             _forkPause.Click += (s, e) => forkSetPaused(!_forkDisplayFrozen);
             Controls.Add(_forkPause);
             chkPower.CheckedChanged += (s, e) => { if (!chkPower.Checked) forkSetPaused(false); _forkPause.Enabled = chkPower.Checked; };
+            chkMOX.CheckedChanged += (s, e) => { if (chkMOX.Checked) forkSetPaused(false); }; // transmitting ends a pause
+            chkTUN.CheckedChanged += (s, e) => { if (chkTUN.Checked) forkSetPaused(false); };
             _forkPause.Enabled = chkPower.Checked;
             forkPauseTip();
         }
@@ -46491,8 +46493,8 @@ namespace Thetis
         {
             if (_forkPause == null) return;
             toolTip1.SetToolTip(_forkPause, _forkDisplayFrozen
-                ? "Paused (P): the spectrum and waterfall are frozen; the radio and the audio go on. Click or press P to resume."
-                : "Pause (P): freeze the spectrum and waterfall, e.g. while you change antennas, to compare the signals.");
+                ? "Paused (P): the spectrum and waterfall are frozen, the receivers and their audio stopped. Click or press P to resume."
+                : "Pause (P): freeze the spectrum and waterfall and stop the receivers and their audio, e.g. while you change antennas.");
         }
 
         private void forkSetPaused(bool on)
@@ -46505,15 +46507,49 @@ namespace Thetis
                 _forkFrozenBottom = Display.new_display_data_bottom == null ? null : (float[])Display.new_display_data_bottom.Clone();
                 _forkResumeAt = 0;
                 _forkDisplayFrozen = true;
+                forkPauseDsp(true);
             }
             else
             {
+                forkPauseDsp(false);
                 _forkResumeAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 _forkDisplayFrozen = false;
             }
             if (_forkPause != null) _forkPause.Paused = on;
             forkPauseTip();
             HighDpi.Log("display " + (on ? "paused" : "resumed"));
+        }
+
+        // The receivers stopped while paused (the user: "stop the audio for real and the decoding in the background"):
+        // their DSP channels off as Power off does it (RX1, its sub-receiver, RX2), the audio mixer no longer waiting
+        // for them; the radio keeps streaming, so a resume is at once (as Power on: the mixer, then the channels on).
+        private bool _forkPauseStoppedDsp;
+        unsafe private void forkPauseDsp(bool stop)
+        {
+            try
+            {
+                if (stop)
+                {
+                    if (!chkPower.Checked || _forkPauseStoppedDsp) return;
+                    int RX1 = 1 << WDSP.id(0, 0), RX1S = 1 << WDSP.id(0, 1), RX2 = 1 << WDSP.id(2, 0), MON = 1 << WDSP.id(1, 0);
+                    cmaster.SetAAudioMixStates((void*)0, 0, RX1 + RX1S + RX2 + MON, MON);
+                    WDSP.SetChannelState(WDSP.id(0, 0), 0, 1);
+                    if (radio.GetDSPRX(0, 1).Active) WDSP.SetChannelState(WDSP.id(0, 1), 0, 1);
+                    if (radio.GetDSPRX(1, 0).Active) WDSP.SetChannelState(WDSP.id(2, 0), 0, 1);
+                    _forkPauseStoppedDsp = true;
+                }
+                else
+                {
+                    if (!_forkPauseStoppedDsp) return;
+                    _forkPauseStoppedDsp = false;
+                    if (!chkPower.Checked) return; // powered off meanwhile: Power on starts them
+                    UpdateAAudioMixerStates();
+                    WDSP.SetChannelState(WDSP.id(0, 0), 1, 1);
+                    if (radio.GetDSPRX(0, 1).Active) WDSP.SetChannelState(WDSP.id(0, 1), 1, 1);
+                    if (radio.GetDSPRX(1, 0).Active) WDSP.SetChannelState(WDSP.id(2, 0), 1, 1);
+                }
+            }
+            catch (Exception ex) { HighDpi.Log("pause dsp: " + ex.Message); }
         }
 
         // new frames for the 450 ms after a resume: frozen + a (live - frozen), a a smoothstep from 0 to 1

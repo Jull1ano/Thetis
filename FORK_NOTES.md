@@ -22,9 +22,11 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
 - Memory window: never narrower than the fields under the grid (a saved 853 px window cut Name and Comments off).
 - Pause (P, and a button above Power), as AetherSDR's: the spectrum and waterfall stop taking new frames and keep
   the last ones (the display pump skips GetPixels while paused), so signals can be compared while switching
-  antennas; the radio, the DSP and its averaging, the audio and the overlays go on. Resume: the trace glides from the
-  frozen frame to the live one over 450 ms (smoothstep), the waterfall goes on under the frozen rows. Power off ends
-  a pause. P was Thetis' default XIT-down key (Setup > Keyboard can give XIT down another key).
+  antennas. The receivers stop too: their DSP channels off as Power off does it (RX1, its sub-receiver, RX2) and the
+  audio mixer no longer waits for them, so no audio and no demodulating in the background; the radio keeps streaming,
+  so a resume is at once. Resume: the channels back on, the trace glides from the frozen frame to the live one over
+  450 ms (smoothstep), the waterfall goes on under the frozen rows. Power off, MOX and TUNE end a pause. P was
+  Thetis' default XIT-down key (Setup > Keyboard can give XIT down another key).
 - The three band / mode groups 12 px apart: the mode buttons move down into the free space under them when needed.
 - Value boxes (tune step, quick memory, band stack) in AetherSDR's value colours (skin xml); the slider knob a vector
   circle (14 px, lighter under the mouse; ForkTheme <Slider>); the console's number boxes' up / down buttons drawn as
@@ -36,6 +38,11 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
 - One edge for every box: Thetis runs without visual styles, so a single-line box (FixedSingle) draws its grey
   #646464 border inside itself; the theme gives the value boxes a 3D border (a window frame) that the fork paints
   as the subtle edge. Number boxes draw a 1 px #abadb3 border in their client area: painted over after they paint.
+- Faster start with a big skin (Skin.cs): every picture was decoded, re-encoded as PNG and hashed at every skin load,
+  and resizeImage drew a resized copy it then threw away. The cache key is now the MD5 of the file's bytes, a picture
+  is decoded only once, and the wasted draw is gone: AetherSDR Style (1289 pictures at 200 %) 3.4 s -> ~0.7 s.
+- Start-up times saved as text: `%TEMP%\thetis-fork-startup.txt` (each step of Thetis' own start-up log, its offset and
+  ms), written when the start finishes, so a slow start can be read afterwards.
 
 
 Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
