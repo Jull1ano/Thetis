@@ -79,7 +79,12 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   full-window frame (1.37 s at 262144 / 192 kHz) shows at once, its pixels starting the averaging over (a little
   grassy, then settling, as AltSDR). Tunes inside the span (mode 2) and pans (mode 1) are unchanged. The user accepts
   the longer wait ("that's fine too if that's the last resort"); AltSDR's 1.0 s cap with a coarse frame was left out
-  so nothing changes after the first frame. The first version (cubic ease-out from rest at every stage) lurched:
+  so nothing changes after the first frame. Since 11:1x the same for a pan's re-centre and a tune (also the AltSDR
+  session; user, OBS video ...-PAN.mp4 with AVG off at 192 kHz: the quick fill's carriers grew and its shapes "danced
+  backwards" for a second; asked, the user chose "Wait, then show at once"): sm_quick_fill draws nothing for any LO
+  change, so the newly uncovered part stays the floor line until a full window covers it (about 1.4 s at 262144 /
+  192 kHz, 0.7 s at 384 kHz; a smaller FFT shortens it), then shows at once. The quick fill code and the glide stay in
+  the source, unused. The first version (cubic ease-out from rest at every stage) lurched:
   "speeding up then resuming at normal speed". The averaging is untouched; the waterfall gets the frames as they are.
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.

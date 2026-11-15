@@ -1055,12 +1055,15 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	dINREAL* Q = a->Q_samples[ss][LO];
 	if (a->qf_levels <= 0 || fs <= 0.0 || a->main_E <= 0.0)
 		return;
-	// a band change (3): no quick fill at all - AltSDR's jump hold (SpectrumEngine::startJumpHold): the floor line until
-	// a full window of the new band's samples, then the full spectrum in one frame (user, 2026-11-15, two videos: "i want
-	// exactly as altsdr does it ... i dont see that backwards speedy movement for 1s in the beginning ... i see
-	// sometimes altsdr waits a bit more until the MW is loaded, that's fine too if that's the last resort")
-	if (mode == 3)
-		return;
+	// no quick fill for any LO change - AltSDR's rule (it never draws a stand-in: SpectrumEngine::startJumpHold, frames
+	// mapped by their own LO): what no full window covers yet stays the floor line, then the real spectrum shows in one
+	// frame. Band change (3), user 2026-11-15 after videos of both: "i want exactly as altsdr does it ... i see sometimes
+	// altsdr waits a bit more until the MW is loaded, that's fine too if that's the last resort". A pan's re-centre (1)
+	// and a tune (2), user 2026-11-15 11:1x (OBS video ...-PAN.mp4, AVG off, 192 kHz): the short FFTs' carriers grew and
+	// their shapes "danced backwards" for a second; asked, the user chose "Wait, then show at once" (about 1.4 s at
+	// 262144 / 192 kHz). The code below is kept for reference.
+	(void)mode;
+	return;
 	// only when the view reaches past the part the frame covers
 	if (!sm_geometry(a, &low_rel, &hzpp))
 		return;
@@ -1248,8 +1251,8 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 		fi->vhi_hz = -Fmax + half;
 		if (fi->vhi_hz - fi->vlo_hz < 0.1 * fs)
 			fi->skip = 1;
-		// a pan's re-centre (1): fast, calm, coarse; another LO change (2, a tune): from a quarter window; a band change
-		// (3): none (the floor line until the full window)
+		// since 2026-11-15 11:2x sm_quick_fill draws nothing for any of them (AltSDR's rule): a pan's re-centre (1), a
+		// tune (2), a band change (3) - what the frame does not cover stays the floor line until a full window does
 		sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi, qf_ok == 1 ? 1 : qf_ok == 3 ? 3 : 2);
 	}
 
