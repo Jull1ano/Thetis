@@ -1013,8 +1013,19 @@ static void sm_ease_start(DP a)
 	int j, n = a->num_pixels;
 	double now = sm_now_ms(), fl;
 	if (!a->ease_from || !a->shown || n < 2 || n != a->av_n[0])
+	{
+		a->hold_morph = 0;
 		return;
-	if (a->shown_at > 0.0 && a->shown_n == n && a->shown_low_hz == a->av_low_hz[0] && a->shown_hzpp == a->av_hzpp[0])
+	}
+	if (a->hold_morph && a->shown_at > 0.0 && a->shown_n == n)
+	{
+		// a band change: from the old band's trace, held on screen until now, screen to screen (as the original
+		// Thetis' frozen image), from rest
+		memcpy(a->ease_from, a->shown, n * sizeof(double));
+		a->speed = 0.0;
+		a->ease_t0 = now - 16.7;
+	}
+	else if (a->shown_at > 0.0 && a->shown_n == n && a->shown_low_hz == a->av_low_hz[0] && a->shown_hzpp == a->av_hzpp[0])
 	{
 		if (now - a->shown_at > 50.0)
 		{
@@ -1038,6 +1049,7 @@ static void sm_ease_start(DP a)
 		a->speed = 0.0;
 		a->ease_t0 = now - 16.7;
 	}
+	a->hold_morph = 0;
 	a->ease_n = n;
 	a->ease_low_hz = a->av_low_hz[0];
 	a->ease_hzpp = a->av_hzpp[0];
@@ -2467,16 +2479,23 @@ void SetPixelRef(int disp, double pixel_ref)
 	// Jull1ano fork: the call is also the LO change marker for the smooth pan / retune code. It must come
 	// right when the new LO is sent to the radio (Thetis: Display.CentreFreqRX1 in UpdateRX1DDSFreq).
 	DP a = pdisp[disp];
-	int changed;
+	int changed, hold = 0;
+	double old_ref;
 	if (a == 0)
 		return;
 
 	EnterCriticalSection(&a->ResampleSection);
 	EnterCriticalSection(&a->PixelRefSection);
 	changed = (pixel_ref != a->pixel_ref);
+	old_ref = a->pixel_ref;
 	a->pixel_ref = pixel_ref;
 	if (changed)
 	{
+		// Jull1ano fork: a band change (a jump past the whole span, not a pan's re-centre): the trace shown stays as it
+		// is, frozen as in the original Thetis, until the new band's first frame, which glides in from it (user,
+		// 2026-11-15: "half wait in, then half enter with the effect"); smaller jumps keep showing what is still valid
+		hold = a->req_valid && a->smooth_on && a->qf_arm != 1 &&
+			fabs(pixel_ref - old_ref) * 1.0e6 > 0.9 * (double)a->sample_rate;
 		if (!a->req_valid || !a->smooth_on)
 		{
 			// first LO, or no smooth mode: nothing to rotate
@@ -2504,7 +2523,12 @@ void SetPixelRef(int disp, double pixel_ref)
 	}
 	LeaveCriticalSection(&a->PixelRefSection);
 	if (changed && a->smooth_on)
-		sm_follow_view(a, 1);
+	{
+		a->hold_morph = hold;
+		if (hold)
+			a->qf_stage = -1;		// the next frame (quick fill or full) starts the glide
+		sm_follow_view(a, !hold);	// held: realigned, not published (the old band's trace stays on screen)
+	}
 	LeaveCriticalSection(&a->ResampleSection);
 }
 

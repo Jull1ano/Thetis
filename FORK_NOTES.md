@@ -69,7 +69,9 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   trace shown last at the time it was shown (a running glide continues, never restarted from rest); its length is
   2 / rate (rate = speed / gap) within 0.1-0.45 s (0.3 s from rest) and w = 1 - (1-x)^2 (1 + (2 - slope) x) with the
   start slope rate x length (0..3) and end slope 0. A band change's first stage starts from rest (the hold publishes
-  nothing, so the trace counts as still). The first version (cubic ease-out from rest at every stage) lurched:
+  nothing, so the trace counts as still). Since 02:0x a band change (a jump past the whole span, not a pan) holds the
+  old band's trace on screen, frozen as in the original Thetis (SetPixelRef realigns without publishing), and the
+  first new frame glides in from it screen to screen; smaller jumps keep showing what is still valid. The first version (cubic ease-out from rest at every stage) lurched:
   "speeding up then resuming at normal speed". The averaging is untouched; the waterfall gets the frames as they are.
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.

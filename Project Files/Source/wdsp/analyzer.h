@@ -217,6 +217,7 @@ typedef struct _dp
 	double shown_mean, shown_at, speed;						// its mean (dB), when (ms), how fast the mean moves (dB/s)
 	int shown_n;											// its grid
 	double shown_low_hz, shown_hzpp;
+	int hold_morph;											// a band change holds the shown trace; the next stage glides from it
 	// END SMOOTH PAN / RETUNE
 
 }  dp, *DP;
