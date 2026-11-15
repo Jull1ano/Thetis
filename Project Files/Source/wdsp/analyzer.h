@@ -202,7 +202,8 @@ typedef struct _dp
 	double main_E;											// the main window's energy
 	double *qf_disp;										// the last short spectrum, display order, in main-bin units
 	int qf_len;												// its length
-	int ev_qf[dMAX_RETUNE_EV];								// the LO change may use the quick fill (a pan's re-centre)
+	int ev_qf[dMAX_RETUNE_EV];								// 1 a pan's re-centre (fast quick fill), 2 another LO change (steps),
+															// 3 a band change (no quick fill: AltSDR's jump hold)
 	int qf_arm;												// the next LO change may (SetAnalyzerQuickFill)
 	// the glide (pixel output 0, the panadapter): at each fill stage change the trace eases from what was shown to
 	// the new values, AltSDR's antenna fade exactly (SpectrumView::antennaFade): the curve starts at the speed the
@@ -217,7 +218,8 @@ typedef struct _dp
 	double shown_mean, shown_at, speed;						// its mean (dB), when (ms), how fast the mean moves (dB/s)
 	int shown_n;											// its grid
 	double shown_low_hz, shown_hzpp;
-	int hold_morph;											// a band change holds the shown trace; the next stage glides from it
+	int band_jump;											// a band change (AltSDR's jump hold): the floor line, no glide, no
+															// quick fill steps, until the new band's first full-window frame
 	// END SMOOTH PAN / RETUNE
 
 }  dp, *DP;

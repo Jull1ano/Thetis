@@ -71,7 +71,15 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   start slope rate x length (0..3) and end slope 0. A band change's first stage starts from rest (the hold publishes
   nothing, so the trace counts as still). Since 02:0x a band change (a jump past the whole span, not a pan) holds the
   old band's trace on screen, frozen as in the original Thetis (SetPixelRef realigns without publishing), and the
-  first new frame glides in from it screen to screen; smaller jumps keep showing what is still valid. The first version (cubic ease-out from rest at every stage) lurched:
+  first new frame glides in from it screen to screen; smaller jumps keep showing what is still valid. Since
+  2026-11-15 11:0x (done by the AltSDR session while this one was offline; user: "i want exactly as altsdr does it",
+  after OBS videos of both, D:\Videos\OBS\demo): a band change is AltSDR's jump hold - SetPixelRef publishes the
+  realigned state at once (all invalid: the flat floor line; the old band's trace is gone, it no longer slides onto the
+  new scale), the event is ev_qf 3 (no quick fill steps), band_jump suppresses every glide, and the new band's first
+  full-window frame (1.37 s at 262144 / 192 kHz) shows at once, its pixels starting the averaging over (a little
+  grassy, then settling, as AltSDR). Tunes inside the span (mode 2) and pans (mode 1) are unchanged. The user accepts
+  the longer wait ("that's fine too if that's the last resort"); AltSDR's 1.0 s cap with a coarse frame was left out
+  so nothing changes after the first frame. The first version (cubic ease-out from rest at every stage) lurched:
   "speeding up then resuming at normal speed". The averaging is untouched; the waterfall gets the frames as they are.
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.

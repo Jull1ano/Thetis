@@ -1013,19 +1013,8 @@ static void sm_ease_start(DP a)
 	int j, n = a->num_pixels;
 	double now = sm_now_ms(), fl;
 	if (!a->ease_from || !a->shown || n < 2 || n != a->av_n[0])
-	{
-		a->hold_morph = 0;
 		return;
-	}
-	if (a->hold_morph && a->shown_at > 0.0 && a->shown_n == n)
-	{
-		// a band change: from the old band's trace, held on screen until now, screen to screen (as the original
-		// Thetis' frozen image), from rest
-		memcpy(a->ease_from, a->shown, n * sizeof(double));
-		a->speed = 0.0;
-		a->ease_t0 = now - 16.7;
-	}
-	else if (a->shown_at > 0.0 && a->shown_n == n && a->shown_low_hz == a->av_low_hz[0] && a->shown_hzpp == a->av_hzpp[0])
+	if (a->shown_at > 0.0 && a->shown_n == n && a->shown_low_hz == a->av_low_hz[0] && a->shown_hzpp == a->av_hzpp[0])
 	{
 		if (now - a->shown_at > 50.0)
 		{
@@ -1049,7 +1038,6 @@ static void sm_ease_start(DP a)
 		a->speed = 0.0;
 		a->ease_t0 = now - 16.7;
 	}
-	a->hold_morph = 0;
 	a->ease_n = n;
 	a->ease_low_hz = a->av_low_hz[0];
 	a->ease_hzpp = a->av_hzpp[0];
@@ -1066,6 +1054,12 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_fr
 	dINREAL* I = a->I_samples[ss][LO];
 	dINREAL* Q = a->Q_samples[ss][LO];
 	if (a->qf_levels <= 0 || fs <= 0.0 || a->main_E <= 0.0)
+		return;
+	// a band change (3): no quick fill at all - AltSDR's jump hold (SpectrumEngine::startJumpHold): the floor line until
+	// a full window of the new band's samples, then the full spectrum in one frame (user, 2026-11-15, two videos: "i want
+	// exactly as altsdr does it ... i dont see that backwards speedy movement for 1s in the beginning ... i see
+	// sometimes altsdr waits a bit more until the MW is loaded, that's fine too if that's the last resort")
+	if (mode == 3)
 		return;
 	// only when the view reaches past the part the frame covers
 	if (!sm_geometry(a, &low_rel, &hzpp))
@@ -1254,8 +1248,9 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 		fi->vhi_hz = -Fmax + half;
 		if (fi->vhi_hz - fi->vlo_hz < 0.1 * fs)
 			fi->skip = 1;
-		// a pan's re-centre (1): fast, calm, coarse; any other change (2, a band change): from half a window
-		sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi, qf_ok == 1 ? 1 : 2);
+		// a pan's re-centre (1): fast, calm, coarse; another LO change (2, a tune): from a quarter window; a band change
+		// (3): none (the floor line until the full window)
+		sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi, qf_ok == 1 ? 1 : qf_ok == 3 ? 3 : 2);
 	}
 
 	if (nev == 0 || fi->skip)
@@ -1385,7 +1380,11 @@ static void sm_stitch(int disp, sm_frame* fi)
 				if (i == 0)
 				{
 					int stage = fi->qf ? a->qf_len : 0;
-					if (stage != a->qf_stage)
+					// a band change ends with the new band's first full-window frame: it shows at once, the averaging
+					// starting from it (its pixels were invalidated), never glided (AltSDR: no ease on a band change)
+					if (a->band_jump && !fi->skip && !fi->qf && fabs(fi->lo - lo_req) < 1.0e-9)
+						a->band_jump = 0;
+					else if (stage != a->qf_stage && !a->band_jump)
 						sm_ease_start(a);	// quick fill stage -> next stage / full window: the trace glides
 					a->qf_stage = stage;
 				}
@@ -2479,7 +2478,7 @@ void SetPixelRef(int disp, double pixel_ref)
 	// Jull1ano fork: the call is also the LO change marker for the smooth pan / retune code. It must come
 	// right when the new LO is sent to the radio (Thetis: Display.CentreFreqRX1 in UpdateRX1DDSFreq).
 	DP a = pdisp[disp];
-	int changed, hold = 0;
+	int changed, jump = 0;
 	double old_ref;
 	if (a == 0)
 		return;
@@ -2491,10 +2490,11 @@ void SetPixelRef(int disp, double pixel_ref)
 	a->pixel_ref = pixel_ref;
 	if (changed)
 	{
-		// Jull1ano fork: a band change (a jump past the whole span, not a pan's re-centre): the trace shown stays as it
-		// is, frozen as in the original Thetis, until the new band's first frame, which glides in from it (user,
-		// 2026-11-15: "half wait in, then half enter with the effect"); smaller jumps keep showing what is still valid
-		hold = a->req_valid && a->smooth_on && a->qf_arm != 1 &&
+		// Jull1ano fork: a band change (a jump past the whole span, not a pan's re-centre) as AltSDR's (user, 2026-11-15,
+		// after comparing videos of both: "i want exactly as altsdr does it"): the old band's trace goes at once (the
+		// realigned state, all invalid, is published: the floor line), no quick fill steps, no glide, until the new
+		// band's first full-window frame, which shows at once; smaller jumps keep showing what is still valid
+		jump = a->req_valid && a->smooth_on && a->qf_arm != 1 &&
 			fabs(pixel_ref - old_ref) * 1.0e6 > 0.9 * (double)a->sample_rate;
 		if (!a->req_valid || !a->smooth_on)
 		{
@@ -2512,7 +2512,7 @@ void SetPixelRef(int disp, double pixel_ref)
 				memmove(a->ev_lo, a->ev_lo + 1, a->ev_count * sizeof(double));
 				memmove(a->ev_qf, a->ev_qf + 1, a->ev_count * sizeof(int));
 			}
-			a->ev_qf[a->ev_count] = a->qf_arm;
+			a->ev_qf[a->ev_count] = jump ? 3 : a->qf_arm;
 			a->ev_idx[a->ev_count] = a->in_count[0][0] + llround(a->lat_ms * 1.0e-3 * (double)a->sample_rate);
 			if (a->ev_count > 0 && a->ev_idx[a->ev_count] < a->ev_idx[a->ev_count - 1])
 				a->ev_idx[a->ev_count] = a->ev_idx[a->ev_count - 1];
@@ -2524,10 +2524,13 @@ void SetPixelRef(int disp, double pixel_ref)
 	LeaveCriticalSection(&a->PixelRefSection);
 	if (changed && a->smooth_on)
 	{
-		a->hold_morph = hold;
-		if (hold)
-			a->qf_stage = -1;		// the next frame (quick fill or full) starts the glide
-		sm_follow_view(a, !hold);	// held: realigned, not published (the old band's trace stays on screen)
+		if (jump)
+		{
+			a->band_jump = 1;
+			a->ease_state = 0;		// a glide under way ends: nothing eases across a band change
+			a->qf_stage = 0;
+		}
+		sm_follow_view(a, 1);		// a band change: all invalid -> the floor line at once (AltSDR: no data = the floor)
 	}
 	LeaveCriticalSection(&a->ResampleSection);
 }
