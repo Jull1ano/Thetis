@@ -202,9 +202,6 @@ typedef struct _dp
 	double main_E;											// the main window's energy
 	double *qf_disp;										// the last short spectrum, display order, in main-bin units
 	int qf_len;												// its length
-	double *qf_acc;											// the calm quick fill: segment powers summed since the LO change
-	long long qf_acc_from, qf_acc_next;						// absolute index of its first counted sample / of the next segment
-	int qf_acc_k, qf_acc_n;									// its size level and segment count (-1: nothing summed)
 	int ev_qf[dMAX_RETUNE_EV];								// 1 a pan's re-centre (fast quick fill), 2 another LO change (steps),
 															// 3 a band change (no quick fill: AltSDR's jump hold)
 	int qf_arm;												// the next LO change may (SetAnalyzerQuickFill)

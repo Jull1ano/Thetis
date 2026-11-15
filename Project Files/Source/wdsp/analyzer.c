@@ -1044,28 +1044,23 @@ static void sm_ease_start(DP a)
 	a->ease_state = 1;
 }
 
-// quick fill, the calm one (user, 2026-11-15 11:2x: after trying AltSDR's wait - "wait is insanely long, lets switch to
-// calmer"): a stand-in for what the frame cannot cover yet after a pan's re-centre (1) or a tune (2), never after a band
-// change (3: AltSDR's jump hold, the floor line until the full window). One fixed size - the smallest that puts 16 bins
-// in a pixel, so it shows what the full window will but for the carriers' height - Welch-averaged over EVERY sample
-// since the change (half-overlapping segments, summed as they come: one FFT per new half segment), so it neither steps
-// in size nor dances: it only settles as data comes in, as the full window would. Its power is matched to the main bins'
-// noise floor, so narrow carriers show lower (10 log(size / Ls) dB) until the full window takes over (the glide eases
-// that step). Before 11:2x the size grew with the fresh samples (4096 -> ... -> half the window) and only the newest 8
-// segments were averaged, blended 70 % with the last value: the carriers grew and the shapes "danced backwards" for a
-// second (user's video ...-PAN.mp4, AVG off, 192 kHz).
-// idx0: buffer index of the window's first sample; ws: its absolute index; fresh: samples since the last LO change.
-static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long ws, long long fresh, sm_frame* fi, int mode)
+// quick fill: a short FFT of the newest samples (all taken at the newest LO), when the frame's valid part does not
+// cover the view; its power is matched to the main bins' noise floor (narrow carriers show lower until the full
+// window takes over). idx0: buffer index of the window's first sample; fresh: samples since the last LO change.
+static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long fresh, sm_frame* fi, int mode)
 {
-	int k, i, b, Ls, hs, idx;
+	int k, i, b, Ls, hs, idx, seg, nseg;
 	double low_rel, hzpp, fs = (double)a->sample_rate, scale, lo_req;
-	long long from, end;
 	dINREAL* I = a->I_samples[ss][LO];
 	dINREAL* Q = a->Q_samples[ss][LO];
-	if (a->qf_levels <= 0 || fs <= 0.0 || a->main_E <= 0.0 || !a->qf_acc)
+	if (a->qf_levels <= 0 || fs <= 0.0 || a->main_E <= 0.0)
 		return;
+	// a band change (3): no quick fill at all - AltSDR's jump hold (SpectrumEngine::startJumpHold): the floor line until
+	// a full window of the new band's samples, then the full spectrum in one frame (user, 2026-11-15, two videos: "i want
+	// exactly as altsdr does it ... i dont see that backwards speedy movement for 1s in the beginning ... i see
+	// sometimes altsdr waits a bit more until the MW is loaded, that's fine too if that's the last resort")
 	if (mode == 3)
-		return;	// a band change: no stand-in (user, 2026-11-15: "exactly as altsdr does it")
+		return;
 	// only when the view reaches past the part the frame covers
 	if (!sm_geometry(a, &low_rel, &hzpp))
 		return;
@@ -1079,33 +1074,48 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long ws, long lon
 	}
 	// a margin for the retune latency guess: the first 10 ms after the marked change may still be the old LO
 	fresh -= (long long)(0.010 * fs);
-	// the size: the smallest with 16 bins in a pixel (at most half the window)
-	for (k = 0; k < a->qf_levels - 1; k++)
-		if ((double)(dQF_MIN << k) * hzpp >= 16.0 * fs)
-			break;
+	// Welch: Ls the largest power of two that still gives 5 half-overlapping segments of the fresh samples (fewer,
+	// from 4096 points, right after the change), up to 8 averaged; the stand-in should look calm (user, 2026-11-15:
+	// "the lines are too grassy"), its resolution matters less
+	if (mode == 2)
+	{
+		// a band change or a tune (not a pan): nothing until a quarter window of new samples, then the longest power of
+		// two that fits (a quarter, then half the window), Welch-averaged over all samples since the change, then the
+		// full window takes over: 0.34 / 0.68 / 1.37 s at 262144 points and 192 kHz (user, 2026-11-15: "when changing
+		// band, cut the time in half", then "even again almost half, 0.4 s")
+		for (k = a->qf_levels - 1; k >= 0; k--)
+			if ((long long)(dQF_MIN << k) <= fresh)
+				break;
+		if (k < 0 || (long long)(dQF_MIN << k) * 4 < (long long)a->size)
+			return;
+	}
+	else
+	{
+		for (k = a->qf_levels - 1; k >= 0; k--)
+			if ((long long)(dQF_MIN << k) * 3 <= fresh)
+				break;
+		if (k < 0)
+		{
+			if (fresh < (long long)dQF_MIN)
+				return;
+			k = 0;
+		}
+	}
 	if (!a->qf_plan[k] || !a->qf_win[k])
 		return;
 	Ls = dQF_MIN << k;
 	hs = Ls / 2;
-	if (fresh < (long long)Ls)
-		return;
-	end = ws + (long long)a->size;	// absolute index after the window's last sample
-	from = end - fresh;				// absolute index of the first sample counted (the change + the margin)
-	if (a->qf_acc_n < 0 || from != a->qf_acc_from || k != a->qf_acc_k)
+	nseg = 1 + (int)((fresh - (long long)Ls) / (long long)hs);
+	if (nseg > 8) nseg = 8;
+	if (nseg < 1) nseg = 1;	// mode 2 too: the step spans all the time since the change (its motion slows steadily
+							// to the full window's pace; one FFT of the newest 0.34 s made a station's sidebands
+							// "dance" faster for the first second, user 2026-11-15)
+	scale = a->main_E / a->qf_E[k] / (double)nseg;
+	for (i = 0; i < Ls; i++)
+		a->qf_disp[i] = 0.0;
+	for (seg = 0; seg < nseg; seg++)
 	{
-		// another LO change (or another size): the sum starts over
-		for (i = 0; i < Ls; i++)
-			a->qf_acc[i] = 0.0;
-		a->qf_acc_from = from;
-		a->qf_acc_next = from;
-		a->qf_acc_k = k;
-		a->qf_acc_n = 0;
-	}
-	if (a->qf_acc_next < ws)
-		a->qf_acc_next = ws;		// frames went by without a call: the samples before this window are not read
-	while (a->qf_acc_next + (long long)Ls <= end)
-	{
-		idx = idx0 + (int)(a->qf_acc_next - ws);
+		idx = idx0 + a->size - Ls - seg * hs;
 		while (idx >= a->bsize) idx -= a->bsize;
 		while (idx < 0) idx += a->bsize;
 		for (i = 0; i < Ls; i++)
@@ -1119,16 +1129,9 @@ static void sm_quick_fill(DP a, int ss, int LO, int idx0, long long ws, long lon
 		{
 			b = a->flip[LO] ? -i : i;
 			if (b < 0) b += Ls;
-			a->qf_acc[i + hs] += a->qf_out[b][0] * a->qf_out[b][0] + a->qf_out[b][1] * a->qf_out[b][1];
+			a->qf_disp[i + hs] += scale * (a->qf_out[b][0] * a->qf_out[b][0] + a->qf_out[b][1] * a->qf_out[b][1]);
 		}
-		a->qf_acc_n++;
-		a->qf_acc_next += hs;
 	}
-	if (a->qf_acc_n <= 0)
-		return;
-	scale = a->main_E / a->qf_E[k] / (double)a->qf_acc_n;
-	for (i = 0; i < Ls; i++)
-		a->qf_disp[i] = scale * a->qf_acc[i];
 	a->qf_disp[0] = a->qf_disp[1];
 	a->qf_len = Ls;
 	fi->qf_bws = fs / (double)Ls;
@@ -1150,16 +1153,13 @@ static void sm_quick_setup(DP a, int sz)
 	if (a->qf_in) { fftw_free(a->qf_in); a->qf_in = 0; }
 	if (a->qf_out) { fftw_free(a->qf_out); a->qf_out = 0; }
 	if (a->qf_disp) { _aligned_free(a->qf_disp); a->qf_disp = 0; }
-	if (a->qf_acc) { _aligned_free(a->qf_acc); a->qf_acc = 0; }
-	a->qf_acc_n = -1;
 	if (sz / 2 < dQF_MIN)
 		return;
 	a->qf_bufsize = sz / 2;
 	a->qf_in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * a->qf_bufsize);
 	a->qf_out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * a->qf_bufsize);
 	a->qf_disp = (double*) malloc0(sizeof(double) * a->qf_bufsize);
-	a->qf_acc = (double*) malloc0(sizeof(double) * a->qf_bufsize);
-	if (!a->qf_in || !a->qf_out || !a->qf_disp || !a->qf_acc)
+	if (!a->qf_in || !a->qf_out || !a->qf_disp)
 		return;
 	for (k = 0; k < dQF_LEVELS && (dQF_MIN << k) <= sz / 2; k++)
 	{
@@ -1248,9 +1248,9 @@ static void sm_fill_window(DP a, int ss, int LO, sm_frame* fi)
 		fi->vhi_hz = -Fmax + half;
 		if (fi->vhi_hz - fi->vlo_hz < 0.1 * fs)
 			fi->skip = 1;
-		// a pan's re-centre (1) and a tune (2): the calm stand-in (one size, averaged over everything since the change); a
-		// band change (3): none (AltSDR's jump hold: the floor line until the full window)
-		sm_quick_fill(a, ss, LO, idx0, ws, (long long)size - eidx[nev - 1], fi, qf_ok == 1 ? 1 : qf_ok == 3 ? 3 : 2);
+		// a pan's re-centre (1): fast, calm, coarse; another LO change (2, a tune): from a quarter window; a band change
+		// (3): none (the floor line until the full window)
+		sm_quick_fill(a, ss, LO, idx0, (long long)size - eidx[nev - 1], fi, qf_ok == 1 ? 1 : qf_ok == 3 ? 3 : 2);
 	}
 
 	if (nev == 0 || fi->skip)
@@ -1384,15 +1384,13 @@ static void sm_stitch(int disp, sm_frame* fi)
 					// starting from it (its pixels were invalidated), never glided (AltSDR: no ease on a band change)
 					if (a->band_jump && !fi->skip && !fi->qf && fabs(fi->lo - lo_req) < 1.0e-9)
 						a->band_jump = 0;
-					else if (stage != a->qf_stage && a->qf_stage != 0 && !a->band_jump)
-						sm_ease_start(a);	// the stand-in -> the full window (the carriers rise): the trace glides; a
-											// stand-in's first appearance shows at once (11:2x: it rose from the floor)
+					else if (stage != a->qf_stage && !a->band_jump)
+						sm_ease_start(a);	// quick fill stage -> next stage / full window: the trace glides
 					a->qf_stage = stage;
 				}
 				if (pv0 <= pv1)
 					sm_accumulate(a, i, a->t_pixels[i], n,
-						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1, mv0, mv1, 0);
-						// 11:2x: qblend 0 - no 70 % blend with the last stand-in value (signals grew in); it is an average
+						(fi->lo * 1.0e6 + low_rel - a->av_low_hz[i]) / hzpp, pv0, pv1, mv0, mv1, fi->qf == 1);
 				sm_publish(a, i, tag);
 			}
 		}

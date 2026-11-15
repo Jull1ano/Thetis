@@ -89,8 +89,11 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   change (qf_acc: one FFT per new half segment, so its motion only settles, never steps or dances), noise-matched (the
   carriers 10 log(size / Ls) dB low until the full window, ~12 dB there), no 70 % blend with the last value (signals
   grew in), shown at once on its first frame, and the glide only at the hand-over to the full window (the carriers
-  rise smoothly). Band changes keep AltSDR's jump hold (no stand-in). The first version (cubic ease-out from rest at
-  every stage) lurched:
+  rise smoothly). Band changes keep AltSDR's jump hold (no stand-in). BOTH REVERTED at 11:2x (user: "still wait and
+  see flat line, can you pls revert 2 steps back ... the band changing is good, but lets revert the pan movement as it
+  was"): analyzer.c / .h are 798afab's again - pans and tunes use the quick fill as before (growing sizes, 70 % blend,
+  glides between stages), band changes keep the jump hold. The first version (cubic ease-out from rest at every stage)
+  lurched:
   "speeding up then resuming at normal speed". The averaging is untouched; the waterfall gets the frames as they are.
   Asked the AltSDR session first: AltSDR retunes while dragging with ~18 ms mutes; its short windows (33 ms) fill
   fast; it once showed coarse frames after big jumps and the user called that a bug (rc28), so it waits instead.
