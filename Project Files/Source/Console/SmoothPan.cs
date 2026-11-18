@@ -137,7 +137,7 @@ namespace Thetis
                 {
                     bool u = s.Update;
                     s.Update = false;
-                    s.PanSlider = pan_slider;
+                    s.PanSlider = s == specRX.GetSpecRX(cmaster.inid(1, 0)) ? 0.5 : pan_slider; // TX always centred
                     s.Update = u;
                 }
                 ptbDisplayZoom.Value = zv;
@@ -274,6 +274,7 @@ namespace Thetis
             }
             Point p = pnlDisplay.PointToClient(Control.MousePosition);
             if (!pnlDisplay.ClientRectangle.Contains(p) || pnlDisplay.Width <= 0) return true;
+            if (forkZoomIsTx()) return forkWheelZoomTx(e); // transmitting: TX's own zoom (console.cs)
 
             int rx = (rx2_enabled && p.Y > pnlDisplay.Height / 2) ? 2 : 1;
             if (rx == 2) return forkWheelZoomRx2(e); // RX2's own zoom (console.cs)

@@ -38,6 +38,11 @@ app (checkout `thetis-aether`, launcher `run-thetis-aether.bat`); `native-scalin
   once the hook attaches (the skin is applied before the console's windows exist).
 - The two-line labels Tune Step, Band Stack and VFO Lock 1 px smaller with no background of their own, the boxes in
   front of them (`forkThemeLabels`): "Tune Step:" covered the quick memory box's top edge once that box moved up.
+- TX's own zoom: the TX spectrum (shown while transmitting) took RX's zoom and pan, so zoomed in or panned aside on RX
+  the TX signal was off screen or very zoomed. TX now has its own zoom (1x until changed, saved as `option tx_zoom`)
+  and is always centred on its frequency (pan 0.5). While transmitting (MOX / TUNE, not duplex) the zoom slider, the
+  0.5x..4x buttons (no RX pan centring then) and Ctrl + wheel set TX's zoom; the slider shows TX's zoom during the
+  transmission and RX's again after (MoxChangeHandlers).
 - RX2's own zoom: Ctrl + wheel over RX2's spectrum, Shift + 0.5x / 1x / 2x / 4x, Shift + ZTB (zoom to band and its
   store / recall) zoom RX2 alone; until RX2 is zoomed on its own it follows the Zoom slider as before. The slider and
   the buttons without Shift are RX1's (and TX's); the pan stays shared. Zooming RX2 in keeps VFO B in view (CTUN).

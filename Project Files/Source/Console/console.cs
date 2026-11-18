@@ -764,6 +764,7 @@ namespace Thetis
             forkTieAtt(udRX2StepAttData, comboRX2Preamp);
             forkCreatePause();                 // Jull1ano fork: pause (P) above Power
             forkHookZoomButtons();             // Jull1ano fork: Shift + a zoom button = RX2's own zoom
+            MoxChangeHandlers += forkOnMoxZoom; // Jull1ano fork: TX's own zoom on the slider while transmitting
             forkTieBox(txtVFOABand, chkVFOATX); // Jull1ano fork: (themed) band text as tall as its TX button,
             forkTieBox(txtVFOBBand, chkVFOBTX); // the quick memory box as the VFO lock buttons, the tune step box as its - / +
             forkTieBox(txtMemoryQuick, chkVFOLock);
@@ -33734,7 +33735,7 @@ namespace Thetis
             double pan = exactPanSlider(); // Jull1ano fork: keeps a drag pan's exact value (the trackbar has 1000 steps)
             specRX.GetSpecRX(0).PanSlider = pan;
             specRX.GetSpecRX(1).PanSlider = pan;
-            specRX.GetSpecRX(cmaster.inid(1, 0)).PanSlider = pan;
+            specRX.GetSpecRX(cmaster.inid(1, 0)).PanSlider = 0.5; // Jull1ano fork: TX always centred on its frequency
             CalcDisplayFreq();
             CalcRX2DisplayFreq();
             CalcTXDisplayFreq();
@@ -33864,9 +33865,15 @@ namespace Thetis
             double dOldZoomFactor = lastZoomFactor;//MW0LGE21d
 
             double zoom = exactZoomSlider(); // Jull1ano fork: keeps a Ctrl+wheel zoom's exact value
+            if (forkZoomIsTx()) // Jull1ano fork: transmitting: the slider is TX's zoom (the RX analyzers keep theirs)
+            {
+                forkSetTxZoom(zoom);
+                forkSyncZoomButtons();
+                return;
+            }
             specRX.GetSpecRX(0).ZoomSlider = zoom;
             specRX.GetSpecRX(1).ZoomSlider = forkRx2Zoom(zoom); // Jull1ano fork: RX2's own zoom once it has one
-            specRX.GetSpecRX(cmaster.inid(1, 0)).ZoomSlider = zoom;
+            specRX.GetSpecRX(cmaster.inid(1, 0)).ZoomSlider = forkTxZoom(); // Jull1ano fork: TX's own zoom, centred
             double zoom_factor = 1.0 / ((ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - ptbDisplayZoom.Value) * 0.01);
 
             DisplayZoomButton dzb;
@@ -33944,7 +33951,7 @@ namespace Thetis
         }
         private void displayZoom05()
         {
-            PanCentre();
+            if (!forkZoomIsTx()) PanCentre(); // Jull1ano fork: transmitting, the buttons are TX's zoom (TX is centred)
             Zoom = ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - (int)(100.0 / 0.5);
         }
 
@@ -33957,7 +33964,7 @@ namespace Thetis
         }
         private void displayZoom1()
         {
-            PanCentre();
+            if (!forkZoomIsTx()) PanCentre(); // Jull1ano fork: transmitting, the buttons are TX's zoom (TX is centred)
             Zoom = ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - (int)(100.0 / 1.0);
         }
 
@@ -33970,7 +33977,7 @@ namespace Thetis
         }
         private void displayZoom2()
         {
-            PanCentre();
+            if (!forkZoomIsTx()) PanCentre(); // Jull1ano fork: transmitting, the buttons are TX's zoom (TX is centred)
             Zoom = ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - (int)(100.0 / 2.0);
         }
         private void radDisplayZoom4x_CheckedChanged(object sender, System.EventArgs e)
@@ -33982,7 +33989,7 @@ namespace Thetis
         }
         private void displayZoom4()
         {
-            PanCentre();
+            if (!forkZoomIsTx()) PanCentre(); // Jull1ano fork: transmitting, the buttons are TX's zoom (TX is centred)
             Zoom = ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - (int)(100.0 / 4.0);
         }
         #endregion
@@ -46768,6 +46775,102 @@ namespace Thetis
             catch { run(); }
         }
 
+        // ---------------------------------------------------------------- Jull1ano fork: the TX display's own zoom
+        // The TX spectrum (shown while transmitting) took RX's zoom and pan: zoomed in or panned aside on RX, the TX signal
+        // was off screen or very zoomed (user, 2026-11-18: "i want tx always in the center at normal zoom as default, but
+        // i can be able to modify zooms separately on tx"). TX now has its own zoom (1x until changed; option tx_zoom)
+        // and is always centred on the TX frequency (pan 0.5). While transmitting (MOX / TUNE, not duplex) the zoom
+        // slider, the 0.5x..4x buttons and Ctrl + wheel are TX's: the slider shows TX's zoom, and RX's again after.
+        private double _forkTxZoom = double.NaN;       // zoom slider value 0..1 (as SpecHPSDR.ZoomSlider), NaN: 1x
+        private int _forkRxZoomValueSaved = -1;        // RX's slider while the slider shows TX's
+        private double _forkRxZoomExactSaved = double.NaN;
+        private System.Windows.Forms.Timer _forkOptionsSave;
+
+        private bool forkZoomIsTx() { return _mox && !_display_duplex; }
+
+        private double forkTxZoom()
+        {
+            if (!double.IsNaN(_forkTxZoom)) return _forkTxZoom;
+            int v = ptbDisplayZoom.Maximum + ptbDisplayZoom.Minimum - 100; // the 1x button's value
+            return Math.Max(0.0, Math.Min(1.0, (v - 10.0) / 230.0));
+        }
+
+        private void forkSaveOptionsSoon()
+        {
+            if (_forkOptionsSave == null)
+            {
+                _forkOptionsSave = new System.Windows.Forms.Timer { Interval = 800 };
+                _forkOptionsSave.Tick += (s, e) => { _forkOptionsSave.Stop(); forkSaveBandMemory(); };
+            }
+            _forkOptionsSave.Stop();
+            _forkOptionsSave.Start();
+        }
+
+        private void forkSetTxZoom(double z)
+        {
+            z = Math.Max(0.0, Math.Min(1.0, z));
+            _forkTxZoom = z;
+            SpecHPSDR tx = specRX.GetSpecRX(cmaster.inid(1, 0));
+            bool u = tx.Update;
+            tx.Update = false;
+            tx.PanSlider = 0.5;
+            tx.Update = u;
+            tx.ZoomSlider = z;
+            CalcTXDisplayFreq();
+            forkSaveOptionsSoon();
+        }
+
+        // the slider (and the zoom buttons) show TX's zoom while transmitting, RX's again after
+        private void forkOnMoxZoom(int rx, bool oldMox, bool newMox)
+        {
+            try
+            {
+                if (oldMox == newMox) return;
+                if (newMox && !_display_duplex)
+                {
+                    if (_forkRxZoomValueSaved < 0)
+                    {
+                        _forkRxZoomValueSaved = ptbDisplayZoom.Value;
+                        _forkRxZoomExactSaved = _zoom_exact;
+                    }
+                    forkShowZoomOnSlider(forkTxZoom());
+                }
+                else if (!newMox && _forkRxZoomValueSaved >= 0)
+                {
+                    ptbDisplayZoom.Value = Math.Max(ptbDisplayZoom.Minimum, Math.Min(ptbDisplayZoom.Maximum, _forkRxZoomValueSaved));
+                    _zoom_exact = _forkRxZoomExactSaved;
+                    _forkRxZoomValueSaved = -1;
+                    forkSyncZoomButtons();
+                }
+            }
+            catch (Exception ex) { HighDpi.Log("tx zoom: " + ex.Message); }
+        }
+
+        // the slider and the buttons show a zoom value without changing any analyzer
+        private void forkShowZoomOnSlider(double z)
+        {
+            int zv = (int)Math.Round(z * 230.0 + 10.0);
+            ptbDisplayZoom.Value = Math.Max(ptbDisplayZoom.Minimum, Math.Min(ptbDisplayZoom.Maximum, zv));
+            _zoom_exact = z;
+            forkSyncZoomButtons();
+        }
+
+        // Ctrl + wheel while transmitting: TX's zoom, around the centre (TX is always centred)
+        private bool forkWheelZoomTx(MouseEventArgs e)
+        {
+            SpecHPSDR spec = specRX.GetSpecRX(cmaster.inid(1, 0));
+            if (!panGeometry(spec, forkTxZoom(), 0.5, out PanGeometry g)) return true;
+            double notches = e.Delta / 120.0;
+            if (notches == 0) return true;
+            double newWidth = g.width * Math.Pow(2.0, -notches * WHEEL_ZOOM_STEP);
+            newWidth = Math.Max(g.intervals / 100.0, Math.Min(g.intervals, newWidth));
+            double z = zoomSliderForWidth(newWidth, g.intervals);
+            if (z < 0.02 / 230.0) z = 0.0;
+            forkSetTxZoom(z);
+            forkShowZoomOnSlider(z);
+            return true;
+        }
+
         // ---------------------------------------------------------------- Jull1ano fork: RX2's own zoom
         // Thetis has one zoom for both receivers (user, 2026-11-14: "how do i control zoom on the RX2?" ... "Yes, add it").
         // RX2 gets its own once it is zoomed on its own: Ctrl + wheel over RX2's spectrum, Shift + 0.5x / 1x / 2x / 4x, Shift
@@ -47158,6 +47261,8 @@ namespace Thetis
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "nr2_default") _forkNr2Default = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "memory_simple") _forkMemorySimple = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "bands_together") _forkBandsTogether = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "option" && p[1] == "tx_zoom" &&
+                        double.TryParse(p[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ztx) && ztx >= 0 && ztx <= 1) _forkTxZoom = ztx;
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "rx2_zoom" &&
                         double.TryParse(p[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double z2) && z2 >= 0 && z2 <= 1) _forkRx2Zoom = z2;
                     else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
@@ -47178,6 +47283,7 @@ namespace Thetis
                 sb.Append("option\tnr2_default\t").Append(_forkNr2Default ? "1" : "0").Append("\r\n");
                 sb.Append("option\tmemory_simple\t").Append(_forkMemorySimple ? "1" : "0").Append("\r\n");
                 sb.Append("option\tbands_together\t").Append(_forkBandsTogether ? "1" : "0").Append("\r\n");
+                if (!double.IsNaN(_forkTxZoom)) sb.Append("option\ttx_zoom\t").Append(_forkTxZoom.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append("\r\n");
                 if (!double.IsNaN(_forkRx2Zoom)) sb.Append("option\trx2_zoom\t").Append(_forkRx2Zoom.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append("\r\n");
                 foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
                     sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
