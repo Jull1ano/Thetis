@@ -46774,8 +46774,9 @@ namespace Thetis
             return x >= a && x <= b;
         }
 
-        // Jull1ano fork: the cursor over the passband - a fat four-way move cross (white, black outline, thick shafts),
-        // 32 px at 100 % and scaled with the DPI, hotspot in the middle; replaces the stock NoMoveHoriz
+        // Jull1ano fork: the cursor over the passband - a small black four-way move cross with a thin white rim (the
+        // user's picture, 2026-11-20), 32 px frame at 100 % scaled with the DPI, hotspot in the middle; replaces the
+        // stock NoMoveHoriz
         private Cursor _forkMoveCursor;
         private Cursor forkMoveCursor()
         {
@@ -46795,11 +46796,12 @@ namespace Thetis
             [System.Runtime.InteropServices.DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr h);
         }
 
-        // the cross drawn in a 32-unit square (the user's picture, 2026-11-20): arms to 13.5 units from the middle, shafts 2.5
-        // wide, heads 10.5 wide and 5.25 long, thin outline
+        // the cross drawn in a 32-unit square: arms to 10 units from the middle (a little shorter than the arrow pointer),
+        // shafts 2 wide, heads 6.5 wide and 5.5 long; the white rim (0.5 unit) is drawn under the black so the black keeps
+        // its size and the gaps between the arms show the background
         private static Bitmap forkMoveCursorBitmap(int n)
         {
-            float s = n / 32.0f, c = 16.0f, L = 13.5f, H = 5.25f, W = 5.25f, T = 1.25f;
+            float s = n / 32.0f, c = 16.0f, L = 10.0f, H = 5.5f, W = 3.25f, T = 1.0f;
             PointF[] arm = { new PointF(T, -T), new PointF(L - H, -T), new PointF(L - H, -W), new PointF(L, 0), new PointF(L - H, W), new PointF(L - H, T) };
             List<PointF> pts = new List<PointF>();
             for (int k = 0; k < 4; k++)
@@ -46815,12 +46817,12 @@ namespace Thetis
                 g.Clear(Color.Transparent);
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                g.FillPolygon(Brushes.White, pts.ToArray());
-                using (Pen pen = new Pen(Color.Black, Math.Max(1.0f, 0.6f * s)))
+                using (Pen pen = new Pen(Color.White, Math.Max(1.0f, 1.0f * s)))
                 {
-                    pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Miter;
+                    pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
                     g.DrawPolygon(pen, pts.ToArray());
                 }
+                g.FillPolygon(Brushes.Black, pts.ToArray());
             }
             return bmp;
         }

@@ -14,7 +14,7 @@ Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
   Thetis put the VFO's zero beat on the mouse ("CTUN: ignore 0 beat" unticked) and dragged it with every pixel of
   hand jitter. A move of 3 px or more drags the VFO, from the press point (no jump). Shift + passband: moves the
   filter (as before). The filter edges stay filter drags. (2026-11-20)
-- The cursor over that zone is a fat four-way move cross (drawn: white, black outline, 32 px at 100 %, scaled
+- The cursor over that zone is a small black four-way move cross with a thin white rim (drawn, 32 px frame at 100 %, scaled
   with the DPI) instead of the stock NoMoveHoriz left-right arrow that read as "resize"; the edges keep the
   left-right resize arrow, a press / drag shows the grabbing hand (as before).
 - The view first moves inside the DDC span (display only: no radio change, no audio change). When its
