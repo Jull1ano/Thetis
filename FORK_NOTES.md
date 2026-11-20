@@ -10,7 +10,10 @@ Based on Thetis v2.10.3.15 (ramdor/Thetis). Branches:
 - Left-press on the spectrum or the waterfall outside the RX passband and move 3 px or more: the
   spectrum follows the mouse 1:1, the VFO keeps its frequency. The top drag strip does the same.
 - Released before 3 px: a click, tunes the VFO to that point (as before).
-- Inside the passband: drags the VFO (as before). Shift + passband: moves the filter (as before).
+- Inside the passband (RX1 and RX2, from the VFO line to the far filter edge): a click moves nothing - stock
+  Thetis put the VFO's zero beat on the mouse ("CTUN: ignore 0 beat" unticked) and dragged it with every pixel of
+  hand jitter. A move of 3 px or more drags the VFO, from the press point (no jump). Shift + passband: moves the
+  filter (as before). The filter edges stay filter drags. (2026-11-20)
 - The view first moves inside the DDC span (display only: no radio change, no audio change). When its
   edge leaves the span, the DDC is re-centred on the view, at most every 25 ms, exact final value on release.
 - No inertia: the view stops where the mouse lets go.
@@ -291,7 +294,7 @@ CTUN). Test hooks: `click:<control>:...`, `memrow:<n>`.
 A double-click on the RX1 passband (inside the filter, on an edge or on the VFO line) sets the filter to the width
 chosen for the mode in use, on that mode's filter button as if it were clicked (the closest button if the buttons were
 changed since); elsewhere on the display a double-click still sets the squelch. The first click keeps its meaning (a
-drag that does not move), the second press starts no drag, the VFO ends where it was. One width per mode (fork
+click inside the passband moves nothing), the second press starts no drag, the VFO ends where it was. One width per mode (fork
 options file: `option dbl_filter`, `dblf <mode> <Hz>`); the defaults are the buttons closest to AltSDR's popular
 widths: SSB and digital 3 kHz, AM / SAM 10 kHz, CW 500 Hz, DSB 5.4 kHz (FM not offered: its filter follows the deviation here).
 As AltSDR rc61 (2026-11-20). That Setup page now scrolls: it was too short for "Receive (fork)", whose last

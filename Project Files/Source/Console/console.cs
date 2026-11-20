@@ -45017,6 +45017,101 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "pbclick")
+                {
+                    // pbclick: real press / move / release handlers inside the passband: a click (the VFO stays), 2 px of
+                    // jitter (stays), a 40 px drag (moves by 40 px from the press point), a click on the VFO line (stays), a
+                    // click off the passband (stock: tunes to the mouse), a double-click (the filter default, the VFO stays);
+                    // then RX2 on: RX1 click, RX2 click / jitter / drag / off the passband; RX2 back off
+                    System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                    HighDpi.Log("pbclick CTUN " + _click_tune_display + " zero on mouse " + m_bCTUNputsZeroOnMouse + " click tune mode " + current_click_tune_mode +
+                        " display " + Display.CurrentDisplayMode + " RX2 " + rx2_enabled);
+                    Func<int, double> vfoOf = (rx) => rx == 2 ? VFOBFreq : VFOAFreq;
+                    Func<int, int> yOf = (rx) => rx == 2 ? pnlDisplay.Height * 3 / 4 : (rx2_enabled ? pnlDisplay.Height / 8 : pnlDisplay.Height / 4);
+                    Func<int, int> vfoX = (rx) => rx == 2 ? HzToPixel((float)((VFOBFreq - CentreRX2Frequency) * 1e6), 2)
+                                                          : HzToPixel((float)((VFOAFreq - CentreFrequency) * 1e6));
+                    Func<int, int> passX = (rx) =>
+                    {
+                        int r = rx == 2 ? 1 : 0, d = rx == 2 ? 2 : 1;
+                        return vfoX(rx) + (HzToPixel(radio.GetDSPRX(r, 0).RXFilterLow, d) + HzToPixel(radio.GetDSPRX(r, 0).RXFilterHigh, d)) / 2 - HzToPixel(0.0f, d);
+                    };
+                    Action<int, int, MouseButtons> mv = (x, y, b) => pnlDisplay_MouseMove(pnlDisplay, new MouseEventArgs(b, 0, x, y, 0));
+                    Action<int, int> down = (x, y) => pnlDisplay_MouseDown(pnlDisplay, new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
+                    Action<int, int> up = (x, y) => pnlDisplay_MouseUp(pnlDisplay, new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
+                    // expect: 0 = the VFO stays, 1 = moves by the drag, 2 = moves (stock click off the passband)
+                    Action<int, string, int, int[], int> gesture = (rx, what, x, moves, expect) =>
+                    {
+                        int y = yOf(rx);
+                        mv(x, y, MouseButtons.None);
+                        double before = vfoOf(rx);
+                        down(x, y);
+                        int last = x;
+                        foreach (int dx in moves) { last = x + HighDpi.Px(dx); mv(last, y, MouseButtons.Left); }
+                        up(last, y);
+                        double movedHz = (vfoOf(rx) - before) * 1e6;
+                        double wantHz = expect == 1 ? (PixelToHz(last, rx) - PixelToHz(x, rx)) : 0.0;
+                        double onePx = Math.Abs(PixelToHz(x + 1, rx) - PixelToHz(x, rx));
+                        bool ok = expect == 2 ? Math.Abs(movedHz) > 0.5 : Math.Abs(movedHz - wantHz) <= Math.Max(1.0, onePx);
+                        HighDpi.Log("pbclick " + (ok ? "PASS" : "FAIL") + " RX" + rx + " " + what + ": x " + x + " moves " + string.Join(",", moves) +
+                            " VFO " + before.ToString("0.000000", ci) + " -> " + vfoOf(rx).ToString("0.000000", ci) + " moved " + movedHz.ToString("0", ci) +
+                            " Hz (want " + (expect == 2 ? "a move" : wantHz.ToString("0", ci) + " Hz") + ")");
+                    };
+                    List<Action> plan = new List<Action>();
+                    plan.Add(() =>
+                    {
+                        if (!_click_tune_display) ClickTuneDisplay = true;
+                        RX1DSPMode = DSPMode.USB; RX1Filter = Filter.F5;
+                        HighDpi.Log("pbclick RX1 USB filter " + RX1Filter + " " + Display.RX1FilterLow + " .. " + Display.RX1FilterHigh +
+                            " VFO x " + vfoX(1) + " passband centre x " + passX(1));
+                    });
+                    plan.Add(() => gesture(1, "click inside", passX(1), new int[0], 0));
+                    plan.Add(() => gesture(1, "click inside, 2 px jitter", passX(1), new int[] { 1, 2, -1 }, 0));
+                    plan.Add(() => gesture(1, "click near the high edge", passX(1) + (passX(1) - vfoX(1)) * 3 / 4, new int[0], 0));
+                    plan.Add(() => gesture(1, "click on the VFO line", vfoX(1), new int[0], 0));
+                    plan.Add(() => gesture(1, "drag 40 px right", passX(1), new int[] { 2, 5, 20, 40 }, 1));
+                    plan.Add(() => gesture(1, "drag 40 px left", passX(1), new int[] { -2, -5, -20, -40 }, 1));
+                    plan.Add(() => gesture(1, "click off the passband (stock CTUN click)", passX(1) - HighDpi.Px(300), new int[0], 2));
+                    plan.Add(() =>
+                    {
+                        RX1Filter = Filter.F1;
+                        int x = passX(1), y = yOf(1);
+                        double before = VFOAFreq;
+                        mv(x, y, MouseButtons.None);
+                        down(x, y); up(x, y); down(x, y); up(x, y);
+                        pnlDisplay_DoubleClick(this, EventArgs.Empty);
+                        int want = ForkDblFilterWidth(DSPMode.USB), got = Display.RX1FilterHigh - Display.RX1FilterLow;
+                        bool ok = Math.Abs(got - want) <= 100 && VFOAFreq == before;
+                        HighDpi.Log("pbclick " + (ok ? "PASS" : "FAIL") + " RX1 double-click: filter " + RX1Filter + " " + got + " Hz (default " + want +
+                            " Hz) VFO " + before.ToString("0.000000", ci) + " -> " + VFOAFreq.ToString("0.000000", ci));
+                    });
+                    plan.Add(() =>
+                    {
+                        RX2Enabled = true;
+                        if (!_click_tune_rx2_display) ClickTuneRX2Display = true;
+                        RX2DSPMode = DSPMode.USB;
+                        HighDpi.Log("pbclick RX2 on: " + rx2_enabled + " CTUN RX2 " + _click_tune_rx2_display + " VFO B x " + vfoX(2) + " passband centre x " + passX(2));
+                    });
+                    plan.Add(() => gesture(1, "click inside (RX2 on)", passX(1), new int[0], 0));
+                    plan.Add(() => gesture(2, "click inside", passX(2), new int[0], 0));
+                    plan.Add(() => gesture(2, "click inside, 2 px jitter", passX(2), new int[] { 1, 2, -1 }, 0));
+                    plan.Add(() => gesture(2, "drag 40 px right", passX(2), new int[] { 2, 5, 20, 40 }, 1));
+                    plan.Add(() => gesture(2, "click off the passband (stock CTUN click)", passX(2) - HighDpi.Px(300), new int[0], 2));
+                    plan.Add(() => { RX2Enabled = false; HighDpi.Log("pbclick RX2 off"); });
+                    int step = 0;
+                    System.Windows.Forms.Timer tp = new System.Windows.Forms.Timer();
+                    tp.Interval = 900;
+                    tp.Tick += (s9, e9) =>
+                    {
+                        if (IsDisposed || Disposing || !Visible) { tp.Stop(); return; }
+                        if (step < plan.Count)
+                        {
+                            try { plan[step++](); }
+                            catch (Exception ex) { HighDpi.Log("pbclick FAIL exception: " + ex.Message); }
+                        }
+                        else { tp.Stop(); HighDpi.Log("pbclick done"); }
+                    };
+                    tp.Start();
+                }
                 else if (parts[0] == "dbltest")
                 {
                     // dbltest: the passband double-click (forkPassbandDoubleClick) in each mode from another button, the
@@ -46562,6 +46657,38 @@ namespace Thetis
             int a = Math.Min(Math.Min(lo, hi), vfo) - HighDpi.Px(3);
             int b = Math.Max(Math.Max(lo, hi), vfo) + HighDpi.Px(3);
             return e.X >= a && e.X <= b;
+        }
+
+        // Jull1ano fork: a press inside the RX1 / RX2 passband (CTUN on, click tune off) does not tune: the stock code put
+        // the VFO's zero beat on the mouse at once ("CTUN puts zero on mouse", Setup "CTUN: ignore 0 beat" unticked) and
+        // dragged the VFO with every pixel of hand jitter. The press is held instead; a move of PAN_DRAG_THRESHOLD_PX or
+        // more starts the stock VFO drag, measured from the press point (no jump); a release before that moved nothing.
+        // The passband: between the VFO line (+-3 px) and the far filter edge; the edges themselves stay filter drags.
+        private int _forkPbHold;        // 0 none, 1 RX1, 2 RX2: pressed inside that passband, not moved far enough yet
+        private int _forkPbPressX;
+        private bool forkPbArm(MouseEventArgs e, int rx, int low_x, int high_x)
+        {
+            _forkPbHold = 0;
+            if (_mox) return false;
+            int vfo = rx == 2 ? HzToPixel((float)((VFOBFreq - CentreRX2Frequency) * 1e6), 2)
+                              : HzToPixel((float)((VFOAFreq - CentreFrequency) * 1e6));
+            int a = Math.Min(Math.Min(low_x, high_x), vfo - HighDpi.Px(3));
+            int b = Math.Max(Math.Max(low_x, high_x), vfo + HighDpi.Px(3));
+            if (e.X < a || e.X > b) return false;
+            _forkPbHold = rx;
+            _forkPbPressX = e.X;
+            return true;
+        }
+
+        private void forkPbMove(MouseEventArgs e)
+        {
+            if (_forkPbHold == 0) return;
+            if ((e.Button & MouseButtons.Left) == 0) { _forkPbHold = 0; return; }
+            if (Math.Abs(e.X - _forkPbPressX) < HighDpi.Px(PAN_DRAG_THRESHOLD_PX)) return;
+            spectrum_drag_last_x = _forkPbPressX; // the stock drag below then moves the VFO by the whole way from the press
+            if (_forkPbHold == 2) rx2_click_tune_drag = true;
+            else rx1_click_tune_drag = true;
+            _forkPbHold = 0;
         }
 
         // called first on a left press: the second press on the passband within the double-click time and size of the
@@ -50246,6 +50373,7 @@ namespace Thetis
             {
                 case MouseButtons.Left:
 
+                    _forkPbHold = 0;
                     if (forkPassbandDoubleClick(e)) return; // Jull1ano fork: a double-click on the passband: the filter to the mode's width, no drag
                     bool bOverRX1 = overRX(e.X, e.Y, 1, false);  //MW0LGE
                     bool bOverRX2 = overRX(e.X, e.Y, 2, false);
@@ -50637,7 +50765,8 @@ namespace Thetis
                                             {
                                                 if (!(Common.ShiftKeyDown && (e.X > low_x && e.X < high_x))) // ignore if shift down, so that we move the filter, and not the frequency MW0LGE_21k9d
                                                 {
-                                                    rx2_click_tune_drag = true;
+                                                    if (!forkPbArm(e, 2, low_x, high_x)) // Jull1ano fork: inside the passband a click does not tune, a drag moves the VFO
+                                                        rx2_click_tune_drag = true;
                                                     next_cursor = grabbing;
                                                 }
                                                 else
@@ -50665,7 +50794,9 @@ namespace Thetis
                                             {
                                                 if (!(Common.ShiftKeyDown && (e.X > low_x && e.X < high_x))) // ignore if shift down, so that we move the filter, and not the frequency MW0LGE_21k9d
                                                 {
-                                                    if (!panDragArm(e, low_x, high_x, freq)) // Jull1ano fork: outside the passband, a drag pans (SmoothPan.cs)
+                                                    if (forkPbArm(e, 1, low_x, high_x)) // Jull1ano fork: inside the passband a click does not tune, a drag moves the VFO
+                                                        next_cursor = grabbing;
+                                                    else if (!panDragArm(e, low_x, high_x, freq)) // Jull1ano fork: outside the passband, a drag pans (SmoothPan.cs)
                                                     {
                                                         rx1_click_tune_drag = true;
                                                         next_cursor = grabbing;
@@ -50687,7 +50818,7 @@ namespace Thetis
                                 {
                                     if (!rx2_enabled)
                                     {
-                                        if (!rx1_spectrum_tune_drag && !_pan_pending) // Jull1ano fork: a click-or-pan tunes on release, if it was a click
+                                        if (!rx1_spectrum_tune_drag && !_pan_pending && _forkPbHold == 0) // Jull1ano fork: a click-or-pan tunes on release, if it was a click; a click inside the passband does not tune
                                         {
                                             if (!(Common.ShiftKeyDown && (e.X > low_x && e.X < high_x))) //MW0LGE_21k9d do not set freq, so we can shift the filter instead
                                             {
@@ -50724,13 +50855,13 @@ namespace Thetis
                                                 {
                                                     if (e.Y <= pnlDisplay.Height / 2)
                                                     {
-                                                        if (!rx1_spectrum_tune_drag && !_pan_pending) // Jull1ano fork
+                                                        if (!rx1_spectrum_tune_drag && !_pan_pending && _forkPbHold == 0) // Jull1ano fork
                                                             VFOAFreq = Math.Round(freq, 6);
                                                     }
 
                                                     else
                                                     {
-                                                        if (!rx2_spectrum_tune_drag)
+                                                        if (!rx2_spectrum_tune_drag && _forkPbHold == 0) // Jull1ano fork: a click inside the passband does not tune
                                                             VFOBFreq = Math.Round(freq, 6);
                                                     }
                                                 }
@@ -51063,6 +51194,7 @@ namespace Thetis
             if (Display.PausedDisplay) return;
 
             if (panDragMove(e)) return; // Jull1ano fork: click-or-pan / pan in progress (SmoothPan.cs)
+            forkPbMove(e); // Jull1ano fork: a press inside the passband becomes the VFO drag only past a few px
 
             try
             {
@@ -52311,6 +52443,7 @@ namespace Thetis
             if (e.Button == MouseButtons.Left)
             {
                 panDragUp(); // Jull1ano fork: a click tunes, a pan ends or coasts on (SmoothPan.cs)
+                _forkPbHold = 0; // Jull1ano fork: a click inside the passband moved nothing
 
                 switch (Display.CurrentDisplayMode)
                 {
