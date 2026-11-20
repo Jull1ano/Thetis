@@ -45017,6 +45017,57 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "dbltest")
+                {
+                    // dbltest: the passband double-click (forkPassbandDoubleClick) in each mode from another button, the
+                    // display's DoubleClick right after (the squelch must stay), a double-click off the passband (the
+                    // squelch moves), the option off (nothing); the defaults logged
+                    System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                    foreach (DSPMode m in ForkDblFilterModes)
+                    {
+                        List<KeyValuePair<string, int>> ch = ForkDblFilterChoices(m);
+                        string all = string.Join(" ", ch.ConvertAll(kv => kv.Key + "=" + kv.Value));
+                        HighDpi.Log("dbltest default " + m + ": " + ForkDblFilterWidth(m) + " Hz; choices " + all);
+                    }
+                    Func<int> passX = () =>
+                    {
+                        int vfo = HzToPixel((float)((VFOAFreq - CentreFrequency) * 1e6));
+                        return vfo + (HzToPixel(radio.GetDSPRX(0, 0).RXFilterLow) + HzToPixel(radio.GetDSPRX(0, 0).RXFilterHigh)) / 2 - HzToPixel(0.0f);
+                    };
+                    Func<int, bool> dbl = (x) =>
+                    {
+                        MouseEventArgs ev = new MouseEventArgs(MouseButtons.Left, 1, x, pnlDisplay.Height / 4, 0);
+                        bool first = forkPassbandDoubleClick(ev);
+                        bool second = forkPassbandDoubleClick(ev);
+                        int sq = ptbSquelch.Value;
+                        display_cursor_y = pnlDisplay.Height / 3;
+                        pnlDisplay_DoubleClick(this, EventArgs.Empty);  // as Windows raises it after the second press
+                        HighDpi.Log("dbltest   x " + x + " first " + first + " second " + second + " squelch " + sq + " -> " + ptbSquelch.Value);
+                        return second;
+                    };
+                    Action<string> log = (what) => HighDpi.Log("dbltest " + what + ": mode " + RX1DSPMode + " filter " + RX1Filter + " " +
+                        Display.RX1FilterLow + " .. " + Display.RX1FilterHigh + " VFO " + VFOAFreq.ToString("0.000000", ci));
+                    List<Action> plan = new List<Action>();
+                    foreach (DSPMode m in new DSPMode[] { DSPMode.LSB, DSPMode.AM, DSPMode.CWU, DSPMode.DSB, DSPMode.DIGU, DSPMode.FM })
+                    {
+                        if (Array.IndexOf(ForkDblFilterModes, m) < 0) continue;
+                        DSPMode mm = m;
+                        plan.Add(() => { RX1DSPMode = mm; if (mm != DSPMode.FM) RX1Filter = Filter.F1; else UpdateRX1Filters(-3000, 3000); log(mm + " before"); });
+                        plan.Add(() => { dbl(passX()); log(mm + " after the double-click"); });
+                    }
+                    plan.Add(() => { RX1DSPMode = DSPMode.LSB; RX1Filter = Filter.F1; log("off the passband, before"); });
+                    plan.Add(() => { dbl(Math.Max(5, passX() - HighDpi.Px(300))); log("off the passband, after (filter kept, squelch moved)"); });
+                    plan.Add(() => { ForkDblFilterOn = false; dbl(passX()); log("option off, after (filter kept)"); ForkDblFilterOn = true; });
+                    int step = 0;
+                    System.Windows.Forms.Timer td = new System.Windows.Forms.Timer();
+                    td.Interval = 900;
+                    td.Tick += (s9, e9) =>
+                    {
+                        if (IsDisposed || Disposing || !Visible) { td.Stop(); return; } // Thetis is closing
+                        if (step < plan.Count) plan[step++](); else { td.Stop(); HighDpi.Log("dbltest done"); }
+                    };
+                    td.Start();
+                }
                 else if (parts[0] == "memnav")
                 {
                     // memnav:<row>:<action>,<action>...: the Memory window open, that row tuned, then one action a
@@ -46394,11 +46445,185 @@ namespace Thetis
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "keep_ctun") _forkKeepCtun = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "nr2_default") _forkNr2Default = p[2] != "0";
                     else if (p.Length == 3 && p[0] == "option" && p[1] == "memory_simple") _forkMemorySimple = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "option" && p[1] == "dbl_filter") _forkDblFilterOn = p[2] != "0";
+                    else if (p.Length == 3 && p[0] == "dblf" && Enum.TryParse(p[1], out DSPMode dm) && int.TryParse(p[2], out int dw) && dw > 0) _forkDblFilterWidth[dm] = dw;
                     else if (p.Length == 3 && p[0] == "mode" && Enum.TryParse(p[1], out Band b) && Enum.TryParse(p[2], out DSPMode m)) _forkBandMode[b] = m;
                     else if (p.Length == 4 && p[0] == "step") _forkBandStep[p[1] + "|" + p[2]] = p[3];
                 }
             }
             catch { }
+        }
+
+        // ---------------------------------------------------------------- Jull1ano fork: double-click on the passband
+        // A double-click on the RX1 passband (inside the filter, on an edge or on the VFO line) puts the filter to the
+        // width chosen for the mode in use (Setup > Appearance > General > "Passband double-click (fork)"), on that mode's
+        // filter button as if it were clicked; elsewhere on the display a double-click sets the squelch as before. As
+        // AltSDR rc61 (user, 2026-11-20: "when i double click the vfo band it resets to a value ... default is 3000, do
+        // same with fm AM etc and default should be the popular default for them"). The first click keeps its meaning
+        // (a drag that does not move); the second press starts no drag; the VFO ends where it was.
+        // FM is not offered here: this build keeps Thetis' FM filter tied to the deviation.
+        private bool _forkDblFilterOn = true;
+        private readonly Dictionary<DSPMode, int> _forkDblFilterWidth = new Dictionary<DSPMode, int>(); // Hz, the user's choices
+        private bool _forkDblArmed;                    // a first press on the passband is waiting for its second
+        private int _forkDblT;
+        private Point _forkDblP;
+        private double _forkDblVfo;
+        private bool _forkDblHandled;                  // the second press was ours: the DoubleClick event is not the squelch
+        private int _forkDblHandledAt;
+
+        public static readonly DSPMode[] ForkDblFilterModes = { DSPMode.LSB, DSPMode.USB, DSPMode.DSB, DSPMode.CWL, DSPMode.CWU, DSPMode.AM, DSPMode.SAM, DSPMode.DIGL, DSPMode.DIGU };
+
+        // the popular widths (AltSDR's): SSB and digital 3 kHz, AM / SAM 10 kHz, CW 500 Hz, FM 12 kHz, DSB 5.4 kHz;
+        // the default is the mode's button closest to it
+        private static int forkDblTarget(DSPMode m)
+        {
+            switch (m)
+            {
+                case DSPMode.AM:
+                case DSPMode.SAM: return 10000;
+                case DSPMode.CWL:
+                case DSPMode.CWU: return 500;
+                case DSPMode.FM: return 12000;
+                case DSPMode.DSB: return 5400;
+                default: return 3000;
+            }
+        }
+
+        public bool ForkDblFilterOn
+        {
+            get { return _forkDblFilterOn; }
+            set { _forkDblFilterOn = value; forkSaveBandMemory(); }
+        }
+
+        // the widths offered for a mode: its filter buttons (label, width), smallest first
+        public List<KeyValuePair<string, int>> ForkDblFilterChoices(DSPMode m)
+        {
+            List<KeyValuePair<string, int>> list = new List<KeyValuePair<string, int>>();
+            if (m == DSPMode.FM)
+            {
+                foreach (int w in new int[] { 6000, 8000, 10000, 12000, 14000, 16000, 20000 })
+                    list.Add(new KeyValuePair<string, int>((w / 1000).ToString() + "k", w));
+                return list;
+            }
+            if ((int)m < 0 || (int)m >= rx1_filters.Length || rx1_filters[(int)m] == null) return list;
+            FilterPreset p = rx1_filters[(int)m];
+            for (Filter f = Filter.F1; f <= Filter.F10; f++)
+            {
+                int w = p.GetHigh(f) - p.GetLow(f);
+                string n = p.GetName(f);
+                if (w > 0 && !string.IsNullOrEmpty(n)) list.Add(new KeyValuePair<string, int>(n, w));
+            }
+            list.Sort((a, b) => a.Value.CompareTo(b.Value));
+            return list;
+        }
+
+        private static int forkDblClosest(List<KeyValuePair<string, int>> list, int target)
+        {
+            int best = target, d = int.MaxValue;
+            foreach (KeyValuePair<string, int> kv in list)
+            {
+                int dd = Math.Abs(kv.Value - target);
+                if (dd < d) { d = dd; best = kv.Value; }
+            }
+            return best;
+        }
+
+        // the width the double-click sets for a mode: the user's choice, else the button closest to the popular width
+        public int ForkDblFilterWidth(DSPMode m)
+        {
+            if (_forkDblFilterWidth.TryGetValue(m, out int w)) return w;
+            return forkDblClosest(ForkDblFilterChoices(m), forkDblTarget(m));
+        }
+
+        public void SetForkDblFilterWidth(DSPMode m, int w)
+        {
+            _forkDblFilterWidth[m] = w;
+            forkSaveBandMemory();
+        }
+
+        // on the RX1 passband: inside the filter, on an edge or on the VFO line (as the filter drag zones), RX1 only
+        private bool forkOnRx1Passband(MouseEventArgs e)
+        {
+            if (_mox || _rx1_dsp_mode == DSPMode.DRM || _rx1_dsp_mode == DSPMode.SPEC || SelectedNotch != null) return false;
+            if (rx2_enabled && e.Y > pnlDisplay.Height / 2) return false;
+            switch (Display.CurrentDisplayMode)
+            {
+                case DisplayMode.PANADAPTER:
+                case DisplayMode.PANAFALL:
+                case DisplayMode.PANASCOPE:
+                case DisplayMode.WATERFALL:
+                    break;
+                default:
+                    return false;
+            }
+            int vfo = HzToPixel((float)((VFOAFreq - CentreFrequency) * 1e6));
+            int lo = vfo + HzToPixel(radio.GetDSPRX(0, 0).RXFilterLow) - HzToPixel(0.0f);
+            int hi = vfo + HzToPixel(radio.GetDSPRX(0, 0).RXFilterHigh) - HzToPixel(0.0f);
+            int a = Math.Min(Math.Min(lo, hi), vfo) - HighDpi.Px(3);
+            int b = Math.Max(Math.Max(lo, hi), vfo) + HighDpi.Px(3);
+            return e.X >= a && e.X <= b;
+        }
+
+        // called first on a left press: the second press on the passband within the double-click time and size of the
+        // first sets the filter and starts no drag (true); a press anywhere else forgets the first one
+        private bool forkPassbandDoubleClick(MouseEventArgs e)
+        {
+            if (!_forkDblFilterOn) { _forkDblArmed = false; return false; }
+            bool on = forkOnRx1Passband(e);
+            int now = Environment.TickCount;
+            Size dc = SystemInformation.DoubleClickSize;
+            int sx = Math.Max(dc.Width, HighDpi.Px(4)), sy = Math.Max(dc.Height, HighDpi.Px(4));
+            if (on && _forkDblArmed && unchecked(now - _forkDblT) <= SystemInformation.DoubleClickTime &&
+                Math.Abs(e.X - _forkDblP.X) <= sx && Math.Abs(e.Y - _forkDblP.Y) <= sy)
+            {
+                _forkDblArmed = false;
+                _forkDblHandled = true;
+                _forkDblHandledAt = now;
+                if (VFOAFreq != _forkDblVfo) VFOAFreq = _forkDblVfo; // the VFO ends where it was
+                forkDblFilterApply();
+                return true;
+            }
+            _forkDblArmed = on;
+            if (on)
+            {
+                _forkDblT = now;
+                _forkDblP = e.Location;
+                _forkDblVfo = VFOAFreq;
+            }
+            return false;
+        }
+
+        // the filter to the mode's chosen width: the mode's button with that width (the closest if the buttons changed),
+        // selected as if it were clicked; FM: the FM filter set by hand
+        private void forkDblFilterApply()
+        {
+            DSPMode m = _rx1_dsp_mode;
+            if (Array.IndexOf(ForkDblFilterModes, m) < 0) return;
+            int w = ForkDblFilterWidth(m);
+            string what;
+            if (m == DSPMode.FM)
+            {
+                int half = Math.Max(500, w / 2);
+                UpdateRX1Filters(-half, half);
+                what = (w / 1000).ToString() + "k";
+            }
+            else
+            {
+                FilterPreset p = rx1_filters[(int)m];
+                if (p == null) return;
+                Filter best = Filter.F1;
+                int d = int.MaxValue;
+                for (Filter f = Filter.F1; f <= Filter.F10; f++)
+                {
+                    int fw = p.GetHigh(f) - p.GetLow(f);
+                    if (fw <= 0) continue;
+                    int dd = Math.Abs(fw - w);
+                    if (dd < d) { d = dd; best = f; }
+                }
+                RX1Filter = best;   // the button lit, as a click on it
+                what = p.GetName(best);
+            }
+            HighDpi.Log("Filter " + what + ": the " + m + " default (double-click on the passband)");
         }
 
         private void forkSaveBandMemory()
@@ -46411,6 +46636,9 @@ namespace Thetis
                 sb.Append("option\tkeep_ctun\t").Append(_forkKeepCtun ? "1" : "0").Append("\r\n");
                 sb.Append("option\tnr2_default\t").Append(_forkNr2Default ? "1" : "0").Append("\r\n");
                 sb.Append("option\tmemory_simple\t").Append(_forkMemorySimple ? "1" : "0").Append("\r\n");
+                sb.Append("option\tdbl_filter\t").Append(_forkDblFilterOn ? "1" : "0").Append("\r\n");
+                foreach (KeyValuePair<DSPMode, int> kv in _forkDblFilterWidth)
+                    sb.Append("dblf\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
                 foreach (KeyValuePair<Band, DSPMode> kv in _forkBandMode)
                     sb.Append("mode\t").Append(kv.Key).Append('\t').Append(kv.Value).Append("\r\n");
                 foreach (KeyValuePair<string, string> kv in _forkBandStep)
@@ -49947,6 +50175,10 @@ namespace Thetis
 
         private void pnlDisplay_DoubleClick(object sender, EventArgs e)
         {
+            // Jull1ano fork: a double-click on the passband set the filter (forkPassbandDoubleClick), not the squelch
+            bool forkPassband = _forkDblHandled && unchecked(Environment.TickCount - _forkDblHandledAt) < 1500;
+            _forkDblHandled = false;
+            if (forkPassband) return;
             if (Display.PausedDisplay) return;
 
             int new_val = (int)PixelToDb(display_cursor_y);
@@ -50014,6 +50246,7 @@ namespace Thetis
             {
                 case MouseButtons.Left:
 
+                    if (forkPassbandDoubleClick(e)) return; // Jull1ano fork: a double-click on the passband: the filter to the mode's width, no drag
                     bool bOverRX1 = overRX(e.X, e.Y, 1, false);  //MW0LGE
                     bool bOverRX2 = overRX(e.X, e.Y, 2, false);
 

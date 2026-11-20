@@ -286,6 +286,17 @@ Memory window: one left click on a row's header (the small field left of the row
 Select or a double click do; every recall from the window centres the view on the VFO (as a right click on
 CTUN). Test hooks: `click:<control>:...`, `memrow:<n>`.
 
+## Double-click on the passband (Setup > Appearance > General > "Double-click (fork)", under TX attenuation, on by default)
+
+A double-click on the RX1 passband (inside the filter, on an edge or on the VFO line) sets the filter to the width
+chosen for the mode in use, on that mode's filter button as if it were clicked (the closest button if the buttons were
+changed since); elsewhere on the display a double-click still sets the squelch. The first click keeps its meaning (a
+drag that does not move), the second press starts no drag, the VFO ends where it was. One width per mode (fork
+options file: `option dbl_filter`, `dblf <mode> <Hz>`); the defaults are the buttons closest to AltSDR's popular
+widths: SSB and digital 3 kHz, AM / SAM 10 kHz, CW 500 Hz, DSB 5.4 kHz (FM not offered: its filter follows the deviation here).
+As AltSDR rc61 (2026-11-20). That Setup page now scrolls: it was too short for "Receive (fork)", whose last
+options were cut off at the bottom.
+
 ## Keys
 
 M mutes / unmutes RX1 (as MUT), Shift+M RX2; it comes before the user-defined keys, so M no longer is Band Up
