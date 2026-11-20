@@ -47668,11 +47668,13 @@ namespace Thetis
         }
 
         // the cross drawn in a 32-unit square: arms to 10 units from the middle (a little shorter than the arrow pointer),
-        // shafts 2 wide, heads 6.5 wide and 5.5 long; the white rim (0.5 unit) is drawn under the black so the black keeps
-        // its size and the gaps between the arms show the background
+        // shafts 3 wide, heads 9 wide and 4.5 long - square heads (90 degree tips), so every head corner lies on one
+        // 45 degree line and the outline reads as a square turned 45 degrees (the user's Figma sim, 2026-11-20); whole
+        // pixels at 200 %; the white rim (0.5 unit) is drawn under the black so the black keeps its size and the gaps
+        // between the arms show the background
         private static Bitmap forkMoveCursorBitmap(int n)
         {
-            float s = n / 32.0f, c = 16.0f, L = 10.0f, H = 5.5f, W = 3.25f, T = 1.0f;
+            float s = n / 32.0f, c = 16.0f, L = 10.0f, H = 4.5f, W = 4.5f, T = 1.5f;
             PointF[] arm = { new PointF(T, -T), new PointF(L - H, -T), new PointF(L - H, -W), new PointF(L, 0), new PointF(L - H, W), new PointF(L - H, T) };
             List<PointF> pts = new List<PointF>();
             for (int k = 0; k < 4; k++)
