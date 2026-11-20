@@ -46795,11 +46795,11 @@ namespace Thetis
             [System.Runtime.InteropServices.DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr h);
         }
 
-        // the cross drawn in a 32-unit square: arms to 13.5 units from the middle, shafts 4 wide, heads 8.5 wide (wider heads
-        // run into each other and read as a diamond)
+        // the cross drawn in a 32-unit square (the user's picture, 2026-11-20): arms to 13.5 units from the middle, shafts 2.5
+        // wide, heads 10.5 wide and 5.25 long, thin outline
         private static Bitmap forkMoveCursorBitmap(int n)
         {
-            float s = n / 32.0f, c = 16.0f, L = 13.5f, H = 5.0f, W = 4.25f, T = 2.0f;
+            float s = n / 32.0f, c = 16.0f, L = 13.5f, H = 5.25f, W = 5.25f, T = 1.25f;
             PointF[] arm = { new PointF(T, -T), new PointF(L - H, -T), new PointF(L - H, -W), new PointF(L, 0), new PointF(L - H, W), new PointF(L - H, T) };
             List<PointF> pts = new List<PointF>();
             for (int k = 0; k < 4; k++)
@@ -46816,7 +46816,7 @@ namespace Thetis
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
                 g.FillPolygon(Brushes.White, pts.ToArray());
-                using (Pen pen = new Pen(Color.Black, Math.Max(1.0f, 1.0f * s)))
+                using (Pen pen = new Pen(Color.Black, Math.Max(1.0f, 0.6f * s)))
                 {
                     pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Miter;
                     g.DrawPolygon(pen, pts.ToArray());
