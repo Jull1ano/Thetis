@@ -639,6 +639,94 @@ namespace Thetis
                 "you last set there for that mode (first time: 9 kHz on MW AM, 5 kHz on SW broadcast AM). As AltSDR.");
             grp.Controls.Add(chk);
             anchor.Parent.Controls.Add(grp);
+            addForkDblFilterOptions(grp);
+        }
+
+        // Jull1ano fork: Appearance > General > "Double-click (fork)", under "TX attenuation" (the free space of the right
+        // column: the page is too short for anything under "Receive (fork)", which is cut off at the bottom; the page
+        // scrolls now): a double-click on the RX1 passband sets the filter to the width chosen here for the mode in use
+        // (as AltSDR rc61)
+        private ComboBox _forkDblMode, _forkDblWidth;
+        private void addForkDblFilterOptions(Control receive)
+        {
+            Control above = groupBoxTS38; // TX attenuation
+            if (above == null || above.Parent == null) above = receive;
+            if (above.Parent is ScrollableControl page) page.AutoScroll = true; // "Receive (fork)" reachable
+            GroupBox grp = new GroupBox();
+            grp.Name = "grpForkDblFilter";
+            grp.Text = "Double-click (fork)";
+            grp.Location = new Point(above.Left, above.Bottom + HighDpi.Px(8));
+            grp.Size = new Size(above.Width, HighDpi.Px(76));
+            CheckBox chk = new CheckBox();
+            chk.Name = "chkForkDblFilter";
+            chk.Text = "Passband: filter to";
+            chk.AutoSize = false;
+            chk.Size = new Size(grp.Width - HighDpi.Px(12), HighDpi.Px(20));
+            chk.Location = new Point(HighDpi.Px(6), HighDpi.Px(18));
+            chk.Checked = console == null || console.ForkDblFilterOn;
+            _forkDblMode = new ComboBox();
+            _forkDblMode.Name = "comboForkDblMode";
+            _forkDblMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            _forkDblMode.Location = new Point(HighDpi.Px(6), HighDpi.Px(44));
+            _forkDblMode.Width = HighDpi.Px(64);
+            foreach (DSPMode m in Console.ForkDblFilterModes) _forkDblMode.Items.Add(m.ToString());
+            _forkDblWidth = new ComboBox();
+            _forkDblWidth.Name = "comboForkDblWidth";
+            _forkDblWidth.DropDownStyle = ComboBoxStyle.DropDownList;
+            _forkDblWidth.Location = new Point(HighDpi.Px(74), HighDpi.Px(44));
+            _forkDblWidth.Width = Math.Max(HighDpi.Px(56), grp.Width - HighDpi.Px(80));
+            bool filling = false;
+            Action fillWidths = () =>
+            {
+                if (console == null || _forkDblMode.SelectedIndex < 0) return;
+                DSPMode m = Console.ForkDblFilterModes[_forkDblMode.SelectedIndex];
+                List<KeyValuePair<string, int>> list = console.ForkDblFilterChoices(m);
+                int want = console.ForkDblFilterWidth(m), sel = -1, d = int.MaxValue;
+                filling = true;
+                _forkDblWidth.Items.Clear();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    _forkDblWidth.Items.Add(list[i].Key);
+                    int dd = Math.Abs(list[i].Value - want);
+                    if (dd < d) { d = dd; sel = i; }
+                }
+                _forkDblWidth.Tag = list;
+                if (sel >= 0) _forkDblWidth.SelectedIndex = sel;
+                filling = false;
+            };
+            Action<DSPMode> showMode = (m) =>
+            {
+                int i = Array.IndexOf(Console.ForkDblFilterModes, m);
+                if (i < 0) i = 0;
+                if (_forkDblMode.SelectedIndex != i) _forkDblMode.SelectedIndex = i; else fillWidths();
+            };
+            _forkDblMode.SelectedIndexChanged += (s, e) => fillWidths();
+            _forkDblWidth.SelectedIndexChanged += (s, e) =>
+            {
+                if (filling || console == null || _forkDblMode.SelectedIndex < 0 || _forkDblWidth.SelectedIndex < 0) return;
+                List<KeyValuePair<string, int>> list = _forkDblWidth.Tag as List<KeyValuePair<string, int>>;
+                if (list == null || _forkDblWidth.SelectedIndex >= list.Count) return;
+                console.SetForkDblFilterWidth(Console.ForkDblFilterModes[_forkDblMode.SelectedIndex], list[_forkDblWidth.SelectedIndex].Value);
+            };
+            chk.CheckedChanged += (s, e) =>
+            {
+                if (console != null) console.ForkDblFilterOn = chk.Checked;
+                _forkDblMode.Enabled = _forkDblWidth.Enabled = chk.Checked;
+            };
+            _forkDblMode.Enabled = _forkDblWidth.Enabled = chk.Checked;
+            showMode(console != null ? console.RX1DSPMode : DSPMode.LSB);
+            // opens on the mode in use, with that mode's buttons as they are now
+            this.VisibleChanged += (s, e) => { if (Visible && console != null) showMode(console.RX1DSPMode); };
+            string tip = "A double-click on the RX1 passband (inside the filter, on an edge or on the VFO line) sets the filter\r\n" +
+                "to the width chosen here for the mode in use, on that mode's filter button. Elsewhere on the display a\r\n" +
+                "double-click still sets the squelch. Off: as before. One width per mode; the list shows the mode's filter buttons.";
+            toolTip1.SetToolTip(chk, tip);
+            toolTip1.SetToolTip(_forkDblMode, "The mode whose width is shown (opens on the mode in use).");
+            toolTip1.SetToolTip(_forkDblWidth, "The width a double-click on the passband sets in that mode.");
+            grp.Controls.Add(chk);
+            grp.Controls.Add(_forkDblMode);
+            grp.Controls.Add(_forkDblWidth);
+            above.Parent.Controls.Add(grp);
         }
 
         // Jull1ano fork: Appearance > General > "High DPI (fork)" - text size Default / +1 / +2, used at the next start
