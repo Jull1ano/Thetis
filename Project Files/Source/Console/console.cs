@@ -45017,6 +45017,102 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "cursortest")
+                {
+                    // cursortest: the move cross drawn (cursor-move.png next to the log: the cursor itself on the spectrum
+                    // colours, then 4x, beside the stock NoMoveHoriz and SizeAll), then hover / press checks over the passband
+                    System.Globalization.CultureInfo ci = System.Globalization.CultureInfo.InvariantCulture;
+                    Cursor mc = forkMoveCursor();
+                    HighDpi.Log("cursortest move cursor " + mc.Size.Width + "x" + mc.Size.Height + " hotspot " + mc.HotSpot + " scale " + HighDpi.Scale);
+                    try
+                    {
+                        string dir = System.IO.Path.GetDirectoryName(Environment.GetEnvironmentVariable("THETIS_HIDPI_LOG") ?? "");
+                        if (!string.IsNullOrEmpty(dir))
+                        {
+                            Cursor[] cs = { mc, Cursors.NoMoveHoriz, Cursors.SizeAll };
+                            int cell = Math.Max(mc.Size.Width, 64) + 16;
+                            using (Bitmap one = new Bitmap(cell * cs.Length, cell))
+                            {
+                                using (Graphics g = Graphics.FromImage(one))
+                                {
+                                    for (int i = 0; i < cs.Length; i++)
+                                    {
+                                        using (SolidBrush b1 = new SolidBrush(Color.FromArgb(13, 17, 23))) g.FillRectangle(b1, i * cell, 0, cell, cell / 2);
+                                        using (SolidBrush b2 = new SolidBrush(Color.FromArgb(96, 32, 112))) g.FillRectangle(b2, i * cell, cell / 2, cell, cell - cell / 2);
+                                        Size sz = cs[i].Size;
+                                        cs[i].Draw(g, new Rectangle(i * cell + (cell - sz.Width) / 2, (cell - sz.Height) / 2, sz.Width, sz.Height));
+                                    }
+                                }
+                                using (Bitmap big = new Bitmap(one.Width * 4, one.Height * 4))
+                                {
+                                    using (Graphics g = Graphics.FromImage(big))
+                                    {
+                                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                                        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                                        g.DrawImage(one, new Rectangle(0, 0, big.Width, big.Height));
+                                    }
+                                    big.Save(System.IO.Path.Combine(dir, "cursor-move-4x.png"), System.Drawing.Imaging.ImageFormat.Png);
+                                }
+                                one.Save(System.IO.Path.Combine(dir, "cursor-move.png"), System.Drawing.Imaging.ImageFormat.Png);
+                            }
+                            HighDpi.Log("cursortest pictures saved in " + dir);
+                        }
+                    }
+                    catch (Exception ex) { HighDpi.Log("cursortest picture FAIL " + ex.Message); }
+
+                    Func<int> vfoX = () => HzToPixel((float)((VFOAFreq - CentreFrequency) * 1e6));
+                    Func<int, int> edgeX = (hi) => vfoX() + HzToPixel(hi != 0 ? radio.GetDSPRX(0, 0).RXFilterHigh : radio.GetDSPRX(0, 0).RXFilterLow) - HzToPixel(0.0f);
+                    int y = pnlDisplay.Height / 4;
+                    Action<string, int, MouseButtons, Func<Cursor, bool>, string> hover = (what, x, b, want, wantName) =>
+                    {
+                        pnlDisplay_MouseMove(pnlDisplay, new MouseEventArgs(b, 0, x, y, 0));
+                        Cursor got = pnlDisplay.Cursor;
+                        string name = got == mc ? "move cross" : got == grabbing ? "grabbing" : got == Cursors.SizeWE ? "SizeWE" :
+                            got == Cursors.NoMoveHoriz ? "NoMoveHoriz" : (got == Cursors.Cross || got == _cross_outlined) ? "cross" : got.ToString();
+                        HighDpi.Log("cursortest " + (want(got) ? "PASS" : "FAIL") + " " + what + " x " + x + ": " + name + " (want " + wantName + ")");
+                    };
+                    List<Action> plan = new List<Action>();
+                    plan.Add(() =>
+                    {
+                        if (!_click_tune_display) ClickTuneDisplay = true;
+                        RX1DSPMode = DSPMode.USB; RX1Filter = Filter.F5;
+                        HighDpi.Log("cursortest USB " + Display.RX1FilterLow + " .. " + Display.RX1FilterHigh + " VFO x " + vfoX() + " low x " + edgeX(0) + " high x " + edgeX(1));
+                    });
+                    plan.Add(() => hover("hover the passband middle", (edgeX(0) + edgeX(1)) / 2, MouseButtons.None, c => c == mc, "move cross"));
+                    plan.Add(() =>
+                    {
+                        // the low edge's resize zone (3 px) wins where it covers the VFO line (wide zoom: 100 Hz < 1 px)
+                        bool edge = Math.Abs(vfoX() - edgeX(0)) < HighDpi.Px(3);
+                        hover("hover the VFO line", vfoX(), MouseButtons.None, c => edge ? c == Cursors.SizeWE : c == mc, edge ? "SizeWE (low edge zone)" : "move cross");
+                    });
+                    plan.Add(() => hover("hover the high edge", edgeX(1), MouseButtons.None, c => c == Cursors.SizeWE, "SizeWE"));
+                    plan.Add(() => hover("hover off the passband", edgeX(1) + HighDpi.Px(200), MouseButtons.None, c => c == Cursors.Cross || c == _cross_outlined, "cross"));
+                    plan.Add(() =>
+                    {
+                        int x = (edgeX(0) + edgeX(1)) / 2;
+                        hover("hover before the press", x, MouseButtons.None, c => c == mc, "move cross");
+                        pnlDisplay_MouseDown(pnlDisplay, new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
+                        HighDpi.Log("cursortest " + (pnlDisplay.Cursor == grabbing ? "PASS" : "FAIL") + " pressed: " + (pnlDisplay.Cursor == grabbing ? "grabbing" : pnlDisplay.Cursor.ToString()));
+                        hover("pressed, 1 px jitter", x + 1, MouseButtons.Left, c => c == grabbing, "grabbing");
+                        hover("pressed, dragged 30 px", x + HighDpi.Px(30), MouseButtons.Left, c => c == grabbing, "grabbing");
+                        pnlDisplay_MouseUp(pnlDisplay, new MouseEventArgs(MouseButtons.Left, 1, x + HighDpi.Px(30), y, 0));
+                        hover("hover after the drag", (edgeX(0) + edgeX(1)) / 2, MouseButtons.None, c => c == mc, "move cross");
+                    });
+                    int step = 0;
+                    System.Windows.Forms.Timer tc = new System.Windows.Forms.Timer();
+                    tc.Interval = 900;
+                    tc.Tick += (s9, e9) =>
+                    {
+                        if (IsDisposed || Disposing || !Visible) { tc.Stop(); return; }
+                        if (step < plan.Count)
+                        {
+                            try { plan[step++](); }
+                            catch (Exception ex) { HighDpi.Log("cursortest FAIL exception: " + ex.Message); }
+                        }
+                        else { tc.Stop(); HighDpi.Log("cursortest done"); }
+                    };
+                    tc.Start();
+                }
                 else if (parts[0] == "pbclick")
                 {
                     // pbclick: real press / move / release handlers inside the passband: a click (the VFO stays), 2 px of
@@ -45035,6 +45131,8 @@ namespace Thetis
                         int r = rx == 2 ? 1 : 0, d = rx == 2 ? 2 : 1;
                         return vfoX(rx) + (HzToPixel(radio.GetDSPRX(r, 0).RXFilterLow, d) + HzToPixel(radio.GetDSPRX(r, 0).RXFilterHigh, d)) / 2 - HzToPixel(0.0f, d);
                     };
+                    // off the passband by 300 px, on the side with room (test copies keep the VFO where the last run left it)
+                    Func<int, int> offX = (rx) => passX(rx) - HighDpi.Px(300) >= HighDpi.Px(10) ? passX(rx) - HighDpi.Px(300) : passX(rx) + HighDpi.Px(300);
                     Action<int, int, MouseButtons> mv = (x, y, b) => pnlDisplay_MouseMove(pnlDisplay, new MouseEventArgs(b, 0, x, y, 0));
                     Action<int, int> down = (x, y) => pnlDisplay_MouseDown(pnlDisplay, new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
                     Action<int, int> up = (x, y) => pnlDisplay_MouseUp(pnlDisplay, new MouseEventArgs(MouseButtons.Left, 1, x, y, 0));
@@ -45070,7 +45168,7 @@ namespace Thetis
                     plan.Add(() => gesture(1, "click on the VFO line", vfoX(1), new int[0], 0));
                     plan.Add(() => gesture(1, "drag 40 px right", passX(1), new int[] { 2, 5, 20, 40 }, 1));
                     plan.Add(() => gesture(1, "drag 40 px left", passX(1), new int[] { -2, -5, -20, -40 }, 1));
-                    plan.Add(() => gesture(1, "click off the passband (stock CTUN click)", passX(1) - HighDpi.Px(300), new int[0], 2));
+                    plan.Add(() => gesture(1, "click off the passband (stock CTUN click)", offX(1), new int[0], 2));
                     plan.Add(() =>
                     {
                         RX1Filter = Filter.F1;
@@ -45095,7 +45193,7 @@ namespace Thetis
                     plan.Add(() => gesture(2, "click inside", passX(2), new int[0], 0));
                     plan.Add(() => gesture(2, "click inside, 2 px jitter", passX(2), new int[] { 1, 2, -1 }, 0));
                     plan.Add(() => gesture(2, "drag 40 px right", passX(2), new int[] { 2, 5, 20, 40 }, 1));
-                    plan.Add(() => gesture(2, "click off the passband (stock CTUN click)", passX(2) - HighDpi.Px(300), new int[0], 2));
+                    plan.Add(() => gesture(2, "click off the passband (stock CTUN click)", offX(2), new int[0], 2));
                     plan.Add(() => { RX2Enabled = false; HighDpi.Log("pbclick RX2 off"); });
                     int step = 0;
                     System.Windows.Forms.Timer tp = new System.Windows.Forms.Timer();
@@ -46666,15 +46764,91 @@ namespace Thetis
         // The passband: between the VFO line (+-3 px) and the far filter edge; the edges themselves stay filter drags.
         private int _forkPbHold;        // 0 none, 1 RX1, 2 RX2: pressed inside that passband, not moved far enough yet
         private int _forkPbPressX;
-        private bool forkPbArm(MouseEventArgs e, int rx, int low_x, int high_x)
+        // the passband zone a drag moves the band from: the VFO line (+-3 px) to the far filter edge
+        private bool forkInPbZone(int rx, int x, int low_x, int high_x)
         {
-            _forkPbHold = 0;
-            if (_mox) return false;
             int vfo = rx == 2 ? HzToPixel((float)((VFOBFreq - CentreRX2Frequency) * 1e6), 2)
                               : HzToPixel((float)((VFOAFreq - CentreFrequency) * 1e6));
             int a = Math.Min(Math.Min(low_x, high_x), vfo - HighDpi.Px(3));
             int b = Math.Max(Math.Max(low_x, high_x), vfo + HighDpi.Px(3));
-            if (e.X < a || e.X > b) return false;
+            return x >= a && x <= b;
+        }
+
+        // Jull1ano fork: the cursor over the passband - a fat four-way move cross (white, black outline, thick shafts),
+        // 32 px at 100 % and scaled with the DPI, hotspot in the middle; replaces the stock NoMoveHoriz
+        private Cursor _forkMoveCursor;
+        private Cursor forkMoveCursor()
+        {
+            if (_forkMoveCursor != null) return _forkMoveCursor;
+            try { _forkMoveCursor = forkMakeMoveCursor(HighDpi.Px(32)); }
+            catch (Exception ex) { HighDpi.Log("move cursor: " + ex.Message); _forkMoveCursor = Cursors.SizeAll; }
+            return _forkMoveCursor;
+        }
+
+        private static class ForkCursorNative
+        {
+            [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+            public struct ICONINFO { public bool fIcon; public int xHotspot; public int yHotspot; public IntPtr hbmMask; public IntPtr hbmColor; }
+            [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO info);
+            [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern IntPtr CreateIconIndirect(ref ICONINFO info);
+            [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr hIcon);
+            [System.Runtime.InteropServices.DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr h);
+        }
+
+        // the cross drawn in a 32-unit square: arms to 13.5 units from the middle, shafts 4 wide, heads 8.5 wide (wider heads
+        // run into each other and read as a diamond)
+        private static Bitmap forkMoveCursorBitmap(int n)
+        {
+            float s = n / 32.0f, c = 16.0f, L = 13.5f, H = 5.0f, W = 4.25f, T = 2.0f;
+            PointF[] arm = { new PointF(T, -T), new PointF(L - H, -T), new PointF(L - H, -W), new PointF(L, 0), new PointF(L - H, W), new PointF(L - H, T) };
+            List<PointF> pts = new List<PointF>();
+            for (int k = 0; k < 4; k++)
+                foreach (PointF p in arm)
+                {
+                    float x = p.X, y = p.Y;
+                    for (int r = 0; r < k; r++) { float tx = -y; y = x; x = tx; }  // 90 degrees clockwise (y down)
+                    pts.Add(new PointF((c + x) * s, (c + y) * s));
+                }
+            Bitmap bmp = new Bitmap(n, n, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Transparent);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                g.FillPolygon(Brushes.White, pts.ToArray());
+                using (Pen pen = new Pen(Color.Black, Math.Max(1.0f, 1.0f * s)))
+                {
+                    pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Miter;
+                    g.DrawPolygon(pen, pts.ToArray());
+                }
+            }
+            return bmp;
+        }
+
+        private static Cursor forkMakeMoveCursor(int n)
+        {
+            using (Bitmap bmp = forkMoveCursorBitmap(n))
+            {
+                IntPtr hIcon = bmp.GetHicon();
+                ForkCursorNative.ICONINFO ii;
+                ForkCursorNative.GetIconInfo(hIcon, out ii);
+                ii.fIcon = false;
+                ii.xHotspot = n / 2;
+                ii.yHotspot = n / 2;
+                IntPtr hCur = ForkCursorNative.CreateIconIndirect(ref ii);
+                ForkCursorNative.DestroyIcon(hIcon);
+                if (ii.hbmColor != IntPtr.Zero) ForkCursorNative.DeleteObject(ii.hbmColor);
+                if (ii.hbmMask != IntPtr.Zero) ForkCursorNative.DeleteObject(ii.hbmMask);
+                if (hCur == IntPtr.Zero) throw new Exception("CreateIconIndirect failed");
+                return new Cursor(hCur);
+            }
+        }
+
+        private bool forkPbArm(MouseEventArgs e, int rx, int low_x, int high_x)
+        {
+            _forkPbHold = 0;
+            if (_mox) return false;
+            if (!forkInPbZone(rx, e.X, low_x, high_x)) return false;
             _forkPbHold = rx;
             _forkPbPressX = e.X;
             return true;
@@ -51945,17 +52119,18 @@ namespace Thetis
                                         else if (!bLowEdge && bHighEdge) highlightRX2 = 1;
                                     }
                                 }
-                                else if (bOverRX1 && e.X > filt_low_x && e.X < filt_high_x)
+                                else if (bOverRX1 && ((e.X > filt_low_x && e.X < filt_high_x) || (_click_tune_display && forkInPbZone(1, e.X, filt_low_x, filt_high_x))))
                                 {
                                     // middle of the filter, but only when in CTUN on, or holding shift
+                                    // Jull1ano fork: the move cross (a drag moves the band), from the VFO line on; the hand while pressed
                                     if ((_click_tune_display || Common.ShiftKeyDown) && _highlightedSpot == null)
-                                        next_cursor = Cursors.NoMoveHoriz;
+                                        next_cursor = _forkPbHold != 0 ? grabbing : forkMoveCursor();
                                 }
-                                else if (bOverRX2 && e.X > vfob_low_x && e.X < vfob_high_x)
+                                else if (bOverRX2 && ((e.X > vfob_low_x && e.X < vfob_high_x) || (_click_tune_rx2_display && forkInPbZone(2, e.X, vfob_low_x, vfob_high_x))))
                                 {
                                     // middle of the filter, but only when in CTUN on, or holding shift
                                     if ((_click_tune_rx2_display || Common.ShiftKeyDown) && _highlightedSpot == null)
-                                        next_cursor = Cursors.NoMoveHoriz;
+                                        next_cursor = _forkPbHold != 0 ? grabbing : forkMoveCursor();
                                 }
 
                                 if (e.Y < HighDpi.Px(15)) highlightRX1 = 0; // ignore it if we up top
