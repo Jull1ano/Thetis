@@ -46800,7 +46800,8 @@ namespace Thetis
         // shafts 3 wide, heads 9 wide and 4.5 long - square heads (90 degree tips), so every head corner lies on one
         // 45 degree line and the outline reads as a square turned 45 degrees (the user's Figma sim, 2026-11-20); whole
         // pixels at 200 %; the white rim (0.5 unit) is drawn under the black so the black keeps its size and the gaps
-        // between the arms show the background
+        // between the arms show the background. The centre is cut (the user's sim): four separate arms around a
+        // shaft-wide square hole, rimmed like the rest
         private static Bitmap forkMoveCursorBitmap(int n)
         {
             float s = n / 32.0f, c = 16.0f, L = 10.0f, H = 4.5f, W = 4.5f, T = 1.5f;
@@ -46815,16 +46816,24 @@ namespace Thetis
                 }
             Bitmap bmp = new Bitmap(n, n, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             using (Graphics g = Graphics.FromImage(bmp))
+            using (System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath())
             {
+                // each arm closed at its own inner corner (the next arm's first point): the centre square stays empty
+                for (int k = 0; k < 4; k++)
+                {
+                    List<PointF> one = pts.GetRange(k * arm.Length, arm.Length);
+                    one.Add(pts[((k + 1) % 4) * arm.Length]);
+                    path.AddPolygon(one.ToArray());
+                }
                 g.Clear(Color.Transparent);
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
                 using (Pen pen = new Pen(Color.White, Math.Max(1.0f, 1.0f * s)))
                 {
                     pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
-                    g.DrawPolygon(pen, pts.ToArray());
+                    g.DrawPath(pen, path);
                 }
-                g.FillPolygon(Brushes.Black, pts.ToArray());
+                g.FillPath(Brushes.Black, path);
             }
             return bmp;
         }
