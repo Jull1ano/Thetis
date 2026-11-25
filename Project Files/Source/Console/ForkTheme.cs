@@ -213,7 +213,26 @@ namespace Thetis
 
         protected override void WndProc(ref Message m)
         {
+            // Jull1ano fork: a box without scroll bars draws its frame alone - Windows' frame is never drawn under it. A
+            // themed edit redraws its frame on every mouse enter / leave (hot tracking, a lighter edge): drawn first and
+            // then covered by ours, it flashed while the mouse moved over the VFO and band boxes (their parts overlap)
+            if (m.Msg == ForkTheme.WM_NCPAINT && ownsFrame())
+            {
+                if (Probe) ProbeNcPaints++;
+                if (Probe && ProbeOld)
+                {
+                    base.WndProc(ref m);                                // the old way, measured: Windows' frame first ...
+                    if (_ourPixel != uint.MaxValue && framePixel() != _ourPixel) ProbeFlashes++;   // ... on screen until ours
+                    paintFrame();
+                    return;
+                }
+                paintFrame();
+                m.Result = IntPtr.Zero;
+                return;
+            }
             base.WndProc(ref m);
+            if (Probe && (m.Msg == 0x0200 || m.Msg == 0x02A3) && ownsFrame() && _ourPixel != uint.MaxValue && framePixel() != _ourPixel)
+                ProbeDirect++;  // something drew over the frame outside WM_NCPAINT
             if (ForkTheme.BoxBorder.IsEmpty) return;
             if (m.Msg == ForkTheme.WM_NCPAINT || m.Msg == ForkTheme.WM_SETFOCUS || m.Msg == ForkTheme.WM_KILLFOCUS || m.Msg == ForkTheme.WM_ENABLE)
                 paintFrame();
@@ -235,13 +254,47 @@ namespace Thetis
             if (dc == IntPtr.Zero) return;
             try
             {
-                using (Graphics g = Graphics.FromHdc(dc))
+                // drawn off screen and put on in one go: the window never shows the steps (back, edge, face)
+                using (Bitmap bmp = new Bitmap(w, hh, System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
                 {
-                    g.ExcludeClip(client);
-                    ForkTheme.PaintFrame(g, new Rectangle(0, 0, w, hh), ForkTheme.BehindColor(_c), _c.BackColor, ForkTheme.BoxBorder, ForkTheme.BoxRadius);
+                    using (Graphics bg = Graphics.FromImage(bmp))
+                        ForkTheme.PaintFrame(bg, new Rectangle(0, 0, w, hh), ForkTheme.BehindColor(_c), _c.BackColor, ForkTheme.BoxBorder, ForkTheme.BoxRadius);
+                    using (Graphics g = Graphics.FromHdc(dc))
+                    {
+                        g.ExcludeClip(client);
+                        g.CompositingMode = CompositingMode.SourceCopy;
+                        g.DrawImageUnscaled(bmp, 0, 0);
+                    }
                 }
+                if (Probe) _ourPixel = GetPixel(dc, w / 2, 0);
             }
             catch { }
+            finally { ForkTheme.ReleaseDC(h, dc); }
+        }
+
+        // tests (THETIS_HIDPI_OPEN=boxflicker): count the frame paints, and how often another frame showed before ours
+        internal static bool Probe, ProbeOld;
+        internal static int ProbeNcPaints, ProbeFlashes, ProbeDirect;
+        private uint _ourPixel = uint.MaxValue;
+
+        [DllImport("gdi32.dll")] private static extern uint GetPixel(IntPtr dc, int x, int y);
+        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr h, int index);
+
+        // the frame is all ours: a theme frame is set, not a number box, no scroll bars (Windows draws those in it)
+        private bool ownsFrame()
+        {
+            if (ForkTheme.BoxBorder.IsEmpty || _c is UpDownBase || Handle == IntPtr.Zero) return false;
+            return (GetWindowLong(Handle, -16) & (0x00200000 | 0x00100000)) == 0; // GWL_STYLE: WS_VSCROLL | WS_HSCROLL
+        }
+
+        private uint framePixel()
+        {
+            IntPtr h = Handle;
+            ForkTheme.RECT wr;
+            ForkTheme.GetWindowRect(h, out wr);
+            IntPtr dc = ForkTheme.GetWindowDC(h);
+            if (dc == IntPtr.Zero) return uint.MaxValue;
+            try { return GetPixel(dc, (wr.Right - wr.Left) / 2, 0); }
             finally { ForkTheme.ReleaseDC(h, dc); }
         }
     }

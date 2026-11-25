@@ -45019,6 +45019,58 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "boxflicker")
+                {
+                    // boxflicker: mouse enter / move / leave sent to the VFO and band boxes (as Windows sends them) five
+                    // times each, first the old way (Windows' frame, then ours: how often another frame was on screen
+                    // before ours), then the fork's (the frame ours alone); frame paints counted
+                    TextBox[] boxes = { txtVFOAMSD, txtVFOAFreq, txtVFOABand, txtVFOBMSD, txtVFOBFreq, txtVFOBBand };
+                    List<Action> plan = new List<Action>();
+                    foreach (bool oldWay in new bool[] { true, false })
+                    {
+                        bool ow = oldWay;
+                        plan.Add(() =>
+                        {
+                            ForkBoxBorder.Probe = true;
+                            ForkBoxBorder.ProbeOld = ow;
+                            foreach (TextBox b in boxes) { b.Invalidate(); ForkBoxBorder.RedrawFrame(b); b.Update(); }
+                            ForkBoxBorder.ProbeNcPaints = 0; ForkBoxBorder.ProbeFlashes = 0; ForkBoxBorder.ProbeDirect = 0;
+                            foreach (TextBox b in boxes)
+                            {
+                                if (!b.Visible || !b.IsHandleCreated) continue;
+                                for (int k = 0; k < 5; k++)
+                                {
+                                    foreach (int fx in new int[] { 2, 5, 8 })
+                                    {
+                                        int x = b.ClientSize.Width * fx / 10, y = b.ClientSize.Height / 2;
+                                        ForkVfoSendMouse(b.Handle, 0x0200, IntPtr.Zero, (IntPtr)((y << 16) | (x & 0xFFFF)));
+                                        b.Update();
+                                    }
+                                    ForkVfoSendMouse(b.Handle, 0x02A3, IntPtr.Zero, IntPtr.Zero); // WM_MOUSELEAVE
+                                    b.Update();
+                                }
+                            }
+                            HighDpi.Log("boxflicker " + (ow ? "old way (Windows' frame, then ours)" : "fork (frame ours alone)") +
+                                ": frame paints " + ForkBoxBorder.ProbeNcPaints + ", another frame on screen first " + ForkBoxBorder.ProbeFlashes +
+                                ", drawn over outside the frame paint " + ForkBoxBorder.ProbeDirect + " (theme border " + ForkTheme.BoxBorder + ")");
+                        });
+                    }
+                    plan.Add(() => { ForkBoxBorder.Probe = false; ForkBoxBorder.ProbeOld = false; forkVfoHover(1, new Point(-30000, -30000)); forkVfoHover(2, new Point(-30000, -30000)); });
+                    int step = 0;
+                    System.Windows.Forms.Timer tbx = new System.Windows.Forms.Timer();
+                    tbx.Interval = 900;
+                    tbx.Tick += (s9, e9) =>
+                    {
+                        if (IsDisposed || Disposing || !Visible) { tbx.Stop(); return; }
+                        if (step < plan.Count)
+                        {
+                            try { plan[step++](); }
+                            catch (Exception ex) { HighDpi.Log("boxflicker FAIL exception: " + ex.Message); }
+                        }
+                        else { tbx.Stop(); HighDpi.Log("boxflicker done"); }
+                    };
+                    tbx.Start();
+                }
                 else if (parts[0] == "vfohover")
                 {
                     // vfohover: VFO A / B digits from the boxes' own character positions; the hover at the left edge, the
@@ -46884,6 +46936,8 @@ namespace Thetis
         }
         private readonly Dictionary<string, int[]> _forkVfoInk = new Dictionary<string, int[]>();
         public Point? ForkVfoTestPoint = null;  // tests: the mouse position (screen) instead of the real cursor
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SendMessage")]
+        private static extern IntPtr ForkVfoSendMouse(IntPtr h, int msg, IntPtr w, IntPtr l);
 
         // the ink of "0" drawn by GDI at (0, 0), as the edit box draws it: left, right, top, bottom (exclusive), advance
         private int[] forkVfoInk(Font f)
@@ -47000,6 +47054,7 @@ namespace Thetis
             if (host == null) return -1;
             ForkVfoCell c;
             int d = forkVfoDigitAt(forkVfoCells(vfo), host.PointToClient(screen).X, out c);
+            bool moved = false;
             if (d >= 0)
             {
                 int thick = Math.Max(2, (int)Math.Round(HighDpi.Px(1.5f)));
@@ -47009,12 +47064,12 @@ namespace Thetis
                 int boxTop = host.PointToClient(shown.PointToScreen(Point.Empty)).Y;
                 int top = Math.Max(boxTop + 1, c.r.Top - gap - thick);
                 Rectangle br = new Rectangle(c.inkL, top, Math.Max(2, c.inkR - c.inkL), thick);
-                if (bar.Bounds != br) bar.Bounds = br;
+                if (bar.Bounds != br) { bar.Bounds = br; moved = true; }
                 if (host.Controls.GetChildIndex(bar) != 0) bar.BringToFront();
             }
             int old = vfo == 2 ? vfob_hover_digit : vfoa_hover_digit;
             if (vfo == 2) vfob_hover_digit = d; else vfoa_hover_digit = d;
-            if (d != old || d >= 0) bar.Invalidate();
+            if (d != old || moved) bar.Invalidate();   // only when it changes: no repaint on every mouse move
             return d;
         }
 
