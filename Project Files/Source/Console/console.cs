@@ -834,6 +834,13 @@ namespace Thetis
                 HighDpi.KeepAbove(panelVFOBHover, txtVFOBFreq, HighDpi.Px(1));
             }
 
+            // Jull1ano fork: the digit hover ends when the mouse leaves the VFO box from any of its parts - the small
+            // digits and the hover bar had no MouseLeave, so the highlight (and the wheel's digit) stayed
+            txtVFOALSD.MouseLeave += (s, e) => forkVfoLeave(1);
+            panelVFOAHover.MouseLeave += (s, e) => forkVfoLeave(1);
+            txtVFOBLSD.MouseLeave += (s, e) => forkVfoLeave(2);
+            panelVFOBHover.MouseLeave += (s, e) => forkVfoLeave(2);
+
             // for resizing
             GrabConsoleSizeBasis();
             MinimumSize = this.Size;
@@ -45167,6 +45174,97 @@ namespace Thetis
                     };
                     tf.Start();
                 }
+                else if (parts[0] == "vfoleave")
+                {
+                    // vfoleave: hover a digit, move the (test) mouse out of the VFO box and send the leave Windows sends
+                    // to the part it was over (the big digits, the small digits, the bar): the hover must end; onto
+                    // another part of the same box it stays. The bar's pixels checked in a picture after each leave
+                    const int WM_MOUSELEAVE = 0x02A3;
+                    string dir = System.IO.Path.GetDirectoryName(Environment.GetEnvironmentVariable("THETIS_HIDPI_LOG") ?? "") ?? "";
+                    List<Action> plan = new List<Action>();
+                    plan.Add(() => { VFOBFreq = 3.73; VFOAFreq = 14.265; });
+                    foreach (int vv in new int[] { 1, 2 })
+                    {
+                        int vfo = vv;
+                        TextBox big = vfo == 2 ? txtVFOBFreq : txtVFOAFreq;
+                        TextBox msd = vfo == 2 ? txtVFOBMSD : txtVFOAMSD;
+                        TextBox lsd = vfo == 2 ? txtVFOBLSD : txtVFOALSD;
+                        Panel bar = vfo == 2 ? panelVFOBHover : panelVFOAHover;
+                        Func<int> digit = () => vfo == 2 ? vfob_hover_digit : vfoa_hover_digit;
+                        // over a digit (place d): the test mouse there, the hover as a mouse move does it
+                        Func<int, Point> over = (d) =>
+                        {
+                            ForkVfoCell c = forkVfoCells(vfo).Find(q => q.d == d);
+                            return bar.Parent.PointToScreen(new Point((c.r.Left + c.r.Right) / 2, (c.r.Top + c.r.Bottom) / 2));
+                        };
+                        Action<string, int, Point, Control, int> leave = (what, d, to, part, want) =>
+                        {
+                            ForkVfoTestPoint = over(d);
+                            forkVfoHover(vfo, ForkVfoTestPoint.Value);
+                            int before = digit();
+                            ForkVfoTestPoint = to;
+                            ForkVfoSendMouse(part.Handle, WM_MOUSELEAVE, IntPtr.Zero, IntPtr.Zero);
+                            bar.Update();
+                            int after = digit();
+                            string pic = "";
+                            if (want < 0)
+                            {
+                                // the bar's place on screen: the box background, no VFO colour left
+                                try
+                                {
+                                    string full = System.IO.Path.Combine(dir, "vfoleave-full.png");
+                                    HighDpi.CaptureForm(this, full);
+                                    Rectangle br = bar.Parent.RectangleToScreen(bar.Bounds);
+                                    Color fore = vfo == 2 ? txtVFOBFreq.ForeColor : txtvfoafreq_forecolor_pen.Color;
+                                    int lit = 0;
+                                    using (Bitmap all = new Bitmap(full))
+                                        for (int y = br.Top; y < br.Bottom; y++)
+                                            for (int x = br.Left; x < br.Right; x++)
+                                            {
+                                                int px = x - this.Left, py = y - this.Top;
+                                                if (px < 0 || py < 0 || px >= all.Width || py >= all.Height) continue;
+                                                Color p = all.GetPixel(px, py);
+                                                if (Math.Abs(p.R - fore.R) + Math.Abs(p.G - fore.G) + Math.Abs(p.B - fore.B) < 40) lit++;
+                                            }
+                                    pic = ", bar pixels in the VFO colour " + lit;
+                                    if (lit > 0) after = 99;
+                                }
+                                catch (Exception ex) { pic = ", picture: " + ex.Message; }
+                            }
+                            HighDpi.Log("vfoleave " + (after == want ? "PASS" : "FAIL") + " VFO " + (vfo == 2 ? "B" : "A") + " " + what +
+                                ": digit " + before + " -> " + after + " (want " + want + ")" + pic);
+                        };
+                        plan.Add(() =>
+                        {
+                            Rectangle box = big.Parent.RectangleToScreen(big.Bounds);
+                            Point right = new Point(box.Right + HighDpi.Px(20), box.Top + box.Height / 2);
+                            Point below = new Point(box.Left + box.Width / 2, box.Bottom + HighDpi.Px(20));
+                            Point above = new Point(box.Left + box.Width / 2, box.Top - HighDpi.Px(20));
+                            leave("small 1 Hz digit, out to the right", 9, right, lsd, -1);
+                            leave("small 10 Hz digit, out below", 8, below, lsd, -1);
+                            leave("small 100 Hz digit, onto the big digits", 7, over(6), lsd, 7);
+                            leave("big 1 kHz digit, out above", 6, above, msd.Visible ? (Control)msd : big, -1);
+                            leave("bar over 100 kHz, out above", 4, above, bar, -1);
+                            leave("bar over 10 kHz, onto the box", 5, over(5), bar, 5);
+                            ForkVfoTestPoint = null;
+                            forkVfoHover(vfo, new Point(-30000, -30000));
+                        });
+                    }
+                    int step = 0;
+                    System.Windows.Forms.Timer tl = new System.Windows.Forms.Timer();
+                    tl.Interval = 900;
+                    tl.Tick += (s9, e9) =>
+                    {
+                        if (IsDisposed || Disposing || !Visible) { tl.Stop(); return; }
+                        if (step < plan.Count)
+                        {
+                            try { plan[step++](); }
+                            catch (Exception ex) { HighDpi.Log("vfoleave FAIL exception: " + ex.Message); }
+                        }
+                        else { tl.Stop(); ForkVfoTestPoint = null; HighDpi.Log("vfoleave done"); }
+                    };
+                    tl.Start();
+                }
                 else if (parts[0] == "boxflicker")
                 {
                     // boxflicker: mouse enter / move / leave sent to the VFO and band boxes (as Windows sends them) five
@@ -47942,6 +48040,16 @@ namespace Thetis
             if (vfo == 2) vfob_hover_digit = d; else vfoa_hover_digit = d;
             if (d != old || moved) bar.Invalidate();   // only when it changes: no repaint on every mouse move
             return d;
+        }
+
+        // the mouse left one part of a VFO box: the hover ends unless it is still over the box (onto another part)
+        private void forkVfoLeave(int vfo)
+        {
+            TextBox big = vfo == 2 ? txtVFOBFreq : txtVFOAFreq;
+            Panel bar = vfo == 2 ? panelVFOBHover : panelVFOAHover;
+            if (big.Parent != null && big.Parent.RectangleToScreen(big.Bounds).Contains(ForkVfoTestPoint ?? Control.MousePosition)) return;
+            if (vfo == 2) vfob_hover_digit = -1; else vfoa_hover_digit = -1;
+            bar.Invalidate();
         }
 
         // the hover panel is the bar: the VFO colour while a digit is hovered, else the box background (invisible)
