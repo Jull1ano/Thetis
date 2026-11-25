@@ -45174,6 +45174,80 @@ namespace Thetis
                     };
                     tf.Start();
                 }
+                else if (parts[0] == "vfoleave2")
+                {
+                    // vfoleave2: the mouse leaves the small digits onto the box's edge right of them (the leave keeps the
+                    // hover), then is outside the box with no further mouse message (a quick move): the hover must end
+                    // within the watch time; also straight out with no message at all
+                    const int WM_MOUSELEAVE = 0x02A3;
+                    List<Action> plan = new List<Action>();
+                    plan.Add(() => { VFOBFreq = 3.73; VFOAFreq = 28.438; });
+                    foreach (int vv in new int[] { 1, 2 })
+                    {
+                        int vfo = vv;
+                        TextBox big = vfo == 2 ? txtVFOBFreq : txtVFOAFreq;
+                        TextBox lsd = vfo == 2 ? txtVFOBLSD : txtVFOALSD;
+                        Panel bar = vfo == 2 ? panelVFOBHover : panelVFOAHover;
+                        Func<int> digit = () => vfo == 2 ? vfob_hover_digit : vfoa_hover_digit;
+                        Func<int, Point> over = (d) =>
+                        {
+                            ForkVfoCell c = forkVfoCells(vfo).Find(q => q.d == d);
+                            return bar.Parent.PointToScreen(new Point((c.r.Left + c.r.Right) / 2, (c.r.Top + c.r.Bottom) / 2));
+                        };
+                        Rectangle box = Rectangle.Empty;
+                        plan.Add(() =>
+                        {
+                            box = big.Parent.RectangleToScreen(big.Bounds);
+                            Rectangle ls = lsd.Parent.RectangleToScreen(lsd.Bounds);
+                            // over the 1 Hz digit, then onto the edge right of the small digits (inside the box): the leave keeps it
+                            ForkVfoTestPoint = over(9);
+                            forkVfoHover(vfo, ForkVfoTestPoint.Value);
+                            Point edge = new Point(Math.Min(box.Right - 1, ls.Right + 1), ls.Top + ls.Height / 2);
+                            ForkVfoTestPoint = edge;
+                            ForkVfoSendMouse(lsd.Handle, WM_MOUSELEAVE, IntPtr.Zero, IntPtr.Zero);
+                            HighDpi.Log("vfoleave2 VFO " + (vfo == 2 ? "B" : "A") + " box " + box + " small box " + ls + " edge " + edge + ": after the leave " + digit() + " (kept)");
+                            // then outside to the right, no mouse message
+                            ForkVfoTestPoint = new Point(box.Right + HighDpi.Px(30), edge.Y);
+                        });
+                        plan.Add(() =>
+                        {
+                            int d = digit();
+                            HighDpi.Log("vfoleave2 " + (d < 0 ? "PASS" : "FAIL") + " VFO " + (vfo == 2 ? "B" : "A") + " out right past the edge, no message: digit " + d + " (want -1)");
+                            // straight out of the 1 kHz digit, no message at all
+                            ForkVfoTestPoint = over(6);
+                            forkVfoHover(vfo, ForkVfoTestPoint.Value);
+                            ForkVfoTestPoint = new Point(box.Left + box.Width / 2, box.Bottom + HighDpi.Px(30));
+                        });
+                        plan.Add(() =>
+                        {
+                            int d = digit();
+                            HighDpi.Log("vfoleave2 " + (d < 0 ? "PASS" : "FAIL") + " VFO " + (vfo == 2 ? "B" : "A") + " out below, no message: digit " + d + " (want -1)");
+                            // still inside: the watch keeps it
+                            ForkVfoTestPoint = over(5);
+                            forkVfoHover(vfo, ForkVfoTestPoint.Value);
+                        });
+                        plan.Add(() =>
+                        {
+                            int d = digit();
+                            HighDpi.Log("vfoleave2 " + (d == 5 ? "PASS" : "FAIL") + " VFO " + (vfo == 2 ? "B" : "A") + " still over the 10 kHz digit: digit " + d + " (want 5)");
+                            ForkVfoTestPoint = new Point(-30000, -30000);
+                        });
+                    }
+                    int step = 0;
+                    System.Windows.Forms.Timer tw = new System.Windows.Forms.Timer();
+                    tw.Interval = 600;
+                    tw.Tick += (s9, e9) =>
+                    {
+                        if (IsDisposed || Disposing || !Visible) { tw.Stop(); return; }
+                        if (step < plan.Count)
+                        {
+                            try { plan[step++](); }
+                            catch (Exception ex) { HighDpi.Log("vfoleave2 FAIL exception: " + ex.Message); }
+                        }
+                        else { tw.Stop(); ForkVfoTestPoint = null; HighDpi.Log("vfoleave2 done"); }
+                    };
+                    tw.Start();
+                }
                 else if (parts[0] == "vfoleave")
                 {
                     // vfoleave: hover a digit, move the (test) mouse out of the VFO box and send the leave Windows sends
@@ -48038,6 +48112,7 @@ namespace Thetis
             }
             int old = vfo == 2 ? vfob_hover_digit : vfoa_hover_digit;
             if (vfo == 2) vfob_hover_digit = d; else vfoa_hover_digit = d;
+            if (d >= 0) forkVfoWatch();
             if (d != old || moved) bar.Invalidate();   // only when it changes: no repaint on every mouse move
             return d;
         }
@@ -48050,6 +48125,26 @@ namespace Thetis
             if (big.Parent != null && big.Parent.RectangleToScreen(big.Bounds).Contains(ForkVfoTestPoint ?? Control.MousePosition)) return;
             if (vfo == 2) vfob_hover_digit = -1; else vfoa_hover_digit = -1;
             bar.Invalidate();
+        }
+
+        // while a digit is lit: every 100 ms, is the mouse still over its box? A leave onto the box's thin edge right of
+        // the small digits keeps the hover, and the next mouse message can already be outside the box: no part of it
+        // sees the mouse again, so none sends a leave. This ends the hover whatever way the mouse went.
+        private System.Windows.Forms.Timer _forkVfoWatch;
+        private void forkVfoWatch()
+        {
+            if (_forkVfoWatch == null)
+            {
+                _forkVfoWatch = new System.Windows.Forms.Timer();
+                _forkVfoWatch.Interval = 100;
+                _forkVfoWatch.Tick += (s, e) =>
+                {
+                    if (vfoa_hover_digit >= 0) forkVfoLeave(1);
+                    if (vfob_hover_digit >= 0) forkVfoLeave(2);
+                    if (vfoa_hover_digit < 0 && vfob_hover_digit < 0) _forkVfoWatch.Stop();
+                };
+            }
+            if (!_forkVfoWatch.Enabled) _forkVfoWatch.Start();
         }
 
         // the hover panel is the bar: the VFO colour while a digit is hovered, else the box background (invisible)
