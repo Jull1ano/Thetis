@@ -24051,6 +24051,7 @@ namespace Thetis
 
         private void panelVFOAHover_Paint(object sender, System.Windows.Forms.PaintEventArgs e)
         {
+            if (forkVfoBarPaint(e, panelVFOAHover, txtvfoafreq_forecolor_pen.Color, txtVFOAFreq.BackColor, vfoa_hover_digit)) return; // Jull1ano fork
             if (vfoa_hover_digit < 0)
                 return;
 
@@ -24083,6 +24084,7 @@ namespace Thetis
 
         private void panelVFOBHover_Paint(object sender, System.Windows.Forms.PaintEventArgs e)
         {
+            if (forkVfoBarPaint(e, panelVFOBHover, txtVFOBFreq.ForeColor, txtVFOBFreq.BackColor, vfob_hover_digit)) return; // Jull1ano fork
             if (vfob_hover_digit < 0)
                 return;
 
@@ -31221,15 +31223,9 @@ namespace Thetis
                     int right = grpVFOA.Left + txtVFOAFreq.Left + txtVFOAFreq.Width;
                     if (vfoa_hover_digit < 0)
                     {
-                        int x = right + 2 - (vfo_pixel_offset - 5);
-                        while (x < e.X && mult > 0.0000011)
-                        {
-                            mult /= 10.0;
-                            x += vfo_char_width;
-                            if (mult == 1.0)
-                                x += vfo_decimal_space;
-                            else x += vfo_char_space;
-                        }
+                        // Jull1ano fork: the digit under the mouse from the real digit positions (no step left of the digits)
+                        int fd = forkVfoDigitAtScreen(1, ForkVfoTestPoint ?? Control.MousePosition);
+                        if (fd >= 0) mult = Math.Pow(10, -fd) * 1000.0;
                     }
                     else
                     {
@@ -31250,15 +31246,9 @@ namespace Thetis
                     right = grpVFOB.Left + txtVFOBFreq.Left + txtVFOBFreq.Width;
                     if (vfob_hover_digit < 0)
                     {
-                        int x = right + 2 - (vfo_pixel_offset - 5);
-                        while (x < e.X && mult > 0.0000011)
-                        {
-                            mult /= 10;
-                            x += vfo_char_width;
-                            if (mult == 1.0)
-                                x += vfo_decimal_space;
-                            else x += vfo_char_space;
-                        }
+                        // Jull1ano fork: the digit under the mouse from the real digit positions (no step left of the digits)
+                        int fd = forkVfoDigitAtScreen(2, ForkVfoTestPoint ?? Control.MousePosition);
+                        if (fd >= 0) mult = Math.Pow(10, -fd) * 1000.0;
                     }
                     else
                     {
@@ -32149,6 +32139,12 @@ namespace Thetis
 
         private void txtVFOAFreq_MouseMove(object sender, System.Windows.Forms.MouseEventArgs e)
         {
+            // Jull1ano fork: the digit under the mouse from where the digits really are, the bar above it (forkVfoHover)
+            if (this.ContainsFocus)
+            {
+                forkVfoHover(1, ForkVfoTestPoint ?? Control.MousePosition);
+                return;
+            }
             if (this.ContainsFocus)
             {
                 int old_digit = vfoa_hover_digit;
@@ -33067,6 +33063,12 @@ namespace Thetis
 
         private void txtVFOBFreq_MouseMove(object sender, System.Windows.Forms.MouseEventArgs e)
         {
+            // Jull1ano fork: the digit under the mouse from where the digits really are, the bar above it (forkVfoHover)
+            if (this.ContainsFocus)
+            {
+                forkVfoHover(2, ForkVfoTestPoint ?? Control.MousePosition);
+                return;
+            }
             if (this.ContainsFocus)
             {
                 int old_digit = vfob_hover_digit;
@@ -45017,6 +45019,110 @@ namespace Thetis
                     };
                     tm.Start();
                 }
+                else if (parts[0] == "vfohover")
+                {
+                    // vfohover: VFO A / B digits from the boxes' own character positions; the hover at the left edge, the
+                    // middle and the right edge of every digit (that digit), at the boundary between two, on the decimal
+                    // point, on the 10 MHz digit and left of the digits (none); pictures of the VFO A group with the bar and
+                    // a red line at the mouse (vfohover-*.png next to the log)
+                    string dir = System.IO.Path.GetDirectoryName(Environment.GetEnvironmentVariable("THETIS_HIDPI_LOG") ?? "") ?? "";
+                    List<Action> plan = new List<Action>();
+                    plan.Add(() => { VFOBFreq = 7.074; VFOAFreq = 14.263; });
+                    foreach (int vv in new int[] { 1, 2 })
+                    {
+                        int vfo = vv;
+                        plan.Add(() =>
+                        {
+                            Control host = (vfo == 2 ? panelVFOBHover : panelVFOAHover).Parent;
+                            List<ForkVfoCell> cells = forkVfoCells(vfo);
+                            HighDpi.Log("vfohover VFO " + (vfo == 2 ? "B" : "A") + " small " + small_lsd + " text '" + (vfo == 2 ? txtVFOBFreq.Text : txtVFOAFreq.Text) +
+                                "' cells " + string.Join(" ", cells.ConvertAll(c => c.d + (c.small ? "s" : "") + "@" + c.r.Left + "-" + c.r.Right + "/" + c.r.Top)));
+                            int pass = 0, fail = 0;
+                            Func<int, int> at = (gx) => forkVfoHover(vfo, host.PointToScreen(new Point(gx, cells.Count > 0 ? cells[0].r.Top + 4 : 0)));
+                            Action<string, int, int> chk = (what, gx, want) =>
+                            {
+                                int got = at(gx);
+                                if (got == want) pass++; else { fail++; HighDpi.Log("vfohover FAIL VFO " + vfo + " " + what + " x " + gx + ": " + got + " (want " + want + ")"); }
+                            };
+                            for (int k = 0; k < cells.Count; k++)
+                            {
+                                ForkVfoCell c = cells[k];
+                                int want = c.d < 3 ? -1 : c.d;
+                                chk("digit " + c.d + " left edge", c.r.Left, want);
+                                chk("digit " + c.d + " middle", (c.r.Left + c.r.Right) / 2, want);
+                                chk("digit " + c.d + " right edge", c.r.Right - 1, want);
+                                if (k + 1 < cells.Count && cells[k + 1].r.Left == c.r.Right)
+                                {
+                                    chk("boundary " + c.d + "|" + cells[k + 1].d + " left", c.r.Right - 1, want);
+                                    chk("boundary " + c.d + "|" + cells[k + 1].d + " right", c.r.Right, cells[k + 1].d < 3 ? -1 : cells[k + 1].d);
+                                }
+                                if (k + 1 < cells.Count && cells[k + 1].r.Left > c.r.Right + 1)
+                                {
+                                    int gl = c.r.Right, gr = cells[k + 1].r.Left;
+                                    chk("gap after " + c.d + " left quarter", gl + (gr - gl) / 4, want);
+                                    chk("gap after " + c.d + " right quarter", gr - 1 - (gr - gl) / 4, cells[k + 1].d < 3 ? -1 : cells[k + 1].d);
+                                }
+                            }
+                            if (cells.Count > 0) chk("left of the digits", cells[0].r.Left - HighDpi.Px(10), -1);
+                            if (cells.Count > 0) chk("right of the digits", cells[cells.Count - 1].r.Right + HighDpi.Px(10), -1);
+                            HighDpi.Log("vfohover VFO " + (vfo == 2 ? "B" : "A") + ": " + pass + " PASS, " + fail + " FAIL");
+                            forkVfoHover(vfo, new Point(-30000, -30000));
+                        });
+                    }
+                    // pictures: VFO A hovered near the right edge of the 1 kHz digit, the left edge of the 10 kHz digit,
+                    // the middle of the small 10 Hz digit
+                    foreach (string spot in new string[] { "1kHz-right", "10kHz-left", "10Hz-middle", "100kHz-middle" })
+                    {
+                        string sp = spot;
+                        plan.Add(() =>
+                        {
+                            List<ForkVfoCell> cells = forkVfoCells(1);
+                            int want = sp == "1kHz-right" ? 6 : sp == "10kHz-left" ? 5 : sp == "10Hz-middle" ? 8 : 4;
+                            ForkVfoCell c = cells.Find(q => q.d == want);
+                            int gx = sp.EndsWith("right") ? c.r.Right - 2 : sp.EndsWith("left") ? c.r.Left + 1 : (c.r.Left + c.r.Right) / 2;
+                            Control host = panelVFOAHover.Parent;
+                            int got = forkVfoHover(1, host.PointToScreen(new Point(gx, c.r.Top + 4)));
+                            host.Update();
+                            panelVFOAHover.Update();
+                            try
+                            {
+                                string full = System.IO.Path.Combine(dir, "vfohover-full.png");
+                                HighDpi.CaptureForm(this, full);
+                                Rectangle gs = host.RectangleToScreen(host.ClientRectangle);
+                                Point mouse = host.PointToScreen(new Point(gx, c.r.Top + 4));
+                                using (Bitmap all = new Bitmap(full))
+                                {
+                                    Rectangle crop = new Rectangle(gs.X - this.Left, gs.Y - this.Top, gs.Width, gs.Height);
+                                    crop.Intersect(new Rectangle(0, 0, all.Width, all.Height));
+                                    using (Bitmap part = all.Clone(crop, all.PixelFormat))
+                                    {
+                                        using (Graphics g = Graphics.FromImage(part))
+                                        using (Pen red = new Pen(Color.Red, 1))
+                                            g.DrawLine(red, mouse.X - gs.X, 0, mouse.X - gs.X, part.Height);
+                                        part.Save(System.IO.Path.Combine(dir, "vfohover-" + sp + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+                                    }
+                                }
+                            }
+                            catch (Exception ex) { HighDpi.Log("vfohover picture FAIL " + ex.Message); }
+                            HighDpi.Log("vfohover picture " + sp + ": x " + gx + " digit " + got + " (want " + want + ") bar " + panelVFOAHover.Bounds);
+                        });
+                    }
+                    plan.Add(() => forkVfoHover(1, new Point(-30000, -30000)));
+                    int step = 0;
+                    System.Windows.Forms.Timer tv = new System.Windows.Forms.Timer();
+                    tv.Interval = 900;
+                    tv.Tick += (s9, e9) =>
+                    {
+                        if (IsDisposed || Disposing || !Visible) { tv.Stop(); return; }
+                        if (step < plan.Count)
+                        {
+                            try { plan[step++](); }
+                            catch (Exception ex) { HighDpi.Log("vfohover FAIL exception: " + ex.Message); }
+                        }
+                        else { tv.Stop(); HighDpi.Log("vfohover done"); }
+                    };
+                    tv.Start();
+                }
                 else if (parts[0] == "cursortest")
                 {
                     // cursortest: the move cross drawn (cursor-move.png next to the log: the cursor itself on the spectrum
@@ -46764,6 +46870,161 @@ namespace Thetis
         // The passband: between the VFO line (+-3 px) and the far filter edge; the edges themselves stay filter drags.
         private int _forkPbHold;        // 0 none, 1 RX1, 2 RX2: pressed inside that passband, not moved far enough yet
         private int _forkPbPressX;
+        // Jull1ano fork: the VFO digit under the mouse from where the digits really are - the boxes' own character
+        // positions (EM_POSFROMCHAR) - not from GDI+ widths (MeasureString, typographic, minus a guessed 2 px border),
+        // which drift from the boxes' GDI text at high DPI: the hover sat left of the mouse, by up to half a digit at the
+        // 1 kHz digit. The highlight is a bar ABOVE the hovered digit (the mouse pointer covers the space under it); the
+        // hover panel itself is the bar, moved over each digit. The mouse wheel uses the same lookup.
+        private struct ForkVfoCell
+        {
+            public int d;           // place: 3 = 1 MHz, 4 = 100 kHz ... 9 = 1 Hz (2 = 10 MHz and up: not tuned by the wheel)
+            public Rectangle r;     // in the VFO group: the character cell across, the digit ink top to bottom
+            public int inkL, inkR;  // the digit ink across (group x)
+            public bool small;      // a digit of the small 100 Hz .. 1 Hz box
+        }
+        private readonly Dictionary<string, int[]> _forkVfoInk = new Dictionary<string, int[]>();
+        public Point? ForkVfoTestPoint = null;  // tests: the mouse position (screen) instead of the real cursor
+
+        // the ink of "0" drawn by GDI at (0, 0), as the edit box draws it: left, right, top, bottom (exclusive), advance
+        private int[] forkVfoInk(Font f)
+        {
+            string key = f.Name + "|" + f.SizeInPoints.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + f.Style;
+            int[] v;
+            if (_forkVfoInk.TryGetValue(key, out v)) return v;
+            Size sz = TextRenderer.MeasureText("0", f, Size.Empty, TextFormatFlags.NoPadding);
+            int w = sz.Width + 8, h = sz.Height + 8;
+            int l = w, r = -1, top = h, b = -1;
+            using (Bitmap bmp = new Bitmap(w, h))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(Color.White);
+                    TextRenderer.DrawText(g, "0", f, new Point(0, 0), Color.Black, Color.White, TextFormatFlags.NoPadding);
+                }
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        if (bmp.GetPixel(x, y).R < 128)
+                        {
+                            if (x < l) l = x;
+                            if (x > r) r = x;
+                            if (y < top) top = y;
+                            if (y > b) b = y;
+                        }
+            }
+            if (r < 0) { l = 0; r = sz.Width - 1; top = 0; b = sz.Height - 1; }
+            v = new int[] { l, r + 1, top, b + 1, sz.Width };
+            _forkVfoInk[key] = v;
+            return v;
+        }
+
+        // the digits shown for VFO A (1) / B (2), left to right, in the VFO group's coordinates
+        private List<ForkVfoCell> forkVfoCells(int vfo)
+        {
+            TextBox big = vfo == 2 ? txtVFOBFreq : txtVFOAFreq;
+            TextBox msd = vfo == 2 ? txtVFOBMSD : txtVFOAMSD;
+            TextBox lsd = vfo == 2 ? txtVFOBLSD : txtVFOALSD;
+            Control host = (vfo == 2 ? panelVFOBHover : panelVFOAHover).Parent;
+            List<ForkVfoCell> cells = new List<ForkVfoCell>();
+            if (host == null) return cells;
+            bool small = small_lsd && lsd.Visible;
+            forkAddVfoCells(small && msd.Visible ? msd : big, small ? 6 : 9, false, cells, host);
+            if (small) forkAddVfoCells(lsd, 9, true, cells, host);
+            return cells;
+        }
+
+        // one box's digits: the places from its decimal separator, or (the small box) the last one = 1 Hz
+        private void forkAddVfoCells(TextBox box, int maxPlace, bool lsdBox, List<ForkVfoCell> cells, Control host)
+        {
+            string s = box.Text ?? "";
+            if (s.Length == 0 || !box.IsHandleCreated) return;
+            int sep = s.IndexOf(separator);
+            if (sep < 0) sep = s.Length;
+            int[] ink = forkVfoInk(box.Font);
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (!char.IsDigit(s[i])) continue;
+                int d = lsdBox ? 9 - (s.Length - 1 - i) : (i < sep ? 3 - (sep - 1 - i) : 3 + (i - sep));
+                if (d > maxPlace) continue;     // the big 100 Hz .. 1 Hz digits under the small box
+                Point p = box.GetPositionFromCharIndex(i);
+                int right;
+                if (i + 1 < s.Length) right = box.GetPositionFromCharIndex(i + 1).X;
+                else if (i > 0) right = p.X + (p.X - box.GetPositionFromCharIndex(i - 1).X);  // the last: the advance before it
+                else right = p.X + ink[4];
+                if (right <= p.X) right = p.X + ink[4];
+                Point a = host.PointToClient(box.PointToScreen(new Point(p.X, p.Y + ink[2])));
+                Point b = host.PointToClient(box.PointToScreen(new Point(right, p.Y + ink[3])));
+                ForkVfoCell c = new ForkVfoCell();
+                c.d = d;
+                c.r = Rectangle.FromLTRB(a.X, a.Y, b.X, b.Y);
+                c.inkL = a.X + ink[0];
+                c.inkR = a.X + ink[1];
+                c.small = lsdBox;
+                cells.Add(c);
+            }
+        }
+
+        // the cell under x: inside a cell, else in a gap between two (the decimal point, between the big and the small
+        // box) the nearer one; left of the first or right of the last digit: none (-1); 10 MHz and up: -1 (stock)
+        private static int forkVfoDigitAt(List<ForkVfoCell> cells, int x, out ForkVfoCell hit)
+        {
+            hit = new ForkVfoCell();
+            hit.d = -1;
+            if (cells.Count == 0) return -1;
+            int best = -1, bestDist = int.MaxValue, minL = int.MaxValue, maxR = int.MinValue;
+            for (int k = 0; k < cells.Count; k++)
+            {
+                Rectangle r = cells[k].r;
+                minL = Math.Min(minL, r.Left);
+                maxR = Math.Max(maxR, r.Right);
+                int dist = x < r.Left ? r.Left - x : (x >= r.Right ? x - r.Right + 1 : 0);
+                if (dist < bestDist) { bestDist = dist; best = k; }
+            }
+            if (best < 0 || x < minL || x >= maxR) return -1;
+            hit = cells[best];
+            return hit.d < 3 ? -1 : hit.d;
+        }
+
+        private int forkVfoDigitAtScreen(int vfo, Point screen)
+        {
+            Control host = (vfo == 2 ? panelVFOBHover : panelVFOAHover).Parent;
+            if (host == null) return -1;
+            ForkVfoCell c;
+            return forkVfoDigitAt(forkVfoCells(vfo), host.PointToClient(screen).X, out c);
+        }
+
+        // hover at a screen point: the digit, and the hover panel moved to a bar just above that digit's ink
+        private int forkVfoHover(int vfo, Point screen)
+        {
+            Panel bar = vfo == 2 ? panelVFOBHover : panelVFOAHover;
+            Control host = bar.Parent;
+            if (host == null) return -1;
+            ForkVfoCell c;
+            int d = forkVfoDigitAt(forkVfoCells(vfo), host.PointToClient(screen).X, out c);
+            if (d >= 0)
+            {
+                int thick = Math.Max(2, (int)Math.Round(HighDpi.Px(1.5f)));
+                int gap = Math.Max(2, HighDpi.Px(2));
+                TextBox shown = c.small ? (vfo == 2 ? txtVFOBLSD : txtVFOALSD)
+                    : (small_lsd && (vfo == 2 ? txtVFOBMSD : txtVFOAMSD).Visible ? (vfo == 2 ? txtVFOBMSD : txtVFOAMSD) : (vfo == 2 ? txtVFOBFreq : txtVFOAFreq));
+                int boxTop = host.PointToClient(shown.PointToScreen(Point.Empty)).Y;
+                int top = Math.Max(boxTop + 1, c.r.Top - gap - thick);
+                Rectangle br = new Rectangle(c.inkL, top, Math.Max(2, c.inkR - c.inkL), thick);
+                if (bar.Bounds != br) bar.Bounds = br;
+                if (host.Controls.GetChildIndex(bar) != 0) bar.BringToFront();
+            }
+            int old = vfo == 2 ? vfob_hover_digit : vfoa_hover_digit;
+            if (vfo == 2) vfob_hover_digit = d; else vfoa_hover_digit = d;
+            if (d != old || d >= 0) bar.Invalidate();
+            return d;
+        }
+
+        // the hover panel is the bar: the VFO colour while a digit is hovered, else the box background (invisible)
+        private bool forkVfoBarPaint(PaintEventArgs e, Panel bar, Color fore, Color back, int digit)
+        {
+            using (SolidBrush b = new SolidBrush(digit >= 0 ? fore : back)) e.Graphics.FillRectangle(b, bar.ClientRectangle);
+            return true;
+        }
+
         // the passband zone a drag moves the band from: the VFO line (+-3 px) to the far filter edge
         private bool forkInPbZone(int rx, int x, int low_x, int high_x)
         {
