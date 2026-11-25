@@ -436,6 +436,16 @@ Memory window: one left click on a row's header (the small field left of the row
 Select or a double click do; every recall from the window centres the view on the VFO (as a right click on
 CTUN). Test hooks: `click:<control>:...`, `memrow:<n>`.
 
+## VFO digit hover (2026-11-25)
+
+The digit under the mouse (and the mouse wheel step it picks) comes from where the VFO boxes really draw their
+digits (EM_POSFROMCHAR of the big box and the small 100 Hz .. 1 Hz box), no longer from GDI+ MeasureString widths
+minus a guessed 2 px border, which drifted left of the GDI-drawn digits at high DPI (by up to half a digit at the
+1 kHz digit). Each digit owns its character cell; on the decimal point or between the big and the small digits
+the nearer digit wins; left / right of the digits and the 10 MHz digit: none (as stock). The highlight is a bar
+just ABOVE the hovered digit (the hover panel moved over it), so the mouse pointer no longer hides it. VFO A and
+VFO B. Test hook THETIS_HIDPI_OPEN=vfohover (vfohover-*.png next to the log).
+
 ## Double-click on the passband (Setup > Appearance > General > "Double-click (fork)", under TX attenuation, on by default)
 
 A double-click on the RX1 passband (inside the filter, on an edge or on the VFO line) sets the filter to the width
